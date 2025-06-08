@@ -37,9 +37,9 @@ def calculate_order_data(
     depo_size = Decimal(depo_size)
 
     if order_type == "Limit" and direction == BUY_DIRECTION:
-        order_price = Decimal(order_price) * 0.0025 + Decimal(order_price)
+        order_price = Decimal(order_price) * Decimal(0.0025) + Decimal(order_price)
     elif order_type == "Limit" and direction == SELL_DIRECTION:
-        order_price = Decimal(order_price) - Decimal(order_price) * 0.0025
+        order_price = Decimal(order_price) - Decimal(order_price) * Decimal(0.0025)
 
     if direction == BUY_DIRECTION:
         stop_loss = Decimal(order_price) * (Decimal("1") - Decimal("0.012"))
