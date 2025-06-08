@@ -1,0 +1,3 @@
+EXCHANGE_BYBIT = "bybit"
+EXCHANGE_BINANCE = "binance"
+EXCHANGE_OKX = "okx"

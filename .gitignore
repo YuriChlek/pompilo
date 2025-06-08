@@ -1,0 +1,11 @@
+.idea
+./_AI-bot/.idea
+./_AI-bot/.venv
+./_OF-rain-bot/.idea
+./_OF-rain-bot/.venv
+./_OF-scalping-bot/.idea
+./_OF-scalping-bot/.venv
+pompilo_analytics/app/.idea
+pompilo_analytics/app/.venv
+./data_collector/.idea
+./data_collector/.venv

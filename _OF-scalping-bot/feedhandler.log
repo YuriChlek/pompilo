@@ -1,0 +1,933 @@
+2025-05-19 16:26:33,677 : ERROR : FH: Unhandled RuntimeError('This event loop is already running') - shutting down
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feedhandler.py", line 151, in run
+    loop.run_forever()
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 630, in run_forever
+    self._check_running()
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 622, in _check_running
+    raise RuntimeError('This event loop is already running')
+RuntimeError: This event loop is already running
+2025-05-19 16:27:10,279 : ERROR : FH: Unhandled RuntimeError('This event loop is already running') - shutting down
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feedhandler.py", line 151, in run
+    loop.run_forever()
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 630, in run_forever
+    self._check_running()
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 622, in _check_running
+    raise RuntimeError('This event loop is already running')
+RuntimeError: This event loop is already running
+2025-05-19 16:28:12,465 : ERROR : FH: Unhandled RuntimeError('This event loop is already running') - shutting down
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feedhandler.py", line 151, in run
+    loop.run_forever()
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 630, in run_forever
+    self._check_running()
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 622, in _check_running
+    raise RuntimeError('This event loop is already running')
+RuntimeError: This event loop is already running
+2025-05-19 16:31:42,032 : ERROR : FH: Unhandled RuntimeError('This event loop is already running') - shutting down
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feedhandler.py", line 151, in run
+    loop.run_forever()
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 630, in run_forever
+    self._check_running()
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 622, in _check_running
+    raise RuntimeError('This event loop is already running')
+RuntimeError: This event loop is already running
+2025-05-19 16:31:59,212 : ERROR : FH: Unhandled RuntimeError('This event loop is already running') - shutting down
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feedhandler.py", line 151, in run
+    loop.run_forever()
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 630, in run_forever
+    self._check_running()
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 622, in _check_running
+    raise RuntimeError('This event loop is already running')
+RuntimeError: This event loop is already running
+2025-05-19 16:34:03,123 : ERROR : FH: Unhandled RuntimeError('This event loop is already running') - shutting down
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feedhandler.py", line 151, in run
+    loop.run_forever()
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 630, in run_forever
+    self._check_running()
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 622, in _check_running
+    raise RuntimeError('This event loop is already running')
+RuntimeError: This event loop is already running
+2025-05-19 16:34:03,314 : ERROR : FH: Unhandled RuntimeError('this event loop is already running.') - shutting down
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/main_cryptofeed.py", line 12, in <module>
+    loop.run_until_complete(cryptofeed_main())
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 687, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/start_handlers/_start_bot_with_cryptofead.py", line 59, in cryptofeed_main
+    await f.run()
+          ^^^^^^^
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feedhandler.py", line 157, in run
+    self.stop(loop=loop)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feedhandler.py", line 195, in stop
+    loop.run_until_complete(asyncio.gather(*shutdown_tasks))
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 663, in run_until_complete
+    self._check_running()
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 622, in _check_running
+    raise RuntimeError('This event loop is already running')
+RuntimeError: This event loop is already running
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feedhandler.py", line 151, in run
+    loop.run_forever()
+  File "uvloop/loop.pyx", line 1379, in uvloop.loop.Loop.run_forever
+  File "uvloop/loop.pyx", line 520, in uvloop.loop.Loop._run
+RuntimeError: this event loop is already running.
+2025-05-19 16:34:03,314 : ERROR : FH: Unhandled RuntimeError('this event loop is already running.') - shutting down
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/main_cryptofeed.py", line 12, in <module>
+    loop.run_until_complete(cryptofeed_main())
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 687, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/start_handlers/_start_bot_with_cryptofead.py", line 59, in cryptofeed_main
+    await f.run()
+          ^^^^^^^
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feedhandler.py", line 157, in run
+    self.stop(loop=loop)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feedhandler.py", line 195, in stop
+    loop.run_until_complete(asyncio.gather(*shutdown_tasks))
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 663, in run_until_complete
+    self._check_running()
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 622, in _check_running
+    raise RuntimeError('This event loop is already running')
+RuntimeError: This event loop is already running
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feedhandler.py", line 151, in run
+    loop.run_forever()
+  File "uvloop/loop.pyx", line 1379, in uvloop.loop.Loop.run_forever
+  File "uvloop/loop.pyx", line 520, in uvloop.loop.Loop._run
+RuntimeError: this event loop is already running.
+2025-05-19 16:36:15,474 : ERROR : FH: Unhandled RuntimeError('This event loop is already running') - shutting down
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feedhandler.py", line 151, in run
+    loop.run_forever()
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 630, in run_forever
+    self._check_running()
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 622, in _check_running
+    raise RuntimeError('This event loop is already running')
+RuntimeError: This event loop is already running
+2025-05-19 16:38:00,923 : ERROR : FH: Unhandled RuntimeError('This event loop is already running') - shutting down
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feedhandler.py", line 151, in run
+    loop.run_forever()
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 630, in run_forever
+    self._check_running()
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 622, in _check_running
+    raise RuntimeError('This event loop is already running')
+RuntimeError: This event loop is already running
+2025-05-19 16:39:47,756 : ERROR : FH: Unhandled RuntimeError('This event loop is already running') - shutting down
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feedhandler.py", line 151, in run
+    loop.run_forever()
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 630, in run_forever
+    self._check_running()
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 622, in _check_running
+    raise RuntimeError('This event loop is already running')
+RuntimeError: This event loop is already running
+2025-05-19 16:42:56,989 : ERROR : BYBIT.ws.5: encountered an exception, reconnecting in 1.0 seconds
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 65, in _create_connection
+    await self._handler(connection, self.handler)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 99, in _handler
+    await handler(message, connection, self.conn.last_message)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/bybit.py", line 233, in message_handler
+    await self._trade(msg, timestamp, market)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/bybit.py", line 334, in _trade
+    await self.callback(TRADES, t, timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feed.py", line 258, in callback
+    await cb(obj, receipt_timestamp)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: trade_callback.<locals>.callback() missing 6 required positional arguments: 'order_id', 'timestamp', 'side', 'amount', 'price', and 'receipt_timestamp'
+2025-05-19 16:42:57,555 : ERROR : BITGET.ws.7: encountered an exception, reconnecting in 1.0 seconds
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 65, in _create_connection
+    await self._handler(connection, self.handler)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 99, in _handler
+    await handler(message, connection, self.conn.last_message)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/bitget.py", line 517, in message_handler
+    await self._trade(msg, timestamp, symbol)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/bitget.py", line 177, in _trade
+    await self.callback(TRADES, t, timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feed.py", line 258, in callback
+    await cb(obj, receipt_timestamp)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: trade_callback.<locals>.callback() missing 6 required positional arguments: 'order_id', 'timestamp', 'side', 'amount', 'price', and 'receipt_timestamp'
+2025-05-19 16:42:57,761 : ERROR : OKX.ws.6: encountered an exception, reconnecting in 1.0 seconds
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 65, in _create_connection
+    await self._handler(connection, self.handler)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 99, in _handler
+    await handler(message, connection, self.conn.last_message)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/okx.py", line 426, in message_handler
+    await self._trade(msg, timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/okx.py", line 258, in _trade
+    await self.callback(TRADES, t, timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feed.py", line 258, in callback
+    await cb(obj, receipt_timestamp)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: trade_callback.<locals>.callback() missing 6 required positional arguments: 'order_id', 'timestamp', 'side', 'amount', 'price', and 'receipt_timestamp'
+2025-05-19 16:42:59,013 : ERROR : BYBIT.ws.5: encountered an exception, reconnecting in 1.0 seconds
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 65, in _create_connection
+    await self._handler(connection, self.handler)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 99, in _handler
+    await handler(message, connection, self.conn.last_message)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/bybit.py", line 233, in message_handler
+    await self._trade(msg, timestamp, market)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/bybit.py", line 334, in _trade
+    await self.callback(TRADES, t, timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feed.py", line 258, in callback
+    await cb(obj, receipt_timestamp)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: trade_callback.<locals>.callback() missing 6 required positional arguments: 'order_id', 'timestamp', 'side', 'amount', 'price', and 'receipt_timestamp'
+2025-05-19 16:43:00,325 : ERROR : OKX.ws.6: encountered an exception, reconnecting in 1.0 seconds
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 65, in _create_connection
+    await self._handler(connection, self.handler)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 99, in _handler
+    await handler(message, connection, self.conn.last_message)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/okx.py", line 426, in message_handler
+    await self._trade(msg, timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/okx.py", line 258, in _trade
+    await self.callback(TRADES, t, timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feed.py", line 258, in callback
+    await cb(obj, receipt_timestamp)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: trade_callback.<locals>.callback() missing 6 required positional arguments: 'order_id', 'timestamp', 'side', 'amount', 'price', and 'receipt_timestamp'
+2025-05-19 16:43:00,816 : ERROR : BITGET.ws.7: encountered an exception, reconnecting in 1.0 seconds
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 65, in _create_connection
+    await self._handler(connection, self.handler)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 99, in _handler
+    await handler(message, connection, self.conn.last_message)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/bitget.py", line 517, in message_handler
+    await self._trade(msg, timestamp, symbol)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/bitget.py", line 177, in _trade
+    await self.callback(TRADES, t, timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feed.py", line 258, in callback
+    await cb(obj, receipt_timestamp)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: trade_callback.<locals>.callback() missing 6 required positional arguments: 'order_id', 'timestamp', 'side', 'amount', 'price', and 'receipt_timestamp'
+2025-05-19 16:43:01,231 : ERROR : BYBIT.ws.5: encountered an exception, reconnecting in 1.0 seconds
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 65, in _create_connection
+    await self._handler(connection, self.handler)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 99, in _handler
+    await handler(message, connection, self.conn.last_message)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/bybit.py", line 233, in message_handler
+    await self._trade(msg, timestamp, market)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/bybit.py", line 334, in _trade
+    await self.callback(TRADES, t, timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feed.py", line 258, in callback
+    await cb(obj, receipt_timestamp)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: trade_callback.<locals>.callback() missing 6 required positional arguments: 'order_id', 'timestamp', 'side', 'amount', 'price', and 'receipt_timestamp'
+2025-05-19 16:43:03,470 : ERROR : OKX.ws.6: encountered an exception, reconnecting in 1.0 seconds
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 65, in _create_connection
+    await self._handler(connection, self.handler)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 99, in _handler
+    await handler(message, connection, self.conn.last_message)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/okx.py", line 426, in message_handler
+    await self._trade(msg, timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/okx.py", line 258, in _trade
+    await self.callback(TRADES, t, timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feed.py", line 258, in callback
+    await cb(obj, receipt_timestamp)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: trade_callback.<locals>.callback() missing 6 required positional arguments: 'order_id', 'timestamp', 'side', 'amount', 'price', and 'receipt_timestamp'
+2025-05-19 16:43:03,529 : ERROR : BYBIT.ws.5: encountered an exception, reconnecting in 1.0 seconds
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 65, in _create_connection
+    await self._handler(connection, self.handler)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 99, in _handler
+    await handler(message, connection, self.conn.last_message)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/bybit.py", line 233, in message_handler
+    await self._trade(msg, timestamp, market)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/bybit.py", line 334, in _trade
+    await self.callback(TRADES, t, timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feed.py", line 258, in callback
+    await cb(obj, receipt_timestamp)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: trade_callback.<locals>.callback() missing 6 required positional arguments: 'order_id', 'timestamp', 'side', 'amount', 'price', and 'receipt_timestamp'
+2025-05-19 16:43:04,088 : ERROR : BINANCE.ws.4: encountered an exception, reconnecting in 1.0 seconds
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 65, in _create_connection
+    await self._handler(connection, self.handler)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 99, in _handler
+    await handler(message, connection, self.conn.last_message)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/binance.py", line 518, in message_handler
+    await self._trade(msg, timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/binance.py", line 195, in _trade
+    await self.callback(TRADES, t, timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feed.py", line 258, in callback
+    await cb(obj, receipt_timestamp)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: trade_callback.<locals>.callback() missing 6 required positional arguments: 'order_id', 'timestamp', 'side', 'amount', 'price', and 'receipt_timestamp'
+2025-05-19 16:43:04,101 : ERROR : BITGET.ws.7: encountered an exception, reconnecting in 1.0 seconds
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 65, in _create_connection
+    await self._handler(connection, self.handler)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 99, in _handler
+    await handler(message, connection, self.conn.last_message)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/bitget.py", line 517, in message_handler
+    await self._trade(msg, timestamp, symbol)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/bitget.py", line 177, in _trade
+    await self.callback(TRADES, t, timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feed.py", line 258, in callback
+    await cb(obj, receipt_timestamp)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: trade_callback.<locals>.callback() missing 6 required positional arguments: 'order_id', 'timestamp', 'side', 'amount', 'price', and 'receipt_timestamp'
+2025-05-19 16:44:52,630 : ERROR : BYBIT.ws.5: encountered an exception, reconnecting in 1.0 seconds
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 65, in _create_connection
+    await self._handler(connection, self.handler)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 99, in _handler
+    await handler(message, connection, self.conn.last_message)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/bybit.py", line 233, in message_handler
+    await self._trade(msg, timestamp, market)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/bybit.py", line 334, in _trade
+    await self.callback(TRADES, t, timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feed.py", line 258, in callback
+    await cb(obj, receipt_timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/main_cryptofeed.py", line 33, in callback
+    symbol = data['symbol'].upper()
+             ~~~~^^^^^^^^^^
+TypeError: 'cryptofeed.types.Trade' object is not subscriptable
+2025-05-19 16:44:53,495 : ERROR : OKX.ws.6: encountered an exception, reconnecting in 1.0 seconds
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 65, in _create_connection
+    await self._handler(connection, self.handler)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 99, in _handler
+    await handler(message, connection, self.conn.last_message)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/okx.py", line 426, in message_handler
+    await self._trade(msg, timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/okx.py", line 258, in _trade
+    await self.callback(TRADES, t, timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feed.py", line 258, in callback
+    await cb(obj, receipt_timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/main_cryptofeed.py", line 33, in callback
+    symbol = data['symbol'].upper()
+             ~~~~^^^^^^^^^^
+TypeError: 'cryptofeed.types.Trade' object is not subscriptable
+2025-05-19 16:44:53,805 : ERROR : BITGET.ws.7: encountered an exception, reconnecting in 1.0 seconds
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 65, in _create_connection
+    await self._handler(connection, self.handler)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 99, in _handler
+    await handler(message, connection, self.conn.last_message)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/bitget.py", line 517, in message_handler
+    await self._trade(msg, timestamp, symbol)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/bitget.py", line 177, in _trade
+    await self.callback(TRADES, t, timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feed.py", line 258, in callback
+    await cb(obj, receipt_timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/main_cryptofeed.py", line 33, in callback
+    symbol = data['symbol'].upper()
+             ~~~~^^^^^^^^^^
+TypeError: 'cryptofeed.types.Trade' object is not subscriptable
+2025-05-19 16:44:54,832 : ERROR : BYBIT.ws.5: encountered an exception, reconnecting in 1.0 seconds
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 65, in _create_connection
+    await self._handler(connection, self.handler)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 99, in _handler
+    await handler(message, connection, self.conn.last_message)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/bybit.py", line 233, in message_handler
+    await self._trade(msg, timestamp, market)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/bybit.py", line 334, in _trade
+    await self.callback(TRADES, t, timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feed.py", line 258, in callback
+    await cb(obj, receipt_timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/main_cryptofeed.py", line 33, in callback
+    symbol = data['symbol'].upper()
+             ~~~~^^^^^^^^^^
+TypeError: 'cryptofeed.types.Trade' object is not subscriptable
+2025-05-19 16:44:56,098 : ERROR : OKX.ws.6: encountered an exception, reconnecting in 1.0 seconds
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 65, in _create_connection
+    await self._handler(connection, self.handler)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 99, in _handler
+    await handler(message, connection, self.conn.last_message)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/okx.py", line 426, in message_handler
+    await self._trade(msg, timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/okx.py", line 258, in _trade
+    await self.callback(TRADES, t, timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feed.py", line 258, in callback
+    await cb(obj, receipt_timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/main_cryptofeed.py", line 33, in callback
+    symbol = data['symbol'].upper()
+             ~~~~^^^^^^^^^^
+TypeError: 'cryptofeed.types.Trade' object is not subscriptable
+2025-05-19 16:44:56,842 : ERROR : BYBIT.ws.5: encountered an exception, reconnecting in 1.0 seconds
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 65, in _create_connection
+    await self._handler(connection, self.handler)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 99, in _handler
+    await handler(message, connection, self.conn.last_message)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/bybit.py", line 233, in message_handler
+    await self._trade(msg, timestamp, market)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/bybit.py", line 334, in _trade
+    await self.callback(TRADES, t, timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feed.py", line 258, in callback
+    await cb(obj, receipt_timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/main_cryptofeed.py", line 33, in callback
+    symbol = data['symbol'].upper()
+             ~~~~^^^^^^^^^^
+TypeError: 'cryptofeed.types.Trade' object is not subscriptable
+2025-05-19 16:44:57,136 : ERROR : BITGET.ws.7: encountered an exception, reconnecting in 1.0 seconds
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 65, in _create_connection
+    await self._handler(connection, self.handler)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 99, in _handler
+    await handler(message, connection, self.conn.last_message)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/bitget.py", line 517, in message_handler
+    await self._trade(msg, timestamp, symbol)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/bitget.py", line 177, in _trade
+    await self.callback(TRADES, t, timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feed.py", line 258, in callback
+    await cb(obj, receipt_timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/main_cryptofeed.py", line 33, in callback
+    symbol = data['symbol'].upper()
+             ~~~~^^^^^^^^^^
+TypeError: 'cryptofeed.types.Trade' object is not subscriptable
+2025-05-19 17:18:22,544 : WARNING : BITGET.ws.7: encountered connection issue no close frame received or sent - reconnecting in 1.0 seconds...
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 65, in _create_connection
+    await self._handler(connection, self.handler)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 95, in _handler
+    async for message in connection.read():
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection.py", line 339, in read
+    async for data in self.conn:
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/websockets/asyncio/connection.py", line 242, in __aiter__
+    yield await self.recv()
+          ^^^^^^^^^^^^^^^^^
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/websockets/asyncio/connection.py", line 322, in recv
+    raise self.protocol.close_exc from self.recv_exc
+websockets.exceptions.ConnectionClosedError: no close frame received or sent
+2025-05-19 17:31:50,545 : ERROR : FH: Unhandled RuntimeError('This event loop is already running') - shutting down
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feedhandler.py", line 151, in run
+    loop.run_forever()
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 630, in run_forever
+    self._check_running()
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 622, in _check_running
+    raise RuntimeError('This event loop is already running')
+RuntimeError: This event loop is already running
+2025-05-19 17:34:12,629 : ERROR : FH: Unhandled RuntimeError('This event loop is already running') - shutting down
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feedhandler.py", line 151, in run
+    loop.run_forever()
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 630, in run_forever
+    self._check_running()
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 622, in _check_running
+    raise RuntimeError('This event loop is already running')
+RuntimeError: This event loop is already running
+2025-05-19 17:49:11,090 : ERROR : FH: Unhandled RuntimeError('This event loop is already running') - shutting down
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feedhandler.py", line 151, in run
+    loop.run_forever()
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 630, in run_forever
+    self._check_running()
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 622, in _check_running
+    raise RuntimeError('This event loop is already running')
+RuntimeError: This event loop is already running
+2025-05-19 17:49:45,107 : ERROR : FH: Unhandled RuntimeError('This event loop is already running') - shutting down
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feedhandler.py", line 151, in run
+    loop.run_forever()
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 630, in run_forever
+    self._check_running()
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 622, in _check_running
+    raise RuntimeError('This event loop is already running')
+RuntimeError: This event loop is already running
+2025-05-19 18:03:24,961 : WARNING : BITGET.ws.7: encountered connection issue timed out during opening handshake - reconnecting in 1.0 seconds...
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/websockets/asyncio/client.py", line 543, in __await_impl__
+    await self.connection.handshake(
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/websockets/asyncio/client.py", line 104, in handshake
+    await asyncio.wait(
+  File "/usr/lib/python3.12/asyncio/tasks.py", line 464, in wait
+    return await _wait(fs, timeout, return_when, loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/tasks.py", line 550, in _wait
+    await waiter
+asyncio.exceptions.CancelledError
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/websockets/asyncio/client.py", line 539, in __await_impl__
+    async with asyncio_timeout(self.open_timeout):
+  File "/usr/lib/python3.12/asyncio/timeouts.py", line 115, in __aexit__
+    raise TimeoutError from exc_val
+TimeoutError
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 56, in _create_connection
+    async with self.conn.connect() as connection:
+  File "/usr/lib/python3.12/contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection.py", line 109, in connect
+    await self._open()
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection.py", line 323, in _open
+    self.conn = await connect(self.address, **self.ws_kwargs)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/websockets/asyncio/client.py", line 578, in __await_impl__
+    raise TimeoutError("timed out during opening handshake") from exc
+TimeoutError: timed out during opening handshake
+2025-05-19 18:15:54,552 : ERROR : FH: Unhandled RuntimeError('This event loop is already running') - shutting down
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feedhandler.py", line 151, in run
+    loop.run_forever()
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 630, in run_forever
+    self._check_running()
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 622, in _check_running
+    raise RuntimeError('This event loop is already running')
+RuntimeError: This event loop is already running
+2025-05-19 18:16:25,141 : ERROR : FH: Unhandled RuntimeError('This event loop is already running') - shutting down
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feedhandler.py", line 151, in run
+    loop.run_forever()
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 630, in run_forever
+    self._check_running()
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 622, in _check_running
+    raise RuntimeError('This event loop is already running')
+RuntimeError: This event loop is already running
+2025-05-19 18:22:03,563 : ERROR : FH: Unhandled RuntimeError('This event loop is already running') - shutting down
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feedhandler.py", line 151, in run
+    loop.run_forever()
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 630, in run_forever
+    self._check_running()
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 622, in _check_running
+    raise RuntimeError('This event loop is already running')
+RuntimeError: This event loop is already running
+2025-05-19 18:24:15,073 : ERROR : FH: Unhandled RuntimeError('This event loop is already running') - shutting down
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feedhandler.py", line 151, in run
+    loop.run_forever()
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 630, in run_forever
+    self._check_running()
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 622, in _check_running
+    raise RuntimeError('This event loop is already running')
+RuntimeError: This event loop is already running
+2025-05-19 18:38:23,680 : ERROR : FH: Unhandled RuntimeError('This event loop is already running') - shutting down
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feedhandler.py", line 151, in run
+    loop.run_forever()
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 630, in run_forever
+    self._check_running()
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 622, in _check_running
+    raise RuntimeError('This event loop is already running')
+RuntimeError: This event loop is already running
+2025-05-19 18:46:44,393 : WARNING : BITGET.ws.7: encountered connection issue no close frame received or sent - reconnecting in 1.0 seconds...
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 65, in _create_connection
+    await self._handler(connection, self.handler)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 95, in _handler
+    async for message in connection.read():
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection.py", line 339, in read
+    async for data in self.conn:
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/websockets/asyncio/connection.py", line 242, in __aiter__
+    yield await self.recv()
+          ^^^^^^^^^^^^^^^^^
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/websockets/asyncio/connection.py", line 322, in recv
+    raise self.protocol.close_exc from self.recv_exc
+websockets.exceptions.ConnectionClosedError: no close frame received or sent
+2025-05-19 19:06:52,095 : WARNING : BINANCE.ws.4: encountered connection issue timed out during opening handshake - reconnecting in 1.0 seconds...
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/websockets/asyncio/client.py", line 543, in __await_impl__
+    await self.connection.handshake(
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/websockets/asyncio/client.py", line 104, in handshake
+    await asyncio.wait(
+  File "/usr/lib/python3.12/asyncio/tasks.py", line 464, in wait
+    return await _wait(fs, timeout, return_when, loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/tasks.py", line 550, in _wait
+    await waiter
+asyncio.exceptions.CancelledError
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/websockets/asyncio/client.py", line 539, in __await_impl__
+    async with asyncio_timeout(self.open_timeout):
+  File "/usr/lib/python3.12/asyncio/timeouts.py", line 115, in __aexit__
+    raise TimeoutError from exc_val
+TimeoutError
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 56, in _create_connection
+    async with self.conn.connect() as connection:
+  File "/usr/lib/python3.12/contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection.py", line 109, in connect
+    await self._open()
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection.py", line 323, in _open
+    self.conn = await connect(self.address, **self.ws_kwargs)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/websockets/asyncio/client.py", line 578, in __await_impl__
+    raise TimeoutError("timed out during opening handshake") from exc
+TimeoutError: timed out during opening handshake
+2025-05-19 19:06:52,097 : WARNING : OKX.ws.6: encountered connection issue timed out during opening handshake - reconnecting in 1.0 seconds...
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/websockets/asyncio/client.py", line 543, in __await_impl__
+    await self.connection.handshake(
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/websockets/asyncio/client.py", line 104, in handshake
+    await asyncio.wait(
+  File "/usr/lib/python3.12/asyncio/tasks.py", line 464, in wait
+    return await _wait(fs, timeout, return_when, loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/tasks.py", line 550, in _wait
+    await waiter
+asyncio.exceptions.CancelledError
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/websockets/asyncio/client.py", line 539, in __await_impl__
+    async with asyncio_timeout(self.open_timeout):
+  File "/usr/lib/python3.12/asyncio/timeouts.py", line 115, in __aexit__
+    raise TimeoutError from exc_val
+TimeoutError
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 56, in _create_connection
+    async with self.conn.connect() as connection:
+  File "/usr/lib/python3.12/contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection.py", line 109, in connect
+    await self._open()
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection.py", line 323, in _open
+    self.conn = await connect(self.address, **self.ws_kwargs)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/websockets/asyncio/client.py", line 578, in __await_impl__
+    raise TimeoutError("timed out during opening handshake") from exc
+TimeoutError: timed out during opening handshake
+2025-05-19 19:06:52,098 : WARNING : BITGET.ws.7: encountered connection issue timed out during opening handshake - reconnecting in 1.0 seconds...
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/websockets/asyncio/client.py", line 543, in __await_impl__
+    await self.connection.handshake(
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/websockets/asyncio/client.py", line 104, in handshake
+    await asyncio.wait(
+  File "/usr/lib/python3.12/asyncio/tasks.py", line 464, in wait
+    return await _wait(fs, timeout, return_when, loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/tasks.py", line 550, in _wait
+    await waiter
+asyncio.exceptions.CancelledError
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/websockets/asyncio/client.py", line 539, in __await_impl__
+    async with asyncio_timeout(self.open_timeout):
+  File "/usr/lib/python3.12/asyncio/timeouts.py", line 115, in __aexit__
+    raise TimeoutError from exc_val
+TimeoutError
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 56, in _create_connection
+    async with self.conn.connect() as connection:
+  File "/usr/lib/python3.12/contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection.py", line 109, in connect
+    await self._open()
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection.py", line 323, in _open
+    self.conn = await connect(self.address, **self.ws_kwargs)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/websockets/asyncio/client.py", line 578, in __await_impl__
+    raise TimeoutError("timed out during opening handshake") from exc
+TimeoutError: timed out during opening handshake
+2025-05-19 19:06:52,099 : WARNING : BYBIT.ws.5: encountered connection issue [Errno 5] Input/output error - reconnecting in 1.0 seconds...
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/main_cryptofeed.py", line 23, in worker
+    symbol = symbol_raw.replace("-", "").upper()
+TypeError: cannot unpack non-iterable datetime.datetime object
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/main_cryptofeed.py", line 45, in callback
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/main_cryptofeed.py", line 32, in worker
+    """
+OSError: [Errno 5] Input/output error
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 65, in _create_connection
+    await self._handler(connection, self.handler)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 99, in _handler
+    await handler(message, connection, self.conn.last_message)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/bybit.py", line 233, in message_handler
+    await self._trade(msg, timestamp, market)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/bybit.py", line 334, in _trade
+    await self.callback(TRADES, t, timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feed.py", line 258, in callback
+    await cb(obj, receipt_timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/main_cryptofeed.py", line 47, in callback
+    f.add_feed(
+        ^^^^^^^^
+OSError: [Errno 5] Input/output error
+2025-05-19 19:33:28,713 : ERROR : FH: Unhandled RuntimeError('This event loop is already running') - shutting down
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feedhandler.py", line 151, in run
+    loop.run_forever()
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 630, in run_forever
+    self._check_running()
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 622, in _check_running
+    raise RuntimeError('This event loop is already running')
+RuntimeError: This event loop is already running
+2025-05-19 21:25:14,648 : WARNING : BYBIT.ws.5: received no messages within timeout, restarting connection
+2025-05-19 21:25:14,650 : WARNING : GATEIO.ws.1: received no messages within timeout, restarting connection
+2025-05-19 21:25:17,355 : WARNING : OKX.ws.6: received no messages within timeout, restarting connection
+2025-05-19 21:25:17,356 : WARNING : BITGET.ws.7: received no messages within timeout, restarting connection
+2025-05-19 21:25:17,355 : WARNING : BITGET.ws.7: encountered connection issue [Errno 5] Input/output error - reconnecting in 1.0 seconds...
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/asyncpg/connection.py", line 2421, in connect
+    return await connect_utils._connect(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1049, in _connect
+    conn = await _connect_addr(
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 886, in _connect_addr
+    return await __connect_addr(params, True, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 931, in __connect_addr
+    tr, pr = await connector
+             ^^^^^^^^^^^^^^^
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 802, in _create_ssl_connection
+    tr, pr = await loop.create_connection(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 1080, in create_connection
+    infos = await self._ensure_resolved(
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 1456, in _ensure_resolved
+    return await loop.getaddrinfo(host, port, family=family, type=type,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 901, in getaddrinfo
+    return await self.run_in_executor(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+asyncio.exceptions.CancelledError
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/main_cryptofeed.py", line 35, in callback
+    async def callback(data, receipt_timestamp):
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/asyncpg/pool.py", line 1024, in __aenter__
+    self.connection = await self.pool._acquire(self.timeout)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/asyncpg/pool.py", line 864, in _acquire
+    return await _acquire_impl()
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/asyncpg/pool.py", line 849, in _acquire_impl
+    proxy = await ch.acquire()  # type: PoolConnectionProxy
+            ^^^^^^^^^^^^^^^^^^
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/asyncpg/pool.py", line 140, in acquire
+    await self.connect()
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/asyncpg/pool.py", line 132, in connect
+    self._con = await self._pool._get_new_connection()
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/asyncpg/pool.py", line 517, in _get_new_connection
+    con = await self._connect(
+          ^^^^^^^^^^^^^^^^^^^^
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/asyncpg/connection.py", line 2420, in connect
+    async with compat.timeout(timeout):
+  File "/usr/lib/python3.12/asyncio/timeouts.py", line 115, in __aexit__
+    raise TimeoutError from exc_val
+TimeoutError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 65, in _create_connection
+    await self._handler(connection, self.handler)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 99, in _handler
+    await handler(message, connection, self.conn.last_message)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/bitget.py", line 517, in message_handler
+    await self._trade(msg, timestamp, symbol)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/bitget.py", line 177, in _trade
+    await self.callback(TRADES, t, timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feed.py", line 258, in callback
+    await cb(obj, receipt_timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/main_cryptofeed.py", line 43, in callback
+    size = Decimal(str(data.amount))
+OSError: [Errno 5] Input/output error
+2025-05-19 21:25:17,364 : WARNING : BYBIT.ws.5: encountered connection issue [Errno 5] Input/output error - reconnecting in 1.0 seconds...
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/main_cryptofeed.py", line 32, in callback
+OSError: [Errno 5] Input/output error
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 65, in _create_connection
+    await self._handler(connection, self.handler)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 99, in _handler
+    await handler(message, connection, self.conn.last_message)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/bybit.py", line 233, in message_handler
+    await self._trade(msg, timestamp, market)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/bybit.py", line 334, in _trade
+    await self.callback(TRADES, t, timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feed.py", line 258, in callback
+    await cb(obj, receipt_timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/main_cryptofeed.py", line 43, in callback
+    size = Decimal(str(data.amount))
+OSError: [Errno 5] Input/output error
+2025-05-19 21:25:17,365 : WARNING : BINANCE.ws.4: encountered connection issue [Errno 5] Input/output error - reconnecting in 1.0 seconds...
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/main_cryptofeed.py", line 32, in callback
+OSError: [Errno 5] Input/output error
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 65, in _create_connection
+    await self._handler(connection, self.handler)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 99, in _handler
+    await handler(message, connection, self.conn.last_message)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/binance.py", line 518, in message_handler
+    await self._trade(msg, timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/binance.py", line 195, in _trade
+    await self.callback(TRADES, t, timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feed.py", line 258, in callback
+    await cb(obj, receipt_timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/main_cryptofeed.py", line 43, in callback
+    size = Decimal(str(data.amount))
+OSError: [Errno 5] Input/output error
+2025-05-19 21:25:17,368 : WARNING : BYBIT.ws.5: encountered connection issue [Errno 5] Input/output error - reconnecting in 1.0 seconds...
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/main_cryptofeed.py", line 24, in worker
+    timestamp, symbol, side, price, size, order_id, exchange = data[0]
+OSError: [Errno 5] Input/output error
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/main_cryptofeed.py", line 45, in callback
+    ord_id = f"{data.timestamp}{price}{size}"
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/main_cryptofeed.py", line 32, in worker
+OSError: [Errno 5] Input/output error
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 65, in _create_connection
+    await self._handler(connection, self.handler)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 99, in _handler
+    await handler(message, connection, self.conn.last_message)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/bybit.py", line 233, in message_handler
+    await self._trade(msg, timestamp, market)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/bybit.py", line 334, in _trade
+    await self.callback(TRADES, t, timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feed.py", line 258, in callback
+    await cb(obj, receipt_timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/main_cryptofeed.py", line 47, in callback
+    print(symbol,timestamp, side, size, price,  exchange, ord_id)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+OSError: [Errno 5] Input/output error
+2025-05-19 21:25:17,369 : WARNING : BYBIT.ws.5: encountered connection issue [Errno 5] Input/output error - reconnecting in 1.0 seconds...
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/main_cryptofeed.py", line 26, in worker
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/utils/db.py", line 28, in insert_api_data
+    db_schema = schemas[exchange]
+                ~~~~~~~^^^^^^^^^^
+KeyError: 'BYBIT'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/main_cryptofeed.py", line 45, in callback
+    ord_id = f"{data.timestamp}{price}{size}"
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/main_cryptofeed.py", line 32, in worker
+OSError: [Errno 5] Input/output error
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 65, in _create_connection
+    await self._handler(connection, self.handler)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 99, in _handler
+    await handler(message, connection, self.conn.last_message)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/bybit.py", line 233, in message_handler
+    await self._trade(msg, timestamp, market)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/bybit.py", line 334, in _trade
+    await self.callback(TRADES, t, timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feed.py", line 258, in callback
+    await cb(obj, receipt_timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/main_cryptofeed.py", line 47, in callback
+    print(symbol,timestamp, side, size, price,  exchange, ord_id)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+OSError: [Errno 5] Input/output error
+2025-05-19 21:25:17,374 : WARNING : BITGET.ws.7: encountered connection issue [Errno 5] Input/output error - reconnecting in 1.0 seconds...
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/main_cryptofeed.py", line 44, in callback
+    price = Decimal(str(data.price))
+OSError: [Errno 5] Input/output error
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 65, in _create_connection
+    await self._handler(connection, self.handler)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 99, in _handler
+    await handler(message, connection, self.conn.last_message)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/bitget.py", line 517, in message_handler
+    await self._trade(msg, timestamp, symbol)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/bitget.py", line 177, in _trade
+    await self.callback(TRADES, t, timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feed.py", line 258, in callback
+    await cb(obj, receipt_timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/main_cryptofeed.py", line 47, in callback
+    print(symbol,timestamp, side, size, price,  exchange, ord_id)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+OSError: [Errno 5] Input/output error
+2025-05-19 21:25:17,376 : WARNING : OKX.ws.6: encountered connection issue [Errno 5] Input/output error - reconnecting in 1.0 seconds...
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/main_cryptofeed.py", line 44, in callback
+    price = Decimal(str(data.price))
+OSError: [Errno 5] Input/output error
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 65, in _create_connection
+    await self._handler(connection, self.handler)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/connection_handler.py", line 99, in _handler
+    await handler(message, connection, self.conn.last_message)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/okx.py", line 426, in message_handler
+    await self._trade(msg, timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/exchanges/okx.py", line 258, in _trade
+    await self.callback(TRADES, t, timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/.venv/lib/python3.12/site-packages/cryptofeed/feed.py", line 258, in callback
+    await cb(obj, receipt_timestamp)
+  File "/home/yurii/Project/pompilo/_OF-scalping-bot/main_cryptofeed.py", line 47, in callback
+    print(symbol,timestamp, side, size, price,  exchange, ord_id)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+OSError: [Errno 5] Input/output error

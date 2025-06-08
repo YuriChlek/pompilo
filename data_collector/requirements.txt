@@ -1,0 +1,5 @@
+psycopg2-binary
+drf-yasg
+asyncpg
+websockets
+pandas

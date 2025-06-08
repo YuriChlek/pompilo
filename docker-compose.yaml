@@ -1,0 +1,64 @@
+services:
+  pompilo_bot:
+    container_name: pompilo_scalping_bot
+    build:
+      context: .
+      dockerfile: ./_OF-scalping-bot/Dockerfile
+    image: pompilo_bot
+    restart: always
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    networks:
+      - pompilo
+    depends_on:
+      - postgres
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DATABASE: ${DATABASE}
+
+  pompilo_rain_bot:
+    container_name: pompilo_rain_bot
+    build:
+      context: .
+      dockerfile: ./_OF-rain-bot/Dockerfile
+    image: pompilo_rain_bot
+    restart: always
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    networks:
+      - pompilo
+    depends_on:
+      - postgres
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DATABASE: ${DATABASE}
+
+  postgres:
+    container_name: pompilo_db
+    image: postgres:14-alpine
+    restart: always
+    ports:
+      - "${DB_PORT}:5432"
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DATABASE}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    networks:
+      - pompilo
+
+volumes:
+  postgres_data:
+
+networks:
+  pompilo:
+    driver: bridge

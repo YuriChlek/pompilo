@@ -1,0 +1,7 @@
+psycopg2-binary
+drf-yasg
+asyncpg
+websockets
+pybit
+python-binance
+okx
