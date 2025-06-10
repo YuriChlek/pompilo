@@ -17,11 +17,11 @@ def parse_unix_timestamp(unix_timestamp_str):
 
 def parse_trade_row_bybit_perpetual(row):
     try:
-        timestamp = parse_unix_timestamp(row[0])
-        symbol = row[1]
-        side = str(row[2]).lower()
+        timestamp = parse_unix_timestamp(row[0])  #
+        symbol = row[1]  #
+        side = str(row[2]).lower()  #
         size = float(row[3])
-        price = float(row[4])
+        price = float(row[4])  #
         return (
             timestamp, symbol, side, size, price
         )
@@ -32,13 +32,14 @@ def parse_trade_row_bybit_perpetual(row):
 
 def parse_trade_row_bybit_spot(row, trading_symbol):
     try:
-        timestamp = parse_unix_timestamp(int(row[1]) / 1000)
-        symbol = trading_symbol
-        side = str(row[4]).lower()
+        timestamp = parse_unix_timestamp(int(row[1]) / 1000)  #
+        symbol = trading_symbol  #
+        side = str(row[4]).lower()  #
         size = float(row[3])
-        price = float(row[2])
+        price = float(row[2])  #
+        ord_id = f"{timestamp}{size}{price}"
         return (
-            timestamp, symbol, side, size, price
+            timestamp, symbol, side, size, price, ord_id
         )
     except Exception as e:
         print(f"Error parsing row spot: {row} | {e}")
@@ -47,11 +48,11 @@ def parse_trade_row_bybit_spot(row, trading_symbol):
 
 def parse_trade_row_binance_perpetual(row, trading_symbol):
     try:
-        timestamp = parse_unix_timestamp(int(row[4]) / 1000)
-        symbol = trading_symbol
-        side = 'sell' if row[-1].lower() == 'true' else 'buy'
+        timestamp = parse_unix_timestamp(int(row[4]) / 1000)  #
+        symbol = trading_symbol  #
+        side = 'sell' if row[-1].lower() == 'true' else 'buy'  #
         size = float(row[2])
-        price = float(row[1])
+        price = float(row[1])  #
         return (
             timestamp, symbol, side, size, price
         )
@@ -60,16 +61,28 @@ def parse_trade_row_binance_perpetual(row, trading_symbol):
         return None
 
 
-def parse_trade_row_binance_spot(row):
-    print('def parse_trade_row_bybit_spot(row):')
-    return None
+def parse_trade_row_binance_spot(row, trading_symbol):
+    try:
+        raw_ts = row[4]
+        ts = int(raw_ts)
+        timestamp = datetime.fromtimestamp(ts / 1000000)
+
+        symbol = trading_symbol
+        side = 'sell' if row[5].lower() == 'true' else 'buy'  # is_buyer_maker
+        size = float(row[2])  # quantity
+        price = float(row[1])
+        ord_id = f"{timestamp}{size}{price}{side}"
+        return (
+            timestamp, symbol, side, size, price, ord_id
+        )
+    except Exception as e:
+        print(f"Error parsing row: {row} | raw_ts: {row[4]} | error: {e}")
+        return None
 
 
 def get_trading_symbol(filepath):
     filename = os.path.basename(filepath)
-    if 'USDT' in filename:
-        return filename.split('USDT')[0] + 'USDT'
-    raise ValueError("Не вдалося визначити торгову пару з файлу.")
+    return f"{filename.split('USDT')[0]}USDT"
 
 
 def get_table(contract_type, trading_symbol):
@@ -77,6 +90,7 @@ def get_table(contract_type, trading_symbol):
         "s": f"{str(trading_symbol).lower()}_s_trades",
         "p": f"{str(trading_symbol).lower()}_p_trades",
     }
+
     return tables[contract_type]
 
 
