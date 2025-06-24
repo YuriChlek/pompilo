@@ -42,10 +42,10 @@ def calculate_order_data(
         order_price = Decimal(order_price) - Decimal(order_price) * Decimal(0.0025)
 
     if direction == BUY_DIRECTION:
-        stop_loss = Decimal(order_price) * (Decimal("1") - Decimal("0.012"))
+        stop_loss = Decimal(order_price) * (Decimal("1") - Decimal("0.017"))
         take_profit = Decimal(order_price) + (order_price - stop_loss) * Decimal("3")
     elif direction == SELL_DIRECTION:
-        stop_loss = Decimal(order_price) * (Decimal("1") + Decimal("0.012"))
+        stop_loss = Decimal(order_price) * (Decimal("1") + Decimal("0.017"))
         take_profit = Decimal(order_price) - (Decimal(stop_loss) - Decimal(order_price)) * Decimal("3")
     else:
         return None

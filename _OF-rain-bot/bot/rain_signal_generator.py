@@ -42,7 +42,7 @@ async def get_candles(symbol, pool):
 
     query = f"""
         SELECT *
-        FROM {CANDLES_SCHEMAS[1]}.{str(symbol).lower().strip()}_p_candles
+        FROM {CANDLES_SCHEMAS[0]}.{str(symbol).lower().strip()}_p_candles
         ORDER BY open_time DESC
         LIMIT 12;
     """

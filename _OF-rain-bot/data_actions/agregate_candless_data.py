@@ -23,7 +23,7 @@ def get_hour_window(target_time: datetime, current_time=False, time_delta_hours=
         Повертає час без tzinfo (naive UTC).
 
         Parameters:
-            time_delta_hours:
+            time_delta_hours: Таймфрейм для розрахунку свічок
             target_time (datetime): Початковий час, за яким визначається годинне вікно.
             current_time (bool): Якщо True, повертає поточне годинне вікно; інакше — попереднє.
 
@@ -41,11 +41,18 @@ def get_hour_window(target_time: datetime, current_time=False, time_delta_hours=
     # Переводимо в київський час
     local_time = target_time.astimezone(kyiv)
 
-    # Зменшуємо на time_delta_hours годину — бо хочемо завершену попередню годину
+    # Зменшуємо на 1 годину — бо хочемо завершену попередню годину
     if not current_time:
         local_time -= timedelta(hours=time_delta_hours)
     else:
         local_time += timedelta(hours=time_delta_hours)
+
+    hour = local_time.hour
+    remainder = hour % time_delta_hours
+
+    if remainder != 0:
+        delta = time_delta_hours - remainder
+        local_time = local_time + timedelta(hours=delta)
 
     # Обрізаємо до початку години
     start_time = local_time.replace(minute=0, second=0, microsecond=0)
@@ -465,7 +472,7 @@ async def run_agregate_last_candles_data_job():
         Returns:
             None
     """
-    print("Agregate last hour candle.")
+    print("Agregate candles.")
     kyiv = zoneinfo.ZoneInfo("Europe/Kyiv")
     now = [datetime.now(kyiv)]
 

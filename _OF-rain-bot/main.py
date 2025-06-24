@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from data_actions import run_agregate_all_candles_data_job, run_agregate_last_candles_data_job
 from bot import start_rain_signal_generator
 
-TARGET_HOURS = {3, 7, 11, 15, 19, 23}
+TARGET_HOURS = { 0, 4, 8, 12, 16, 20 }
 
 async def wait_until_next_run(target_minute=0, target_second=10):
     """
@@ -47,7 +47,7 @@ async def main():
     """
 
     while True:
-        await wait_until_next_run(target_minute=0, target_second=10)
+        await wait_until_next_run(target_minute=0, target_second=5)
         await run_agregate_last_candles_data_job()
         await start_rain_signal_generator()
 

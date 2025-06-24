@@ -3,7 +3,7 @@ import os
 # lenovo remote db "172.28.233.170"
 # server remote db "172.28.12.42"
 
-DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_HOST = os.getenv("DB_HOST", "172.28.12.42")
 DB_PORT = os.getenv("DB_PORT", 5432)
 DB_NAME = os.getenv("DATABASE", "pompilo_db")
 DB_USER = os.getenv("DB_USER", "admin")
@@ -30,8 +30,8 @@ SCHEMAS = [
 
 CANDLES_SCHEMAS = [
     '_candles_trading_data',
-    '_candles_h1_trading_data',
-    '_candles_h4_trading_data'
+    #'_candles_h1_trading_data',
+    #'_candles_h4_trading_data'
 ]
 
 SCHEMAS_CANDLES = [
