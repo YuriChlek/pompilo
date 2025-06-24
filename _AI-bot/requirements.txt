@@ -1,7 +1,5 @@
-psycopg2-binary
-drf-yasg
-asyncpg
-websockets
+psycopg2
 pandas
 numpy
-sqlalchemy
+torch
+scikit-learn

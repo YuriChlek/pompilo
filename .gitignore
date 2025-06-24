@@ -5,6 +5,11 @@
 ./_OF-rain-bot/.venv
 ./_OF-scalping-bot/.idea
 ./_OF-scalping-bot/.venv
+./_OF-scalping-bot/bot/__pycache__
+./_OF-scalping-bot/data_actions/__pycache__
+./_OF-scalping-bot/start_handlers/__pycache__
+./_OF-scalping-bot/telegram_bot/__pycache__
+./_OF-scalping-bot/utils/__pycache__
 pompilo_analytics/app/.idea
 pompilo_analytics/app/.venv
 ./data_collector/.idea

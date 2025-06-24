@@ -1,5 +1,3 @@
-import asyncpg
-import asyncio
 import zoneinfo
 from datetime import datetime, timedelta
 from collections import defaultdict
@@ -8,12 +6,13 @@ from utils import (
     SCHEMAS,
     SELL_DIRECTION,
     TRADING_SYMBOLS,
+    CANDLES_TIMEFRAME,
     get_db_pool,
     insert_candles_data
 )
 
 
-def get_hour_window(target_time: datetime, current_time=False):
+def get_hour_window(target_time: datetime, current_time=False, time_delta_hours=CANDLES_TIMEFRAME):
     """
         Обчислює годинне вікно часу (start і end) для заданого моменту часу.
 
@@ -24,6 +23,7 @@ def get_hour_window(target_time: datetime, current_time=False):
         Повертає час без tzinfo (naive UTC).
 
         Parameters:
+            time_delta_hours:
             target_time (datetime): Початковий час, за яким визначається годинне вікно.
             current_time (bool): Якщо True, повертає поточне годинне вікно; інакше — попереднє.
 
@@ -41,15 +41,15 @@ def get_hour_window(target_time: datetime, current_time=False):
     # Переводимо в київський час
     local_time = target_time.astimezone(kyiv)
 
-    # Зменшуємо на 1 годину — бо хочемо завершену попередню годину
+    # Зменшуємо на time_delta_hours годину — бо хочемо завершену попередню годину
     if not current_time:
-        local_time -= timedelta(hours=1)
+        local_time -= timedelta(hours=time_delta_hours)
     else:
-        local_time += timedelta(hours=1)
+        local_time += timedelta(hours=time_delta_hours)
 
     # Обрізаємо до початку години
     start_time = local_time.replace(minute=0, second=0, microsecond=0)
-    end_time = start_time + timedelta(hours=1)
+    end_time = start_time + timedelta(hours=time_delta_hours)
 
     start_utc_naive = start_time.replace(tzinfo=None)
     end_utc_naive = end_time.replace(tzinfo=None)
@@ -343,9 +343,10 @@ async def get_hourly_time_ranges_from_db(pool, table_schema: str, table_name: st
             end = now_kyiv.replace(tzinfo=None)
 
             ranges = []
+            print(result)
             while current < end:
                 ranges.append(current)
-                current += timedelta(hours=1)
+                current += timedelta(hours=CANDLES_TIMEFRAME)
 
             return ranges
 
@@ -399,7 +400,8 @@ async def set_candles_data(hourly_ranges):
                 poc = candle['poc']
                 poc_zone = candle['vpoc_zone']
                 volume = candle['volume']
-                candle_id = f"{volume}{abs(cvd)}{round(open_price, 5)}{round(close_price, 5)}"
+                candle_id = f"{open_time}_{close_time}"
+
                 await insert_candles_data(pool, (
                     open_time,
                     close_time,
@@ -449,7 +451,7 @@ async def run_agregate_all_candles_data_job():
     await set_candles_data(hourly_ranges)
 
 
-async def run_agregate_last_1h_candles_data_job():
+async def run_agregate_last_candles_data_job():
     """
         Виконує агрегацію свічки за останню годину на основі тикових даних.
 

@@ -1,9 +1,10 @@
 import asyncio
 from datetime import datetime, timedelta
 
-from data_actions import run_agregate_all_candles_data_job, run_agregate_last_1h_candles_data_job
+from data_actions import run_agregate_all_candles_data_job, run_agregate_last_candles_data_job
 from bot import start_rain_signal_generator
 
+TARGET_HOURS = {3, 7, 11, 15, 19, 23}
 
 async def wait_until_next_run(target_minute=0, target_second=10):
     """
@@ -21,17 +22,13 @@ async def wait_until_next_run(target_minute=0, target_second=10):
     """
 
     now = datetime.now()
-    next_run = now.replace(microsecond=0)
 
-    # Якщо вже пізніше за target_minute:target_second — чекаємо наступну годину
-    if (now.minute > target_minute or
-            (now.minute == target_minute and now.second >= target_second)):
-        next_run += timedelta(hours=1)
+    candidate = now.replace(minute=target_minute, second=target_second, microsecond=0)
+    while candidate.hour not in TARGET_HOURS or candidate <= now:
+        candidate += timedelta(hours=1)
 
-    next_run = next_run.replace(minute=target_minute, second=target_second)
-
-    sleep_seconds = (next_run - now).total_seconds()
-    print(f"🕒 Sleeping for {sleep_seconds:.1f} seconds until {next_run}")
+    sleep_seconds = (candidate - now).total_seconds()
+    print(f"🕒 Sleeping for {sleep_seconds:.1f} seconds until {candidate}")
     await asyncio.sleep(sleep_seconds)
 
 
@@ -51,7 +48,7 @@ async def main():
 
     while True:
         await wait_until_next_run(target_minute=0, target_second=10)
-        await run_agregate_last_1h_candles_data_job()
+        await run_agregate_last_candles_data_job()
         await start_rain_signal_generator()
 
 

@@ -89,6 +89,7 @@ async def insert_candles_data(pool, data, symbol):
             str | None: Рядок з результатом виконання SQL-запиту або None у разі помилки.
     """
 
+    #db_schema = '_candles_h4_trading_data'
     db_schema = '_candles_trading_data'
     table = f"{str(symbol).lower()}_p_candles"
 

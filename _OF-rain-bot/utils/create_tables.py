@@ -1,6 +1,6 @@
 import asyncio
 import asyncpg
-from config import TRADING_SYMBOLS, SCHEMAS
+from config import TRADING_SYMBOLS, SCHEMAS, CANDLES_SCHEMAS
 
 # SQL шаблон для створення таблиці
 create_tick_data_table_sql = '''
@@ -52,7 +52,6 @@ async def create_tables():
     )
 
     for schema in SCHEMAS:
-        # Створення схеми, якщо її немає
         await conn.execute(create_schema_sql.format(schema=schema))
 
         for symbol in TRADING_SYMBOLS:
@@ -61,15 +60,14 @@ async def create_tables():
             await conn.execute(sql)
             print(f"Created table {schema}.{table_name}")
 
-    candles_data_schema = '_candles_trading_data'
-    await conn.execute(create_schema_sql.format(schema=candles_data_schema))
+    for schema in  CANDLES_SCHEMAS:
+        await conn.execute(create_schema_sql.format(schema=schema))
 
-    for symbol in TRADING_SYMBOLS:
-        table_name = f"{symbol.lower()}_p_candles"
-        sql = create_candles_data_table_sql.format(schema=candles_data_schema, table_name=table_name)
-        await conn.execute(sql)
-        print(f"Created table {candles_data_schema}.{table_name}")
-    # Створення схеми, якщо її немає
+        for symbol in TRADING_SYMBOLS:
+            table_name = f"{symbol.lower()}_p_candles"
+            sql = create_candles_data_table_sql.format(schema=schema, table_name=table_name)
+            await conn.execute(sql)
+            print(f"Created table {schema}.{table_name}")
 
     await conn.close()
 

@@ -1,6 +1,7 @@
 import os
 
 # lenovo remote db "172.28.233.170"
+# server remote db "172.28.12.42"
 
 DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = os.getenv("DB_PORT", 5432)
@@ -14,6 +15,8 @@ BINANCE_WS_URL = ""
 IMBALANCE_AND_CVD_PERIOD = 1
 EXTREMES_PERIOD = 8
 
+CANDLES_TIMEFRAME = 4
+
 BUY_DIRECTION = "buy"
 SELL_DIRECTION = "sell"
 
@@ -25,7 +28,11 @@ SCHEMAS = [
     'gateio_trading_history_data',
 ]
 
-CANDLES_SHEMA = '_candles_trading_data'
+CANDLES_SCHEMAS = [
+    '_candles_trading_data',
+    '_candles_h1_trading_data',
+    '_candles_h4_trading_data'
+]
 
 SCHEMAS_CANDLES = [
     'candles_trading_candles_data'

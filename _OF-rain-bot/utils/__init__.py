@@ -5,7 +5,8 @@ __all__ = [
     # Константи
     'BUY_DIRECTION',
     'BYBIT_WS_URL',
-    'CANDLES_SHEMA',
+    'CANDLES_SCHEMAS',
+    'CANDLES_TIMEFRAME',
     'DB_HOST',
     'DB_NAME',
     'DB_PASS',

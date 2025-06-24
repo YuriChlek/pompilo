@@ -6,7 +6,7 @@ from utils import (
     TRADING_SYMBOLS,
     SELL_DIRECTION,
     BUY_DIRECTION,
-    CANDLES_SHEMA
+    CANDLES_SCHEMAS
 )
 from .order_actions import calculate_order_data
 from .trader import check_balance
@@ -42,7 +42,7 @@ async def get_candles(symbol, pool):
 
     query = f"""
         SELECT *
-        FROM {CANDLES_SHEMA}.{str(symbol).lower().strip()}_p_candles
+        FROM {CANDLES_SCHEMAS[1]}.{str(symbol).lower().strip()}_p_candles
         ORDER BY open_time DESC
         LIMIT 12;
     """
