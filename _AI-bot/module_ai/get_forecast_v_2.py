@@ -53,7 +53,6 @@ def build_argparser():
     p.add_argument("--model-base-dir", default="./tft_runs",
                    help="Base directory with saved models and scalers")
     p.add_argument("--symbol", default="SOLUSDT", help="Specific symbol to predict (e.g., SOLUSDT)")
-    p.add_argument("--hours", type=int, default=6, help="Number of hours to predict")
 
     return p
 

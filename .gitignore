@@ -4,9 +4,9 @@
 _AI-bot/tft_runs/*
 pompilo_analytics/app/.idea
 pompilo_analytics/app/.venv
-./data_collector/.idea
-./data_collector/.venv
-**/__pycache__/*
+_OF-scalping-bot/**/__pycache__/
+_OF-rain-bot/**/__pycache__/
 **/**/__pycache__/*
 **/**/**/__pycache__/*
 **/**/**/**/__pycache__/*
+*_ai_rez.txt
