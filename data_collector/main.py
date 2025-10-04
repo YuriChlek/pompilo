@@ -26,6 +26,7 @@ def runner(runner_command):
         return
 
     exchange, contract_type = parts[-2], parts[-1]
+
     if contract_type == 's' or contract_type == 'p':
         asyncio.run(run_method(contract_type))
         return

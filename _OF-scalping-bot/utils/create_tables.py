@@ -47,7 +47,7 @@ async def create_tables():
         user='admin',
         password='admin_pass',
         database='pompilo_db',
-        host='172.28.234.187',
+        host='localhost',
         port='5432'
     )
 

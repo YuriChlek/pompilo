@@ -1,0 +1,554 @@
+import argparse
+from pathlib import Path
+import warnings
+
+warnings.filterwarnings("ignore")
+
+import numpy as np
+import pandas as pd
+from sqlalchemy import create_engine, text
+import joblib
+
+import torch
+from dataclasses import dataclass
+from pytorch_forecasting import TimeSeriesDataSet
+from pytorch_forecasting.metrics import QuantileLoss
+from pytorch_forecasting.models.temporal_fusion_transformer import TemporalFusionTransformer
+from utils import TradeSignal
+
+
+@dataclass
+class TradeDecision:
+    time: str
+    signal: TradeSignal
+    entry_price: float
+    atr: float = None  # Додано для повернення ATR
+
+
+# Ознаки, які відповідають скрипту навчання
+KNOWN_REALS = ["hour_sin", "hour_cos", "dow_sin", "dow_cos", "month_sin", "month_cos"]
+UNKNOWN_REALS = [
+    "open", "high", "low", "volume", "cvd", "poc", "close",
+    "rsi", "macd", "macd_signal", "macd_histogram", "bb_upper",
+    "bb_lower", "bb_position", "volume_ma", "volume_ratio",
+    "price_change_1h", "price_change_6h", "volatility", "atr"
+]
+
+
+def build_argparser():
+    p = argparse.ArgumentParser()
+    p.add_argument("--db", default="postgresql://admin:admin_pass@localhost:5432/pompilo_db",
+                   help="SQLAlchemy URL, e.g. postgresql://user:pass@host:5432/db")
+    p.add_argument("--table", default="_candles_trading_data.xrpusdt_p_candles_test_data",
+                   help="Table name with 1h candles")
+    p.add_argument("--model-base-dir", default="./tft_runs",
+                   help="Base directory with saved models and scalers")
+    p.add_argument("--symbol", default="XRPUSDT", help="Specific symbol to predict (e.g., SOLUSDT)")
+    p.add_argument("--hours", type=int, default=6, help="Number of hours to predict")
+    return p
+
+
+def get_symbol_folder_name(symbol: str) -> str:
+    return symbol.lower().replace('/', '').replace('-', '')
+
+
+def fetch_latest_data(db_url: str, table: str, symbol: str = None, limit: int = 200) -> pd.DataFrame:
+    eng = create_engine(db_url)
+
+    if symbol:
+        query = f"""
+            SELECT open_time, close_time, symbol, open, close, high, low, cvd, volume, poc
+            FROM {table}
+            WHERE symbol = '{symbol}'
+            ORDER BY open_time DESC
+            LIMIT {limit}
+        """
+    else:
+        query = f"""
+            SELECT open_time, close_time, symbol, open, close, high, low, cvd, volume, poc
+            FROM {table}
+            ORDER BY open_time DESC
+            LIMIT {limit}
+        """
+
+    with eng.begin() as conn:
+        df = pd.read_sql(text(query), conn)
+
+    df = df.sort_values(["symbol", "open_time"]).reset_index(drop=True)
+    df["open_time"] = pd.to_datetime(df["open_time"], utc=True, errors="coerce")
+    df["close_time"] = pd.to_datetime(df["close_time"], utc=True, errors="coerce")
+
+    return df.dropna(subset=["open_time", "symbol", "close"])
+
+
+def add_technical_indicators_for_prediction(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+
+    for symbol in df['symbol'].unique():
+        symbol_mask = df['symbol'] == symbol
+        symbol_data = df[symbol_mask].copy()
+
+        # RSI
+        delta = symbol_data['close'].diff()
+        gain = delta.where(delta > 0, 0)
+        loss = -delta.where(delta < 0, 0)
+        avg_gain = gain.rolling(window=14, min_periods=1).mean()
+        avg_loss = loss.rolling(window=14, min_periods=1).mean()
+        rs = avg_gain / avg_loss
+        symbol_data['rsi'] = 100 - (100 / (1 + rs))
+
+        # MACD
+        exp12 = symbol_data['close'].ewm(span=12, adjust=False).mean()
+        exp26 = symbol_data['close'].ewm(span=26, adjust=False).mean()
+        symbol_data['macd'] = exp12 - exp26
+        symbol_data['macd_signal'] = symbol_data['macd'].ewm(span=9, adjust=False).mean()
+        symbol_data['macd_histogram'] = symbol_data['macd'] - symbol_data['macd_signal']
+
+        # Bollinger Bands
+        rolling_mean = symbol_data['close'].rolling(window=20, min_periods=1).mean()
+        rolling_std = symbol_data['close'].rolling(window=20, min_periods=1).std()
+        symbol_data['bb_upper'] = rolling_mean + (rolling_std * 2)
+        symbol_data['bb_lower'] = rolling_mean - (rolling_std * 2)
+        symbol_data['bb_position'] = (symbol_data['close'] - symbol_data['bb_lower']) / (
+                symbol_data['bb_upper'] - symbol_data['bb_lower'])
+
+        # Volume-based features
+        symbol_data['volume_ma'] = symbol_data['volume'].rolling(window=20, min_periods=1).mean()
+        symbol_data['volume_ratio'] = symbol_data['volume'] / symbol_data['volume_ma']
+
+        # Price momentum
+        symbol_data['price_change_1h'] = symbol_data['close'].pct_change(1)
+        symbol_data['price_change_6h'] = symbol_data['close'].pct_change(6)
+        symbol_data['volatility'] = symbol_data['price_change_1h'].rolling(window=24, min_periods=1).std()
+
+        # ATR
+        high_low = symbol_data['high'] - symbol_data['low']
+        high_close = np.abs(symbol_data['high'] - symbol_data['close'].shift())
+        low_close = np.abs(symbol_data['low'] - symbol_data['close'].shift())
+        tr = np.maximum(high_low, np.maximum(high_close.fillna(0), low_close.fillna(0)))
+        symbol_data['atr'] = tr.rolling(window=14, min_periods=1).mean()
+
+        for col in ['rsi', 'macd', 'macd_signal', 'macd_histogram', 'bb_upper', 'bb_lower',
+                    'bb_position', 'volume_ma', 'volume_ratio', 'price_change_1h',
+                    'price_change_6h', 'volatility', 'atr']:
+            df.loc[symbol_mask, col] = symbol_data[col].values
+
+    technical_cols = ['rsi', 'macd', 'macd_signal', 'macd_histogram', 'bb_upper', 'bb_lower',
+                     'bb_position', 'volume_ma', 'volume_ratio', 'price_change_1h',
+                     'price_change_6h', 'volatility', 'atr']
+    for col in technical_cols:
+        if col in df.columns:
+            df[col] = df[col].replace([np.inf, -np.inf], np.nan).fillna(0)
+
+    print(f"Додано технічних індикаторів: {len(technical_cols)}")
+    return df
+
+
+def add_time_features(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df = df.sort_values(["symbol", "open_time"]).reset_index(drop=True)
+    df["time_idx"] = df.groupby("symbol").cumcount()
+
+    df["hour"] = df["open_time"].dt.hour.astype(np.int16)
+    df["dow"] = df["open_time"].dt.dayofweek.astype(np.int16)
+    df["month"] = df["open_time"].dt.month.astype(np.int16)
+
+    df["hour_sin"] = np.sin(2 * np.pi * df["hour"] / 24)
+    df["hour_cos"] = np.cos(2 * np.pi * df["hour"] / 24)
+    df["dow_sin"] = np.sin(2 * np.pi * df["dow"] / 7)
+    df["dow_cos"] = np.cos(2 * np.pi * df["dow"] / 7)
+    df["month_sin"] = np.sin(2 * np.pi * df["month"] / 12)
+    df["month_cos"] = np.cos(2 * np.pi * df["month"] / 12)
+
+    return df
+
+
+def scale_data(df: pd.DataFrame, scalers: dict, features_to_scale: list) -> pd.DataFrame:
+    df_scaled = df.copy()
+    for col in features_to_scale:
+        if col in df_scaled.columns and col in scalers:
+            data_to_scale = df_scaled[[col]].replace([np.inf, -np.inf], np.nan).fillna(0)
+            df_scaled[col] = scalers[col].transform(data_to_scale)
+    return df_scaled
+
+
+def create_prediction_dataset(df_scaled: pd.DataFrame, encoder_len: int, pred_len: int, meta: dict) -> TimeSeriesDataSet:
+    target = meta.get('target', 'relative_change')
+
+    print(f"Доступні ознаки для прогнозу:")
+    print(f"Відомі: {KNOWN_REALS} ({len(KNOWN_REALS)})")
+    print(f"Невідомі: {UNKNOWN_REALS} ({len(UNKNOWN_REALS)})")
+    print(f"Додаткові: ['relative_time_idx', 'encoder_length'] (2)")
+    print(f"Загальна кількість для енкодера: {len(KNOWN_REALS) + len(UNKNOWN_REALS) + 2}")
+
+    min_required_length = encoder_len + pred_len
+    if len(df_scaled) < min_required_length:
+        print(f"Попередження: недостатньо даних ({len(df_scaled)}), потрібно мінімум {min_required_length}")
+        return None
+
+    try:
+        df_for_prediction = df_scaled.copy()
+        df_for_prediction[target] = 0
+
+        dataset = TimeSeriesDataSet(
+            df_for_prediction,
+            time_idx="time_idx",
+            target=target,
+            group_ids=["symbol"],
+            min_encoder_length=encoder_len,
+            max_encoder_length=encoder_len,
+            min_prediction_length=pred_len,
+            max_prediction_length=pred_len,
+            time_varying_known_reals=KNOWN_REALS,
+            time_varying_unknown_reals=UNKNOWN_REALS,
+            target_normalizer=None,
+            add_relative_time_idx=True,
+            add_encoder_length=True,
+            allow_missing_timesteps=False,
+        )
+        return dataset
+    except Exception as e:
+        print(f"Помилка створення датасету: {e}")
+        return None
+
+
+def load_trained_model(model_dir: Path, meta: dict):
+    model_path = model_dir / "trading_tft_model.pth"
+    if not model_path.exists():
+        print(f"Помилка: Файл моделі не знайдений: {model_path}")
+        return None, None
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    state_dict = torch.load(model_path, map_location=device)
+
+    encoder_mask_size = None
+    for key in state_dict.keys():
+        if "encoder_variable_selection.flattened_grn.resample_norm.mask" in key:
+            encoder_mask_size = state_dict[key].shape[0]
+            break
+
+    if encoder_mask_size is None:
+        print("Попередження: Не вдалося визначити кількість ознак з state_dict")
+        return None, None
+
+    expected_features = len(KNOWN_REALS) + len(UNKNOWN_REALS) + 2  # + relative_time_idx, encoder_length
+    print(f"Виявлено кількість ознак у навченій моделі: {encoder_mask_size}")
+    print(f"Очікувана кількість ознак: {expected_features}")
+
+    if encoder_mask_size != expected_features:
+        print(f"ПОМИЛКА: Неспівпадіння кількості ознак! Очікувалось: {expected_features}, у моделі: {encoder_mask_size}")
+        return None, None
+
+    print(f"Фінальний набір ознак:")
+    print(f"Відомі: {KNOWN_REALS} ({len(KNOWN_REALS)})")
+    print(f"Невідомі: {UNKNOWN_REALS} ({len(UNKNOWN_REALS)})")
+    print(f"Додаткові: ['relative_time_idx', 'encoder_length'] (2)")
+
+    sequence_length = meta['encoder_len'] + meta['pred_len']
+    dummy_data_dict = {
+        'time_idx': range(sequence_length),
+        'symbol': [meta['symbols'][0]] * sequence_length,
+        'relative_change': np.random.randn(sequence_length),
+    }
+    for col in KNOWN_REALS + UNKNOWN_REALS:
+        dummy_data_dict[col] = np.random.randn(sequence_length)
+
+    dummy_data = pd.DataFrame(dummy_data_dict)
+
+    try:
+        dummy_dataset = TimeSeriesDataSet(
+            dummy_data,
+            time_idx="time_idx",
+            target="relative_change",
+            group_ids=["symbol"],
+            min_encoder_length=meta['encoder_len'],
+            max_encoder_length=meta['encoder_len'],
+            min_prediction_length=meta['pred_len'],
+            max_prediction_length=meta['pred_len'],
+            time_varying_known_reals=KNOWN_REALS,
+            time_varying_unknown_reals=UNKNOWN_REALS,
+            target_normalizer=None,
+            add_relative_time_idx=True,
+            add_encoder_length=True,
+            allow_missing_timesteps=False,
+        )
+
+        model_config = meta.get('model_config', {
+            "hidden_size": 128,
+            "attention_head_size": 8,
+            "dropout": 0.1,
+            "hidden_continuous_size": 32,
+        })
+
+        model = TemporalFusionTransformer.from_dataset(
+            dummy_dataset,
+            loss=QuantileLoss(quantiles=meta['quantiles']),
+            **model_config,
+            output_size=len(meta['quantiles']),
+        )
+
+        model.load_state_dict(state_dict, strict=True)
+        model.to(device)
+        model.eval()
+        print(f"Модель успішно завантажена на {device}")
+        return model, device
+
+    except Exception as e:
+        print(f"Помилка завантаження моделі: {e}")
+        import traceback
+        traceback.print_exc()
+        return None, None
+
+
+def calculate_relative_change_for_prediction(df: pd.DataFrame, pred_len: int = 6) -> pd.DataFrame:
+    df = df.copy()
+    df["relative_change"] = np.nan
+    return df
+
+
+def model_confidence(q10, q50, q90, current_price):
+    q10 = np.array(q10)
+    q50 = np.array(q50)
+    q90 = np.array(q90)
+
+    mpiw = np.mean(q90 - q10)
+    mpiw_relative = mpiw / current_price * 100
+    prob_bullish = np.mean(q50 > current_price)
+    sharpness = 1 / (mpiw_relative + 1e-10)
+
+    if len(q50) > 1:
+        consistency = np.corrcoef(q50[:-1], q50[1:])[0, 1]
+    else:
+        consistency = 1.0
+
+    confidence_score = 100 * (
+            0.4 * (1 - mpiw_relative / 50) +
+            0.3 * (2 * np.abs(prob_bullish - 0.5)) +
+            0.2 * np.tanh(sharpness / 10) +
+            0.1 * max(0, consistency)
+    )
+    confidence_score = np.clip(confidence_score, 0, 100)
+
+    return {
+        "MPIW_absolute": mpiw,
+        "MPIW_relative_percent": mpiw_relative,
+        "prob_bullish": prob_bullish,
+        "sharpness": sharpness,
+        "consistency": consistency,
+        "confidence_score": confidence_score
+    }
+
+
+def get_ai_signal():
+    try:
+        args = build_argparser().parse_args()
+        symbol_folder = get_symbol_folder_name(args.symbol)
+        model_dir = Path(args.model_base_dir) / symbol_folder
+
+        if not model_dir.exists():
+            print(f"Помилка: Папка з моделлю для символу {args.symbol} не знайдена: {model_dir}")
+            return TradeDecision(
+                time="",
+                signal=TradeSignal.HOLD,
+                entry_price=0,
+                atr=0.0
+            )
+
+        scalers_path = model_dir / "scalers.pkl"
+        meta_path = model_dir / "dataset_meta.pkl"
+
+        if not scalers_path.exists() or not meta_path.exists():
+            print(f"Помилка: Файли моделі не знайдені в {model_dir}")
+            return TradeDecision(
+                time="",
+                signal=TradeSignal.HOLD,
+                entry_price=0,
+                atr=0.0
+            )
+
+        scalers = joblib.load(scalers_path)
+        meta = joblib.load(meta_path)
+
+        print(f"[1/7] Завантаження метаданих: encoder_len={meta['encoder_len']}, pred_len={meta['pred_len']}")
+        print(f"Модель завантажена з: {model_dir}")
+
+        print("[2/7] Отримання останніх даних з бази...")
+        required_length = meta['encoder_len'] + meta['pred_len'] + 50
+        df = fetch_latest_data(args.db, args.table, args.symbol, limit=required_length)
+
+        if df.empty:
+            print("Помилка: Не вдалося отримати дані з бази")
+            return TradeDecision(
+                time="",
+                signal=TradeSignal.HOLD,
+                entry_price=0,
+                atr=0.0
+            )
+
+        print(f"Отримано {len(df)} рядків даних")
+
+        print("[3/7] Додавання технічних індикаторів...")
+        df = add_technical_indicators_for_prediction(df)
+
+        print("[4/7] Додавання часових ознак...")
+        df = add_time_features(df)
+
+        df = calculate_relative_change_for_prediction(df, meta['pred_len'])
+
+        print("[5/7] Масштабування даних...")
+        features_to_scale = KNOWN_REALS + UNKNOWN_REALS
+        df_scaled = scale_data(df, scalers, features_to_scale)
+
+        print("[6/7] Завантаження моделі...")
+        model, device = load_trained_model(model_dir, meta)
+
+        if model is None:
+            print("Помилка: Не вдалося завантажити модель")
+            return TradeDecision(
+                time="",
+                signal=TradeSignal.HOLD,
+                entry_price=0,
+                atr=0.0
+            )
+
+        print("[7/7] Підготовка даних для прогнозу...")
+        predictions = []
+
+        for symbol in df_scaled['symbol'].unique():
+            symbol_data = df_scaled[df_scaled['symbol'] == symbol]
+            original_symbol_data = df[df['symbol'] == symbol]
+
+            if len(symbol_data) < meta['encoder_len'] + meta['pred_len']:
+                print(f"Попередження: недостатньо даних для символу {symbol} ({len(symbol_data)} рядків)")
+                continue
+
+            latest_data = symbol_data.iloc[-(meta['encoder_len'] + meta['pred_len']):].copy()
+            latest_original_data = original_symbol_data.iloc[-(meta['encoder_len'] + meta['pred_len']):].copy()
+
+            prediction_ds = create_prediction_dataset(latest_data, meta['encoder_len'], meta['pred_len'], meta)
+            if prediction_ds is None:
+                continue
+
+            dataloader = prediction_ds.to_dataloader(train=False, batch_size=1, num_workers=0)
+
+            with torch.no_grad():
+                for x, _ in dataloader:
+                    for key in x:
+                        if isinstance(x[key], torch.Tensor):
+                            x[key] = x[key].to(device)
+
+                    out = model(x)
+                    pred_tensor = out.prediction
+                    pred_np = pred_tensor.detach().cpu().numpy()
+
+                    relative_changes = pred_np[0]
+                    current_close_original = latest_original_data['close'].iloc[-meta['pred_len']]
+                    pred_prices = current_close_original * (1 + relative_changes)
+
+                    pred_entry = {
+                        'symbol': symbol,
+                        'predictions': pred_prices,
+                        'relative_changes': relative_changes,
+                        'last_price': current_close_original,
+                    }
+
+                    q10 = pred_prices[:, meta['quantiles'].index(0.1)]
+                    q50 = pred_prices[:, meta['quantiles'].index(0.5)]
+                    q90 = pred_prices[:, meta['quantiles'].index(0.9)]
+
+                    confidence_metrics = model_confidence(q10, q50, q90, current_close_original)
+                    pred_entry['confidence'] = confidence_metrics
+                    predictions.append(pred_entry)
+
+        ai_signal = TradeSignal.HOLD
+        last_open_time = None
+        last_price = 0
+        last_atr = 0.0
+
+        if not predictions:
+            print("Не вдалося зробити прогноз для жодного символу")
+            return TradeDecision(
+                time="",
+                signal=TradeSignal.HOLD,
+                entry_price=0,
+                atr=0.0
+            )
+
+        for pred in predictions:
+            last_open_time = df['open_time'].iloc[-1]
+            confidence_metrics = pred['confidence']
+            last_atr = latest_original_data['atr'].iloc[-1] if 'atr' in latest_original_data else 0.0
+
+            print(f"\nРезультати прогнозу для {pred['symbol']}:")
+            print(f"Поточна ціна: {pred['last_price']:.6f}")
+            print(f"ATR: {last_atr:.6f}")
+            print(f"Confidence Score: {confidence_metrics['confidence_score']:.1f}")
+            print(f"MPIW: {confidence_metrics['MPIW_relative_percent']:.2f}%")
+            print(f"Prob Bullish: {confidence_metrics['prob_bullish']:.2f}")
+
+            if (confidence_metrics["MPIW_relative_percent"] < 4.5 and
+                    confidence_metrics["confidence_score"] > 60):
+                last_price = pred['last_price']
+
+                if confidence_metrics['prob_bullish'] < 0.4:
+                    ai_signal = TradeSignal.SELL
+                    print("СИГНАЛ: SELL")
+                elif confidence_metrics['prob_bullish'] > 0.6:
+                    ai_signal = TradeSignal.BUY
+                    print("СИГНАЛ: BUY")
+                else:
+                    print("СИГНАЛ: HOLD (недостатня впевненість у напрямку)")
+
+                results_path = model_dir / "predictions.txt"
+                with open(results_path, "a", encoding="utf-8") as f:
+                    f.write("=" * 60 + "\n")
+                    f.write(f"Час прогнозу: {pd.Timestamp.now()}\n")
+                    f.write(f"Символ: {pred['symbol']}\n")
+                    f.write(f"Поточна ціна: {last_price:.6f}\n")
+                    f.write(f"ATR: {last_atr:.6f}\n")
+                    f.write(f"Час останньої свічки: {last_open_time}\n")
+                    f.write(f"Прогноз на {meta['pred_len']} годин вперед:\n")
+
+                    for i in range(meta['pred_len']):
+                        f.write(f"  Година {i + 1}: {pred['predictions'][i, 1]:.6f} (медіана)\n")
+
+                    if ai_signal == TradeSignal.SELL:
+                        f.write(f"\nПОЗИЦІЯ: SELL\n")
+                    elif ai_signal == TradeSignal.BUY:
+                        f.write(f"\nПОЗИЦІЯ: BUY\n")
+                    else:
+                        f.write(f"\nПОЗИЦІЯ: HOLD\n")
+
+                    f.write(f"\nМетрики впевненості:\n")
+                    f.write(f"MPIW (абсолютний): {confidence_metrics['MPIW_absolute']:+.4f}\n")
+                    f.write(f"MPIW (відносний): {confidence_metrics['MPIW_relative_percent']:+.2f}%\n")
+                    f.write(f"Ймовірність зростання: {confidence_metrics['prob_bullish']:.3f}\n")
+                    f.write(f"Різкість: {confidence_metrics['sharpness']:.4f}\n")
+                    f.write(f"Узгодженість: {confidence_metrics['consistency']:.4f}\n")
+                    f.write(f"Confidence Score: {confidence_metrics['confidence_score']:.1f}\n")
+                    f.write("\n")
+
+                break
+
+        return TradeDecision(
+            time=str(last_open_time),
+            signal=ai_signal,
+            entry_price=last_price,
+            atr=last_atr
+        )
+
+    except Exception as e:
+        print(f"Критична помилка в get_ai_signal: {e}")
+        import traceback
+        traceback.print_exc()
+        return TradeDecision(
+            time="",
+            signal=TradeSignal.HOLD,
+            entry_price=0,
+            atr=0.0
+        )
+
+
+if __name__ == "__main__":
+    decision = get_ai_signal()
+    print(f"\nФінальне рішення: {decision.signal.name} по ціні {decision.entry_price:.6f}, ATR: {decision.atr:.6f}")

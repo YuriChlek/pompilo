@@ -7,7 +7,7 @@ async def delete_old_records():
         user='admin',
         password='admin_pass',
         database='pompilo_db',
-        host='172.28.234.187',
+        host='localhost',
         port='5432'
     )
 
@@ -18,7 +18,7 @@ async def delete_old_records():
                 # Видалення старих записів
                 delete_sql = f'''
                     DELETE FROM "{schema}"."{table_name}"
-                    WHERE timestamp < NOW() - INTERVAL '2 days';
+                    WHERE timestamp < NOW() - INTERVAL '3 hours';
                 '''
                 delete_result = await conn.execute(delete_sql)
                 print(f"[{schema}.{table_name}] Deleted: {delete_result}")

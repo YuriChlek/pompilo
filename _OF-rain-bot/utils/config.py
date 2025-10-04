@@ -33,7 +33,14 @@ SCHEMAS_CANDLES = [
 
 # Торгові символи
 TRADING_SYMBOLS = [
-    'AAVEUSDT',
+    'AVAXUSDT',
+    'DOTUSDT',
+    'SOLUSDT',
+    'XRPUSDT',
+]
+
+"""
+ 'AAVEUSDT',
     'ADAUSDT',
     'APTUSDT',
     'AVAXUSDT',
@@ -42,16 +49,12 @@ TRADING_SYMBOLS = [
     'DOGEUSDT',
     'ETHUSDT',
     'JUPUSDT',
-    'SOLUSDT',
     'SUIUSDT',
+    'SOLUSDT'
     'TIAUSDT',
     'WIFUSDT',
     'WLDUSDT',
     'XRPUSDT',
-]
-
-"""
-Розмір трейдів для скальпера
 """
 
 # Кількість знаків після коми для кожного символу

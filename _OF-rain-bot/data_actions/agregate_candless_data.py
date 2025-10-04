@@ -399,7 +399,7 @@ async def set_candles_data(hourly_ranges):
                 poc = candle['poc']
                 poc_zone = candle['vpoc_zone']
                 volume = candle['volume']
-                candle_id = f"{volume}{abs(cvd)}{round(open_price, 5)}{round(close_price, 5)}"
+                candle_id = f"{open_time}"
                 await insert_candles_data(pool, (
                     open_time,
                     close_time,
@@ -441,9 +441,10 @@ async def run_agregate_all_candles_data_job():
     """
     pool = await get_db_pool()
 
-    table_schema = SCHEMAS[0]
+    table_schema = SCHEMAS[1]
     table_name = f"{str(TRADING_SYMBOLS[0]).lower()}_p_trades"
     hourly_ranges = await get_hourly_time_ranges_from_db(pool, table_schema, table_name)
+    #hourly_ranges = await get_hourly_time_ranges_from_db(pool, 'binance_trading_history_data', "solusdt_p_trades")
     await pool.close()
 
     await set_candles_data(hourly_ranges)

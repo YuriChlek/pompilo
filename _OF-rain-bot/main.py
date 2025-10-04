@@ -56,7 +56,7 @@ async def main():
 
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    #asyncio.run(main())
     #asyncio.run(start_rain_signal_generator())
-    #asyncio.run(run_agregate_all_candles_data_job())
+    asyncio.run(run_agregate_all_candles_data_job())
     #asyncio.run(run_agregate_last_1h_candles_data_job())

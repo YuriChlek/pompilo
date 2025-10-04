@@ -37,9 +37,9 @@ def parse_trade_row_bybit_spot(row, trading_symbol):
         side = str(row[4]).lower()  #
         size = float(row[3])
         price = float(row[2])  #
-        ord_id = f"{timestamp}{size}{price}"
+        order_id = f"{row[1]}{size}{price}"
         return (
-            timestamp, symbol, side, size, price, ord_id
+            timestamp, symbol, side, size, price, order_id
         )
     except Exception as e:
         print(f"Error parsing row spot: {row} | {e}")
@@ -48,13 +48,14 @@ def parse_trade_row_bybit_spot(row, trading_symbol):
 
 def parse_trade_row_binance_perpetual(row, trading_symbol):
     try:
-        timestamp = parse_unix_timestamp(int(row[4]) / 1000)  #
-        symbol = trading_symbol  #
-        side = 'sell' if row[-1].lower() == 'true' else 'buy'  #
+        timestamp = parse_unix_timestamp(int(row[4]) / 1000)
+        symbol = trading_symbol
+        side = 'sell' if row[-1].lower() == 'true' else 'buy'
         size = float(row[2])
-        price = float(row[1])  #
+        price = float(row[1])
+        order_id = f"{row[4]}{size}{price}"
         return (
-            timestamp, symbol, side, size, price
+            timestamp, symbol, side, size, price, order_id
         )
     except Exception as e:
         print(f"Error parsing row: {row} | {e}")
@@ -68,10 +69,10 @@ def parse_trade_row_binance_spot(row, trading_symbol):
         timestamp = datetime.fromtimestamp(ts / 1000000)
 
         symbol = trading_symbol
-        side = 'sell' if row[5].lower() == 'true' else 'buy'  # is_buyer_maker
+        side = 'sell' if row[5].lower() == 'true' else 'buy'
         size = float(row[2])  # quantity
         price = float(row[1])
-        ord_id = f"{timestamp}{size}{price}{side}"
+        ord_id = f"{datetime}_{size}_{price}"
         return (
             timestamp, symbol, side, size, price, ord_id
         )

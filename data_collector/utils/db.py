@@ -65,24 +65,6 @@ async def insert_api_data(pool, table, data, exchange, db_schema):
             )
 
 
-'''
-async def insert_api_data(pool, data, exchange):
-    db_schema = schemas[exchange]
-
-    async with pool.acquire() as conn:
-        await conn.execute(
-            f"""
-                                INSERT INTO {db_schema}.{table} (timestamp, symbol, side, price, size)
-                                VALUES ($1, $2, $3, $4, $5)
-                                ON CONFLICT (timestamp, symbol, side, price)
-                                DO UPDATE SET size = EXCLUDED.size
-                                """,
-            *data
-        )
-
-'''
-
-
 async def insert_csv_data(pool, data, exchange, table):
     batch_size = 2000
     db_schema = schemas[f"{exchange}_history"]
@@ -97,9 +79,11 @@ async def insert_csv_data(pool, data, exchange, table):
                         symbol, 
                         side, 
                         size, 
-                        price
+                        price,
+                        order_id
                     )
-                    VALUES ($1, $2, $3, $4, $5)
+                    VALUES ($1, $2, $3, $4, $5, $6)
+                    ON CONFLICT (order_id) DO NOTHING
                 """,
                 batch
             )
