@@ -1,0 +1,19 @@
+[
+    {
+        "signal_id": "86e74634-8460-49d7-a496-32a601ce3c01",
+        "pair": "FLRUSDT",
+        "timeframe": "3",
+        "direction": "Short",
+        "entry_price": 0.01642562576149699,
+        "sl_target": 0.01692562576149699,
+        "tp_target": 0.01567562576149699,
+        "rr": 1.5,
+        "qty": 60864,
+        "signal_time": "2025-04-24 13:51:00",
+        "exit_price": null,
+        "exit_type": null,
+        "exit_time": null,
+        "prev_po3_state": "Waiting For Distribution",
+        "current_po3_state": "Entry Taken"
+    }
+]
