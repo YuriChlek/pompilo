@@ -1,6 +1,6 @@
-from .bot import *
+from .bot import send_scalping_message, send_pompilo_order_message
 
 __all__ = [
-    'send_big_order_message',
+    'send_scalping_message',
     'send_pompilo_order_message'
 ]

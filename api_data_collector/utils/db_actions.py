@@ -66,14 +66,16 @@ async def delete_old_records():
                 # Видалення старих записів
                 delete_sql = f'''
                     DELETE FROM "{schema}"."{table_name}"
-                    WHERE timestamp < NOW() - INTERVAL '12 hours';
+                    WHERE timestamp < NOW() - INTERVAL '2 days';
                 '''
                 delete_result = await conn.execute(delete_sql)
                 print(f"[{schema}.{table_name}] Deleted: {delete_result}")
+                deleted_count = int(delete_result.split()[-1])
 
-                reindex_sql = f'REINDEX TABLE CONCURRENTLY "{schema}"."{table_name}";'
-                await conn.execute(reindex_sql)
-                print(f"[{schema}.{table_name}] REINDEX TABLE completed")
+                if deleted_count > 0:
+                    reindex_sql = f'REINDEX TABLE CONCURRENTLY "{schema}"."{table_name}";'
+                    await conn.execute(reindex_sql)
+                    print(f"[{schema}.{table_name}] REINDEX TABLE completed")
 
             except Exception as e:
                 print(f"[ERROR] While processing {schema}.{table_name}: {e}")

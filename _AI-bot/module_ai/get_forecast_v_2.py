@@ -48,11 +48,11 @@ def build_argparser():
     p = argparse.ArgumentParser()
     p.add_argument("--db", default="postgresql://admin:admin_pass@localhost:5432/pompilo_db",
                    help="SQLAlchemy URL, e.g. postgresql://user:pass@host:5432/db")
-    p.add_argument("--table", default="_candles_trading_data.solusdt_p_candles_test_data",
+    p.add_argument("--table", default="_candles_trading_data.xrpusdt_p_candles_test_data",
                    help="Table name with 1h candles")
     p.add_argument("--model-base-dir", default="./tft_runs",
                    help="Base directory with saved models and scalers")
-    p.add_argument("--symbol", default="SOLUSDT", help="Specific symbol to predict (e.g., SOLUSDT)")
+    p.add_argument("--symbol", default="XRPUSDT", help="Specific symbol to predict (e.g., SOLUSDT)")
 
     return p
 
@@ -165,9 +165,6 @@ def add_technical_indicators_for_prediction(df: pd.DataFrame) -> pd.DataFrame:
         if col in df.columns:
             df[col] = df[col].fillna(0)
 
-    print(f"Додано технічних індикаторів: {len(technical_cols)}")
-    print(f"Доступні колонки після додавання індикаторів: {list(df.columns)}")
-
     return df
 
 
@@ -224,11 +221,6 @@ def create_prediction_dataset(df_scaled: pd.DataFrame, encoder_len: int, pred_le
     # Фільтруємо тільки ті ознаки, які є в даних
     available_known_reals = [col for col in known_reals if col in df_scaled.columns]
     available_unknown_reals = [col for col in unknown_reals if col in df_scaled.columns]
-
-    print(f"Доступні ознаки для прогнозу:")
-    print(f"Відомі: {available_known_reals} ({len(available_known_reals)})")
-    print(f"Невідомі: {available_unknown_reals} ({len(available_unknown_reals)})")
-    print(f"Загальна кількість: {len(available_known_reals) + len(available_unknown_reals)}")
 
     # Перевіряємо, чи достатньо даних
     min_required_length = encoder_len + pred_len
@@ -288,7 +280,7 @@ def load_trained_model(model_dir: Path, meta: dict):
         print("Попередження: Не вдалося визначити кількість ознак з state_dict")
         return None, None, None
 
-    print(f"Виявлено кількість ознак у навченій моделі: {encoder_mask_size}")
+    #print(f"Виявлено кількість ознак у навченій моделі: {encoder_mask_size}")
 
     # ВИКОРИСТОВУЄМО ХАРДКОДОВАНІ ОЗНАКИ
     known_reals = KNOWN_REALS
@@ -298,14 +290,6 @@ def load_trained_model(model_dir: Path, meta: dict):
 
     # Беремо тільки потрібну кількість ознак з початку списку
     used_unknown_reals = UNKNOWN_REALS[:num_unknown_features]
-
-    print(f"Очікувана кількість ознак: {len(known_reals) + len(used_unknown_reals)}")
-    print(f"Фактична кількість ознак у моделі: {encoder_mask_size}")
-
-    print(f"Фінальний набір ознак:")
-    print(f"Відомі: {known_reals} ({len(known_reals)})")
-    print(f"Невідомі: {used_unknown_reals} ({len(used_unknown_reals)})")
-    print(f"Загальна кількість: {len(known_reals) + len(used_unknown_reals)}")
 
     # Створюємо модель з правильними параметрами
     quantiles = meta['quantiles']
@@ -437,20 +421,32 @@ def model_confidence(q10, q50, q90, current_price):
         "confidence_score": confidence_score
     }
 
+def get_symbol_table(symbol:str=''):
+    if not symbol:
+        args = build_argparser().parse_args()
+        return args.table
+    return f"_candles_trading_data.{symbol.lower()}_p_candles_test_data"
 
-def get_ai_signal():
+def get_symbol(symbol:str=''):
+    if not symbol:
+        args = build_argparser().parse_args()
+        return args.symbol
+    return symbol
+
+def get_ai_signal(symbol:str=''):
     """
     Генерує торговий сигнал на основі прогнозів моделі.
     """
     try:
         args = build_argparser().parse_args()
-
+        table = get_symbol_table(symbol)
+        trading_symbol = get_symbol(symbol)
         # Отримуємо шлях до папки з моделлю для конкретного символу
-        symbol_folder = get_symbol_folder_name(args.symbol)
+        symbol_folder = get_symbol_folder_name(trading_symbol)
         model_dir = Path(args.model_base_dir) / symbol_folder
 
         if not model_dir.exists():
-            print(f"Помилка: Папка з моделлю для символу {args.symbol} не знайдена: {model_dir}")
+            print(f"Помилка: Папка з моделлю для символу {trading_symbol} не знайдена: {model_dir}")
             return TradeDecision(
                 time="",
                 signal=TradeSignal.HOLD,
@@ -479,7 +475,8 @@ def get_ai_signal():
         # Отримуємо дані для прогнозу
         print("[2/7] Отримання останніх даних з бази...")
         required_length = meta['encoder_len'] + meta['pred_len'] + 50
-        df = fetch_latest_data(args.db, args.table, args.symbol, limit=required_length)
+
+        df = fetch_latest_data(args.db, table, trading_symbol, limit=required_length)
 
         if df.empty:
             print("Помилка: Не вдалося отримати дані з бази")

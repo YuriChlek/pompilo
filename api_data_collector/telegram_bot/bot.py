@@ -1,6 +1,7 @@
 from telegram import Bot
 import asyncio
 from datetime import datetime
+import zoneinfo
 
 TOKEN = "7962265207:AAHL2b0TC-Quj5u5Xz3-Bm2sSf-0qlcbAiQ"
 CHAT_ID = ""
@@ -8,21 +9,20 @@ CHAT_ID = ""
 bot = Bot(token=TOKEN)
 
 
-async def send_big_order_message(symbol, price, size, time, direction, exchange, signal):
+async def send_scalping_message(symbol, direction, price, take_profit, stop_loss):
     chat_id = "-4734898285"
     position = get_position_icon(str(direction).lower())
-    time = time.strftime("%Y-%m-%d %H:%M:%S")
-    exchange = exchange.upper() if exchange == 'okx' else exchange.capitalize()
+    time  = datetime.now(zoneinfo.ZoneInfo("Europe/Kyiv"))
 
-    message = f"""🚀 NEW BIG TRADE
+    message = f"""🚀 NEW TRADE
     
 <b>{position}</b>
-<b>{exchange}: <i>{symbol}</i></b>     
+<b><i>{symbol}</i></b>     
     
 <b>Time:</b> {time}
 <b>Price:</b> {price}
-<b>Size:</b> {size} {symbol.replace("-USDT-SWAP", "").replace("USDT", "")}
-{signal}
+<b>Take profit:</b> {take_profit}
+<b>Stop loss:</b> {stop_loss}
     """
 
     try:
@@ -31,7 +31,7 @@ async def send_big_order_message(symbol, price, size, time, direction, exchange,
         print(f"Telegram message error {e}")
 
 
-async def send_pompilo_order_message(symbol, price, take_profit, stop_loss, direction, signal):
+async def send_pompilo_order_message(symbol, price, take_profit, stop_loss, direction, signal='Test message'):
     chat_id = "-4786751817"
     position = get_position_icon(str(direction).lower())
 

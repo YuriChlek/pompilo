@@ -7,7 +7,7 @@ from bot_events import emitter
 from decimal import Decimal
 
 exchange = 'binance'
-WS_URL = "wss://stream.binance.com:9443/ws"
+WS_URL = "wss://fstream.binance.com/ws"
 NUM_WORKERS = len(TRADING_SYMBOLS) * 3
 MAX_QUEUE_SIZE = 5000
 
@@ -141,13 +141,13 @@ async def worker(pool):
             trade_data, exchange_name, symbol = data
             timestamp, symbol, side, price, size, order_id = trade_data
 
-            # Перевірка на великий трейд
+            # ---- Перевірка на великий трейд ----
             threshold = MIN_BIG_TRADES_SIZES.get(symbol.upper())
             if size and threshold and float(size) >= float(threshold):
-                emitter.emit('big_order_open', timestamp, symbol, side, price, size, exchange)
+                emitter.emit('big_order_open', symbol, side, price)
 
-            # Запис в БД
-            await insert_api_data(pool, *data)
+            if size > 0 and price > 0:
+                await insert_api_data(pool, *data)
 
             queue.task_done()
 

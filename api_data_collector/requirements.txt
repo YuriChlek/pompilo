@@ -10,3 +10,4 @@ python-telegram-bot
 python-bitget
 gate_api
 cryptofeed
+sqlalchemy

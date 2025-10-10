@@ -5,7 +5,7 @@ import zoneinfo
 from datetime import datetime, timedelta
 from collections import defaultdict
 from decimal import Decimal
-from utils import (
+from .config import (
     DB_HOST,
     DB_PORT,
     DB_NAME,
@@ -86,6 +86,7 @@ def compute_vpoc_zone(trading_data: list[dict], high, low) -> str | None:
            str | None: Назва зони з найбільшим обсягом — "lower", "middle" або "upper".
                        Якщо ціна не змінювалась, повертає "middle".
     """
+
     range_size = high - low
 
     if range_size == 0:
@@ -128,6 +129,7 @@ def calculate_cvd(rows):
     Returns:
         Decimal: Округлене значення CVD (buy_volume - sell_volume).
     """
+
     buy_orders = Decimal(0)
     sell_orders = Decimal(0)
 
@@ -157,13 +159,14 @@ def compute_poc(trading_data: list[dict]) -> float | None:
         Returns:
             float | None: Ціна з найбільшим обсягом (POC), або None, якщо список порожній.
     """
+
     if not trading_data:
         return None
 
     price_volume_map = defaultdict(float)
 
     for row in trading_data:
-        price = round(float(row["price"]), 4)  # округлення для агрегації
+        price = round(float(row["price"]), 5)  # округлення для агрегації
         size = float(row["size"])
         price_volume_map[price] += size
 
@@ -195,14 +198,17 @@ def compute_candle(trading_data: list[dict]):
             dict | None: Словник з полями "open", "close", "high", "low", "volume",
             "cvd", "poc", "vpoc_zone" або None, якщо список порожній.
     """
+
     if not trading_data:
         return None
+
+    non_zero_prices = [float(row["price"]) for row in trading_data if float(row["price"]) > 0]
 
     prices = [float(row["price"]) for row in trading_data]
     sizes = [float(row["size"]) for row in trading_data]
 
     high = max(prices)
-    low = min(prices)
+    low = min(non_zero_prices)
 
     cvd = calculate_cvd(trading_data)
     poc = compute_poc(trading_data)
@@ -244,6 +250,7 @@ async def fetch_hourly_tick_data(pool, target_time: datetime):
         Raises:
             Exception: У разі помилок під час вибірки даних із БД помилки логуються, але не припиняють виконання.
     """
+
     window = get_hour_window(target_time)
     start_time = window["start"]
     end_time = window["end"]
@@ -374,6 +381,7 @@ async def set_candles_data(hourly_ranges):
         Raises:
             Exception: Помилки, які виникають під час доступу до бази або обробки даних, можуть бути виведені у консоль.
     """
+
     pool = await get_db_pool()
 
     for hour in hourly_ranges:
@@ -465,7 +473,7 @@ async def run_agregate_last_1h_candles_data_job():
     """
     print("Agregate last hour candle.")
     kyiv = zoneinfo.ZoneInfo("Europe/Kyiv")
-    now = [datetime.now()]
+    now = [datetime.now(kyiv)]
 
     await set_candles_data(now)
 

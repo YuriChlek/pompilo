@@ -96,10 +96,10 @@ class WeightedSignalCalculator:
         rsi = market.indicators["rsi"]
         if rsi < self.rsi_oversold_threshold:
             score["BUY"] += self.weights.RSI_EXTREME
-            factors["rsi"] = f"{rsi:.1f}"
+            factors["rsi"] = f"oversold_{rsi:.1f}"
         elif rsi > self.rsi_overbought_threshold:
             score["SELL"] += self.weights.RSI_EXTREME
-            factors["rsi"] = f"{rsi:.1f}"
+            factors["rsi"] = f"overbought_{rsi:.1f}"
 
     def _determine_final_signal(self, score: Dict, factors: Dict) -> SignalResult:
         """Визначення фінального сигналу з confidence"""

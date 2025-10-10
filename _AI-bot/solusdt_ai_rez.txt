@@ -1,883 +1,4 @@
 ============================================================
-Time 2025-08-14 04:00:00+00:00
-Position TradeSignal.SELL
-Entry price 208.37
-Market trend bullish
-CVD trend bearish
-CVD strength strong
-RSI 86.38554216867462
-ATR 3.195714285714286
-Confidence 100.0
-Score {'BUY': 0, 'SELL': 65}
-============================================================
-============================================================
-Time 2025-08-14 05:00:00+00:00
-Position TradeSignal.SELL
-Entry price 206.74
-Market trend bullish
-CVD trend bearish
-CVD strength strong
-RSI 77.15795654726948
-ATR 3.1592857142857134
-Confidence 100.0
-Score {'BUY': 0, 'SELL': 100}
-============================================================
-============================================================
-Time 2025-08-15 19:00:00+00:00
-Position TradeSignal.BUY
-Entry price 183.8
-Market trend bearish
-CVD trend bullish
-CVD strength strong
-RSI 10.164141414141497
-ATR 2.759999999999999
-Signal TradeSignal.BUY
-Confidence 75.0
-Score {'BUY': 60, 'SELL': 20}
-Level 1: BUY at 170.5664 - ACTIVE
-Level 2: BUY at 173.2131 - ACTIVE
-Level 3: BUY at 175.8598 - ACTIVE
-Level 4: BUY at 178.5066 - ACTIVE
-Level 5: BUY at 181.1533 - ACTIVE
-Level 6: BUY at 183.8000 - ACTIVE
-============================================================
-============================================================
-Time 2025-08-15 22:00:00+00:00
-Position TradeSignal.BUY
-Entry price 187.6
-Market trend bearish
-CVD trend bullish
-CVD strength strong
-RSI 25.250278086763046
-ATR 2.864285714285716
-Signal TradeSignal.BUY
-Confidence 100.0
-Score {'BUY': 100, 'SELL': 0}
-Level 1: BUY at 174.0928 - ACTIVE
-Level 2: BUY at 176.7942 - ACTIVE
-Level 3: BUY at 179.4957 - ACTIVE
-Level 4: BUY at 182.1971 - ACTIVE
-Level 5: BUY at 184.8986 - ACTIVE
-Level 6: BUY at 187.6000 - ACTIVE
-============================================================
-============================================================
-Time 2025-08-16 00:00:00+00:00
-Position TradeSignal.BUY
-Entry price 187.35
-Market trend bearish
-CVD trend bullish
-CVD strength strong
-RSI 30.88701161562821
-ATR 2.95357142857143
-Signal TradeSignal.BUY
-Confidence 100.0
-Score {'BUY': 85, 'SELL': 0}
-Level 1: BUY at 173.8608 - ACTIVE
-Level 2: BUY at 176.5586 - ACTIVE
-Level 3: BUY at 179.2565 - ACTIVE
-Level 4: BUY at 181.9543 - ACTIVE
-Level 5: BUY at 184.6522 - ACTIVE
-Level 6: BUY at 187.3500 - ACTIVE
-============================================================
-============================================================
-Time 2025-08-17 19:00:00+00:00
-Position TradeSignal.BUY
-Entry price 191.13
-Market trend neutral
-CVD trend bullish
-CVD strength strong
-RSI 44.847605224963694
-ATR 1.8649999999999949
-Signal TradeSignal.SELL
-Confidence 57.14
-Score {'BUY': 30, 'SELL': 40}
-Level 1: BUY at 183.4848 - ACTIVE
-Level 2: BUY at 186.0332 - ACTIVE
-Level 3: BUY at 188.5816 - ACTIVE
-Level 4: BUY at 191.1300 - ACTIVE
-============================================================
-============================================================
-Time 2025-08-17 20:00:00+00:00
-Position TradeSignal.BUY
-Entry price 191.05
-Market trend neutral
-CVD trend bullish
-CVD strength strong
-RSI 46.88922610015179
-ATR 1.8649999999999969
-Signal TradeSignal.BUY
-Confidence 60.0
-Score {'BUY': 30, 'SELL': 20}
-Level 1: BUY at 183.4080 - ACTIVE
-Level 2: BUY at 185.9553 - ACTIVE
-Level 3: BUY at 188.5027 - ACTIVE
-Level 4: BUY at 191.0500 - ACTIVE
-============================================================
-============================================================
-Time 2025-08-17 22:00:00+00:00
-Position TradeSignal.BUY
-Entry price 192.99
-Market trend bullish
-CVD trend bullish
-CVD strength strong
-RSI 48.778682457439
-ATR 1.866428571428569
-Signal TradeSignal.BUY
-Confidence 100.0
-Score {'BUY': 85, 'SELL': 0}
-Level 1: BUY at 190.0952 - ACTIVE
-Level 2: BUY at 191.5426 - ACTIVE
-Level 3: BUY at 192.9900 - ACTIVE
-============================================================
-============================================================
-Time 2025-08-18 02:00:00+00:00
-Position TradeSignal.BUY
-Entry price 183.86
-Market trend neutral
-CVD trend bullish
-CVD strength strong
-RSI 28.156365557316477
-ATR 2.2064285714285705
-Signal TradeSignal.BUY
-Confidence 60.0
-Score {'BUY': 60, 'SELL': 40}
-Level 1: BUY at 176.5056 - ACTIVE
-Level 2: BUY at 178.9571 - ACTIVE
-Level 3: BUY at 181.4085 - ACTIVE
-Level 4: BUY at 183.8600 - ACTIVE
-============================================================
-============================================================
-Time 2025-08-18 03:00:00+00:00
-Position TradeSignal.BUY
-Entry price 182.56
-Market trend neutral
-CVD trend bullish
-CVD strength strong
-RSI 22.557172557172564
-ATR 2.282142857142856
-Signal TradeSignal.BUY
-Confidence 52.94
-Score {'BUY': 45, 'SELL': 40}
-Level 1: BUY at 175.2576 - ACTIVE
-Level 2: BUY at 177.6917 - ACTIVE
-Level 3: BUY at 180.1259 - ACTIVE
-Level 4: BUY at 182.5600 - ACTIVE
-============================================================
-============================================================
-Time 2025-08-18 04:00:00+00:00
-Position TradeSignal.BUY
-Entry price 182.8
-Market trend neutral
-CVD trend bullish
-CVD strength strong
-RSI 21.28895932382474
-ATR 2.26857142857143
-Signal TradeSignal.BUY
-Confidence 100.0
-Score {'BUY': 65, 'SELL': 0}
-Level 1: BUY at 175.4880 - ACTIVE
-Level 2: BUY at 177.9253 - ACTIVE
-Level 3: BUY at 180.3627 - ACTIVE
-Level 4: BUY at 182.8000 - ACTIVE
-============================================================
-============================================================
-Time 2025-08-18 07:00:00+00:00
-Position TradeSignal.BUY
-Entry price 180.54
-Market trend bearish
-CVD trend bullish
-CVD strength strong
-RSI 12.792056074766336
-ATR 2.30714285714286
-Signal TradeSignal.BUY
-Confidence 52.94
-Score {'BUY': 45, 'SELL': 40}
-Level 1: BUY at 167.5411 - ACTIVE
-Level 2: BUY at 170.1409 - ACTIVE
-Level 3: BUY at 172.7407 - ACTIVE
-Level 4: BUY at 175.3404 - ACTIVE
-Level 5: BUY at 177.9402 - ACTIVE
-Level 6: BUY at 180.5400 - ACTIVE
-============================================================
-============================================================
-Time 2025-08-21 20:00:00+00:00
-Position TradeSignal.BUY
-Entry price 180.75
-Market trend neutral
-CVD trend bullish
-CVD strength strong
-RSI 26.677445432498004
-ATR 2.049285714285712
-Signal TradeSignal.BUY
-Confidence 100.0
-Score {'BUY': 85, 'SELL': 0}
-Level 1: BUY at 173.5200 - ACTIVE
-Level 2: BUY at 175.9300 - ACTIVE
-Level 3: BUY at 178.3400 - ACTIVE
-Level 4: BUY at 180.7500 - ACTIVE
-============================================================
-============================================================
-Time 2025-08-22 04:00:00+00:00
-Position TradeSignal.BUY
-Entry price 182.83
-Market trend neutral
-CVD trend bullish
-CVD strength strong
-RSI 43.53268428372746
-ATR 1.9749999999999983
-Signal TradeSignal.BUY
-Confidence 71.43
-Score {'BUY': 50, 'SELL': 20}
-Level 1: BUY at 175.5168 - ACTIVE
-Level 2: BUY at 177.9545 - ACTIVE
-Level 3: BUY at 180.3923 - ACTIVE
-Level 4: BUY at 182.8300 - ACTIVE
-============================================================
-============================================================
-Time 2025-08-22 18:00:00+00:00
-Position TradeSignal.SELL
-Entry price 196.81
-Market trend bullish
-CVD trend bearish
-CVD strength strong
-RSI 76.31777108433735
-ATR 3.1314285714285677
-Confidence 100.0
-Score {'BUY': 0, 'SELL': 65}
-============================================================
-============================================================
-Time 2025-08-22 22:00:00+00:00
-Position TradeSignal.SELL
-Entry price 199.44
-Market trend bullish
-CVD trend bearish
-CVD strength strong
-RSI 77.99145299145297
-ATR 3.382142857142855
-Confidence 76.47
-Score {'BUY': 20, 'SELL': 65}
-============================================================
-============================================================
-Time 2025-08-23 00:00:00+00:00
-Position TradeSignal.SELL
-Entry price 198.57
-Market trend bullish
-CVD trend bearish
-CVD strength strong
-RSI 80.31933356473444
-ATR 3.4207142857142867
-Confidence 100.0
-Score {'BUY': 0, 'SELL': 100}
-============================================================
-============================================================
-Time 2025-08-23 05:00:00+00:00
-Position TradeSignal.SELL
-Entry price 207.63
-Market trend bullish
-CVD trend bearish
-CVD strength strong
-RSI 82.27790432801817
-ATR 2.9728571428571433
-Confidence 80.0
-Score {'BUY': 20, 'SELL': 80}
-============================================================
-============================================================
-Time 2025-08-23 06:00:00+00:00
-Position TradeSignal.SELL
-Entry price 206.62
-Market trend bullish
-CVD trend bearish
-CVD strength strong
-RSI 77.26218097447794
-ATR 2.8107142857142855
-Confidence 76.47
-Score {'BUY': 20, 'SELL': 65}
-============================================================
-============================================================
-Time 2025-08-24 03:00:00+00:00
-Position TradeSignal.SELL
-Entry price 209.21
-Market trend bullish
-CVD trend bearish
-CVD strength strong
-RSI 88.62944162436568
-ATR 1.9157142857142873
-Confidence 69.23
-Score {'BUY': 20, 'SELL': 45}
-============================================================
-============================================================
-Time 2025-08-24 05:00:00+00:00
-Position TradeSignal.SELL
-Entry price 208.68
-Market trend bullish
-CVD trend bearish
-CVD strength strong
-RSI 74.4698205546494
-ATR 1.9964285714285726
-Confidence 100.0
-Score {'BUY': 0, 'SELL': 85}
-============================================================
-============================================================
-Time 2025-08-24 20:00:00+00:00
-Position TradeSignal.BUY
-Entry price 203.74
-Market trend neutral
-CVD trend bullish
-CVD strength strong
-RSI 41.23422159887798
-ATR 3.1492857142857207
-Signal TradeSignal.SELL
-Confidence 57.14
-Score {'BUY': 30, 'SELL': 40}
-Level 1: BUY at 195.5904 - ACTIVE
-Level 2: BUY at 198.3069 - ACTIVE
-Level 3: BUY at 201.0235 - ACTIVE
-Level 4: BUY at 203.7400 - ACTIVE
-============================================================
-============================================================
-Time 2025-08-25 04:00:00+00:00
-Position TradeSignal.BUY
-Entry price 207.41
-Market trend bullish
-CVD trend bullish
-CVD strength strong
-RSI 51.91605839416057
-ATR 4.520000000000004
-Signal TradeSignal.SELL
-Confidence 57.14
-Score {'BUY': 30, 'SELL': 40}
-Level 1: BUY at 204.2988 - ACTIVE
-Level 2: BUY at 205.8544 - ACTIVE
-Level 3: BUY at 207.4100 - ACTIVE
-============================================================
-============================================================
-Time 2025-08-25 06:00:00+00:00
-Position TradeSignal.BUY
-Entry price 201.99
-Market trend neutral
-CVD trend bullish
-CVD strength strong
-RSI 43.66883116883118
-ATR 4.637142857142861
-Signal TradeSignal.BUY
-Confidence 52.94
-Score {'BUY': 45, 'SELL': 40}
-Level 1: BUY at 193.9104 - ACTIVE
-Level 2: BUY at 196.6036 - ACTIVE
-Level 3: BUY at 199.2968 - ACTIVE
-Level 4: BUY at 201.9900 - ACTIVE
-============================================================
-============================================================
-Time 2025-08-25 08:00:00+00:00
-Position TradeSignal.BUY
-Entry price 199.93
-Market trend neutral
-CVD trend bullish
-CVD strength strong
-RSI 33.381712626995636
-ATR 4.789285714285717
-Signal TradeSignal.BUY
-Confidence 69.23
-Score {'BUY': 45, 'SELL': 20}
-Level 1: BUY at 191.9328 - ACTIVE
-Level 2: BUY at 194.5985 - ACTIVE
-Level 3: BUY at 197.2643 - ACTIVE
-Level 4: BUY at 199.9300 - ACTIVE
-============================================================
-============================================================
-Time 2025-08-25 21:00:00+00:00
-Position TradeSignal.BUY
-Entry price 186.27
-Market trend bearish
-CVD trend bullish
-CVD strength strong
-RSI 14.553990610328498
-ATR 3.000714285714293
-Signal TradeSignal.BUY
-Confidence 69.23
-Score {'BUY': 45, 'SELL': 20}
-Level 1: BUY at 172.8586 - ACTIVE
-Level 2: BUY at 175.5408 - ACTIVE
-Level 3: BUY at 178.2231 - ACTIVE
-Level 4: BUY at 180.9054 - ACTIVE
-Level 5: BUY at 183.5877 - ACTIVE
-Level 6: BUY at 186.2700 - ACTIVE
-============================================================
-============================================================
-Time 2025-08-27 05:00:00+00:00
-Position TradeSignal.SELL
-Entry price 202.84
-Market trend bullish
-CVD trend bearish
-CVD strength strong
-RSI 76.13929492691312
-ATR 2.8614285714285717
-Confidence 100.0
-Score {'BUY': 0, 'SELL': 85}
-============================================================
-============================================================
-Time 2025-08-27 12:00:00+00:00
-Position TradeSignal.SELL
-Entry price 204.59
-Market trend bullish
-CVD trend bearish
-CVD strength strong
-RSI 71.18463180362865
-ATR 2.801428571428567
-Confidence 75.0
-Score {'BUY': 20, 'SELL': 60}
-============================================================
-============================================================
-Time 2025-08-27 16:00:00+00:00
-Position TradeSignal.SELL
-Entry price 207.88
-Market trend bullish
-CVD trend bearish
-CVD strength strong
-RSI 76.58402203856758
-ATR 2.962142857142857
-Confidence 69.23
-Score {'BUY': 20, 'SELL': 45}
-============================================================
-============================================================
-Time 2025-08-27 22:00:00+00:00
-Position TradeSignal.BUY
-Entry price 204.31
-Market trend neutral
-CVD trend bullish
-CVD strength strong
-RSI 52.49856404365309
-ATR 3.192857142857142
-Signal TradeSignal.BUY
-Confidence 52.94
-Score {'BUY': 45, 'SELL': 40}
-Level 1: BUY at 196.1376 - ACTIVE
-Level 2: BUY at 198.8617 - ACTIVE
-Level 3: BUY at 201.5859 - ACTIVE
-Level 4: BUY at 204.3100 - ACTIVE
-============================================================
-============================================================
-Time 2025-08-28 20:00:00+00:00
-Position TradeSignal.BUY
-Entry price 213.13
-Market trend bullish
-CVD trend bullish
-CVD strength strong
-RSI 52.57278266756937
-ATR 3.682857142857143
-Signal TradeSignal.BUY
-Confidence 100.0
-Score {'BUY': 70, 'SELL': 0}
-Level 1: BUY at 209.9330 - ACTIVE
-Level 2: BUY at 211.5315 - ACTIVE
-Level 3: BUY at 213.1300 - ACTIVE
-============================================================
-============================================================
-Time 2025-08-30 23:00:00+00:00
-Position TradeSignal.BUY
-Entry price 202.59
-Market trend neutral
-CVD trend bullish
-CVD strength strong
-RSI 51.33795837462839
-ATR 1.7678571428571448
-Signal TradeSignal.BUY
-Confidence 76.47
-Score {'BUY': 65, 'SELL': 20}
-Level 1: BUY at 194.4864 - ACTIVE
-Level 2: BUY at 197.1876 - ACTIVE
-Level 3: BUY at 199.8888 - ACTIVE
-Level 4: BUY at 202.5900 - ACTIVE
-============================================================
-============================================================
-Time 2025-09-01 03:00:00+00:00
-Position TradeSignal.BUY
-Entry price 198.3
-Market trend neutral
-CVD trend bullish
-CVD strength strong
-RSI 37.993527508090715
-ATR 2.153571428571429
-Signal TradeSignal.BUY
-Confidence 100.0
-Score {'BUY': 70, 'SELL': 0}
-Level 1: BUY at 190.3680 - ACTIVE
-Level 2: BUY at 193.0120 - ACTIVE
-Level 3: BUY at 195.6560 - ACTIVE
-Level 4: BUY at 198.3000 - ACTIVE
-============================================================
-============================================================
-Time 2025-09-01 05:00:00+00:00
-Position TradeSignal.BUY
-Entry price 198.3
-Market trend bearish
-CVD trend bullish
-CVD strength strong
-RSI 28.979591836734883
-ATR 2.1707142857142827
-Signal TradeSignal.BUY
-Confidence 76.47
-Score {'BUY': 65, 'SELL': 20}
-Level 1: BUY at 184.0224 - ACTIVE
-Level 2: BUY at 186.8779 - ACTIVE
-Level 3: BUY at 189.7334 - ACTIVE
-Level 4: BUY at 192.5890 - ACTIVE
-Level 5: BUY at 195.4445 - ACTIVE
-Level 6: BUY at 198.3000 - ACTIVE
-============================================================
-============================================================
-Time 2025-09-01 06:00:00+00:00
-Position TradeSignal.BUY
-Entry price 198.69
-Market trend bearish
-CVD trend bullish
-CVD strength strong
-RSI 28.247422680412384
-ATR 2.192142857142855
-Signal TradeSignal.BUY
-Confidence 100.0
-Score {'BUY': 80, 'SELL': 0}
-Level 1: BUY at 184.3843 - ACTIVE
-Level 2: BUY at 187.2455 - ACTIVE
-Level 3: BUY at 190.1066 - ACTIVE
-Level 4: BUY at 192.9677 - ACTIVE
-Level 5: BUY at 195.8289 - ACTIVE
-Level 6: BUY at 198.6900 - ACTIVE
-============================================================
-============================================================
-Time 2025-09-01 10:00:00+00:00
-Position TradeSignal.BUY
-Entry price 199.39
-Market trend bearish
-CVD trend bullish
-CVD strength strong
-RSI 36.823992133726634
-ATR 2.804999999999999
-Signal TradeSignal.BUY
-Confidence 76.47
-Score {'BUY': 65, 'SELL': 20}
-Level 1: BUY at 185.0339 - ACTIVE
-Level 2: BUY at 187.9051 - ACTIVE
-Level 3: BUY at 190.7764 - ACTIVE
-Level 4: BUY at 193.6476 - ACTIVE
-Level 5: BUY at 196.5188 - ACTIVE
-Level 6: BUY at 199.3900 - ACTIVE
-============================================================
-============================================================
-Time 2025-09-01 22:00:00+00:00
-Position TradeSignal.BUY
-Entry price 195.67
-Market trend bearish
-CVD trend bullish
-CVD strength strong
-RSI 23.951670220326932
-ATR 2.2049999999999943
-Signal TradeSignal.BUY
-Confidence 100.0
-Score {'BUY': 85, 'SELL': 0}
-Level 1: BUY at 181.5818 - ACTIVE
-Level 2: BUY at 184.3994 - ACTIVE
-Level 3: BUY at 187.2171 - ACTIVE
-Level 4: BUY at 190.0347 - ACTIVE
-Level 5: BUY at 192.8524 - ACTIVE
-Level 6: BUY at 195.6700 - ACTIVE
-============================================================
-============================================================
-Time 2025-09-03 02:00:00+00:00
-Position TradeSignal.SELL
-Entry price 211.18
-Market trend bullish
-CVD trend bearish
-CVD strength strong
-RSI 77.00729927007295
-ATR 3.134999999999999
-Confidence 100.0
-Score {'BUY': 0, 'SELL': 80}
-============================================================
-============================================================
-Time 2025-09-03 05:00:00+00:00
-Position TradeSignal.SELL
-Entry price 208.93
-Market trend bullish
-CVD trend bearish
-CVD strength strong
-RSI 75.90504451038578
-ATR 2.5314285714285694
-Confidence 100.0
-Score {'BUY': 0, 'SELL': 100}
-============================================================
-============================================================
-Time 2025-09-03 22:00:00+00:00
-Position TradeSignal.BUY
-Entry price 209.78
-Market trend neutral
-CVD trend bullish
-CVD strength strong
-RSI 51.939825811559814
-ATR 1.9449999999999952
-Signal TradeSignal.BUY
-Confidence 100.0
-Score {'BUY': 85, 'SELL': 0}
-Level 1: BUY at 201.3888 - ACTIVE
-Level 2: BUY at 204.1859 - ACTIVE
-Level 3: BUY at 206.9829 - ACTIVE
-Level 4: BUY at 209.7800 - ACTIVE
-============================================================
-============================================================
-Time 2025-09-04 03:00:00+00:00
-Position TradeSignal.BUY
-Entry price 208.1
-Market trend neutral
-CVD trend bullish
-CVD strength strong
-RSI 36.12693246541905
-ATR 1.7471428571428578
-Signal TradeSignal.BUY
-Confidence 100.0
-Score {'BUY': 50, 'SELL': 0}
-Level 1: BUY at 199.7760 - ACTIVE
-Level 2: BUY at 202.5507 - ACTIVE
-Level 3: BUY at 205.3253 - ACTIVE
-Level 4: BUY at 208.1000 - ACTIVE
-============================================================
-============================================================
-Time 2025-09-04 07:00:00+00:00
-Position TradeSignal.BUY
-Entry price 206.56
-Market trend neutral
-CVD trend bullish
-CVD strength strong
-RSI 31.131221719457045
-ATR 1.527142857142857
-Signal TradeSignal.BUY
-Confidence 69.23
-Score {'BUY': 45, 'SELL': 20}
-Level 1: BUY at 198.2976 - ACTIVE
-Level 2: BUY at 201.0517 - ACTIVE
-Level 3: BUY at 203.8059 - ACTIVE
-Level 4: BUY at 206.5600 - ACTIVE
-============================================================
-============================================================
-Time 2025-09-04 20:00:00+00:00
-Position TradeSignal.BUY
-Entry price 202.52
-Market trend bearish
-CVD trend bullish
-CVD strength strong
-RSI 34.81116584564873
-ATR 1.7428571428571453
-Signal TradeSignal.BUY
-Confidence 69.23
-Score {'BUY': 45, 'SELL': 20}
-Level 1: BUY at 187.9386 - ACTIVE
-Level 2: BUY at 190.8548 - ACTIVE
-Level 3: BUY at 193.7711 - ACTIVE
-Level 4: BUY at 196.6874 - ACTIVE
-Level 5: BUY at 199.6037 - ACTIVE
-Level 6: BUY at 202.5200 - ACTIVE
-============================================================
-============================================================
-Time 2025-09-05 01:00:00+00:00
-Position TradeSignal.BUY
-Entry price 203.36
-Market trend bearish
-CVD trend bullish
-CVD strength strong
-RSI 38.550548112058536
-ATR 2.0607142857142855
-Signal TradeSignal.BUY
-Confidence 71.43
-Score {'BUY': 50, 'SELL': 20}
-Level 1: BUY at 188.7181 - ACTIVE
-Level 2: BUY at 191.6465 - ACTIVE
-Level 3: BUY at 194.5748 - ACTIVE
-Level 4: BUY at 197.5032 - ACTIVE
-Level 5: BUY at 200.4316 - ACTIVE
-Level 6: BUY at 203.3600 - ACTIVE
-============================================================
-============================================================
-Time 2025-09-07 01:00:00+00:00
-Position TradeSignal.BUY
-Entry price 202.62
-Market trend neutral
-CVD trend bullish
-CVD strength strong
-RSI 52.15686274509812
-ATR 1.277142857142859
-Signal TradeSignal.BUY
-Confidence 76.47
-Score {'BUY': 65, 'SELL': 20}
-Level 1: BUY at 194.5152 - ACTIVE
-Level 2: BUY at 197.2168 - ACTIVE
-Level 3: BUY at 199.9184 - ACTIVE
-Level 4: BUY at 202.6200 - ACTIVE
-============================================================
-============================================================
-Time 2025-09-07 19:00:00+00:00
-Position TradeSignal.BUY
-Entry price 202.98
-Market trend bullish
-CVD trend bullish
-CVD strength strong
-RSI 51.26849894291744
-ATR 1.1364285714285671
-Signal TradeSignal.BUY
-Confidence 100.0
-Score {'BUY': 85, 'SELL': 0}
-Level 1: BUY at 199.9353 - ACTIVE
-Level 2: BUY at 201.4577 - ACTIVE
-Level 3: BUY at 202.9800 - ACTIVE
-============================================================
-============================================================
-Time 2025-09-08 11:00:00+00:00
-Position TradeSignal.SELL
-Entry price 214.21
-Market trend bullish
-CVD trend bearish
-CVD strength strong
-RSI 79.66728280961189
-ATR 2.134285714285714
-Confidence 76.47
-Score {'BUY': 20, 'SELL': 65}
-============================================================
-============================================================
-Time 2025-09-08 19:00:00+00:00
-Position TradeSignal.SELL
-Entry price 216.03
-Market trend bullish
-CVD trend bearish
-CVD strength strong
-RSI 78.80577427821527
-ATR 2.4249999999999994
-Confidence 75.0
-Score {'BUY': 20, 'SELL': 60}
-============================================================
-============================================================
-Time 2025-09-08 20:00:00+00:00
-Position TradeSignal.SELL
-Entry price 214.36
-Market trend bullish
-CVD trend bearish
-CVD strength strong
-RSI 71.95925704014388
-ATR 2.5142857142857133
-Confidence 100.0
-Score {'BUY': 0, 'SELL': 85}
-============================================================
-============================================================
-Time 2025-09-10 13:00:00+00:00
-Position TradeSignal.SELL
-Entry price 224.06
-Market trend bullish
-CVD trend bearish
-CVD strength strong
-RSI 70.77106993424987
-ATR 2.343571428571425
-Confidence 69.23
-Score {'BUY': 20, 'SELL': 45}
-============================================================
-============================================================
-Time 2025-09-10 14:00:00+00:00
-Position TradeSignal.SELL
-Entry price 222.62
-Market trend bullish
-CVD trend bearish
-CVD strength strong
-RSI 73.08641975308657
-ATR 2.372857142857139
-Confidence 100.0
-Score {'BUY': 0, 'SELL': 85}
-============================================================
-============================================================
-Time 2025-09-12 05:00:00+00:00
-Position TradeSignal.SELL
-Entry price 238.49
-Market trend bullish
-CVD trend bearish
-CVD strength strong
-RSI 79.82810920121324
-ATR 2.5557142857142816
-Confidence 76.47
-Score {'BUY': 20, 'SELL': 65}
-============================================================
-============================================================
-Time 2025-09-12 06:00:00+00:00
-Position TradeSignal.SELL
-Entry price 238.02
-Market trend bullish
-CVD trend bearish
-CVD strength strong
-RSI 81.68649767201225
-ATR 2.4299999999999966
-Confidence 76.47
-Score {'BUY': 20, 'SELL': 65}
-============================================================
-============================================================
-Time 2025-09-12 13:00:00+00:00
-Position TradeSignal.SELL
-Entry price 239.46
-Market trend bullish
-CVD trend bearish
-CVD strength strong
-RSI 86.32707774798918
-ATR 2.5785714285714243
-Confidence 100.0
-Score {'BUY': 0, 'SELL': 65}
-============================================================
-============================================================
-Time 2025-09-12 16:00:00+00:00
-Position TradeSignal.SELL
-Entry price 238.7
-Market trend bullish
-CVD trend bearish
-CVD strength strong
-RSI 76.67536988685809
-ATR 2.2228571428571393
-Confidence 100.0
-Score {'BUY': 0, 'SELL': 85}
-============================================================
-============================================================
-Time 2025-09-14 03:00:00+00:00
-Position TradeSignal.SELL
-Entry price 246.81
-Market trend bullish
-CVD trend bearish
-CVD strength strong
-RSI 71.19062307217763
-ATR 2.3107142857142873
-Confidence 100.0
-Score {'BUY': 0, 'SELL': 85}
-============================================================
-============================================================
-Time 2025-09-14 06:00:00+00:00
-Position TradeSignal.SELL
-Entry price 246.93
-Market trend bullish
-CVD trend bearish
-CVD strength strong
-RSI 79.86111111111113
-ATR 2.335
-Confidence 75.0
-Score {'BUY': 20, 'SELL': 60}
-============================================================
-============================================================
-Time 2025-09-14 21:00:00+00:00
-Position TradeSignal.BUY
-Entry price 244.02
-Market trend neutral
-CVD trend bullish
-CVD strength strong
-RSI 43.67945823927772
-ATR 2.6492857142857185
-Signal TradeSignal.BUY
-Confidence 100.0
-Score {'BUY': 85, 'SELL': 0}
-Level 1: BUY at 234.2592 - ACTIVE
-Level 2: BUY at 237.5128 - ACTIVE
-Level 3: BUY at 240.7664 - ACTIVE
-Level 4: BUY at 244.0200 - ACTIVE
-============================================================
-============================================================
 Time 2025-09-17 23:00:00+00:00
 Position TradeSignal.SELL
 Entry price 244.75
@@ -886,6 +7,7 @@ CVD trend bearish
 CVD strength strong
 RSI 74.7433264887063
 ATR 3.394285714285711
+Signal TradeSignal.SELL
 Confidence 69.23
 Score {'BUY': 20, 'SELL': 45}
 ============================================================
@@ -898,6 +20,7 @@ CVD trend bearish
 CVD strength strong
 RSI 79.75522692503824
 ATR 3.5057142857142827
+Signal TradeSignal.SELL
 Confidence 69.23
 Score {'BUY': 20, 'SELL': 45}
 ============================================================
@@ -910,6 +33,7 @@ CVD trend bearish
 CVD strength strong
 RSI 83.81948266373143
 ATR 3.4392857142857127
+Signal TradeSignal.SELL
 Confidence 76.47
 Score {'BUY': 20, 'SELL': 65}
 ============================================================
@@ -922,6 +46,7 @@ CVD trend bearish
 CVD strength strong
 RSI 78.00802139037435
 ATR 2.570714285714286
+Signal TradeSignal.SELL
 Confidence 69.23
 Score {'BUY': 20, 'SELL': 45}
 ============================================================
@@ -934,6 +59,7 @@ CVD trend bearish
 CVD strength strong
 RSI 76.07561929595832
 ATR 2.442857142857142
+Signal TradeSignal.SELL
 Confidence 80.0
 Score {'BUY': 20, 'SELL': 80}
 ============================================================
@@ -1056,6 +182,230 @@ CVD trend bearish
 CVD strength strong
 RSI 70.38437303087582
 ATR 2.054285714285714
+Signal TradeSignal.SELL
 Confidence 100.0
 Score {'BUY': 0, 'SELL': 85}
+============================================================
+============================================================
+Time 2025-09-27 22:00:00+00:00
+Position TradeSignal.SELL
+Entry price 203.8
+Market trend bullish
+CVD trend bearish
+CVD strength strong
+RSI 71.08262108262112
+ATR 1.451428571428573
+Signal TradeSignal.SELL
+Confidence 100.0
+Score {'BUY': 0, 'SELL': 80}
+============================================================
+============================================================
+Time 2025-09-28 02:00:00+00:00
+Position TradeSignal.BUY
+Entry price 201.34
+Market trend neutral
+CVD trend bullish
+CVD strength strong
+RSI 44.264194669756606
+ATR 1.451428571428575
+Signal TradeSignal.BUY
+Confidence 71.43
+Score {'BUY': 50, 'SELL': 20}
+Level 1: BUY at 193.2864 - ACTIVE
+Level 2: BUY at 195.9709 - ACTIVE
+Level 3: BUY at 198.6555 - ACTIVE
+Level 4: BUY at 201.3400 - ACTIVE
+============================================================
+============================================================
+Time 2025-09-28 07:00:00+00:00
+Position TradeSignal.BUY
+Entry price 202.0
+Market trend neutral
+CVD trend bullish
+CVD strength strong
+RSI 51.81695827725443
+ATR 1.3300000000000023
+Signal TradeSignal.BUY
+Confidence 71.43
+Score {'BUY': 50, 'SELL': 20}
+Level 1: BUY at 193.9200 - ACTIVE
+Level 2: BUY at 196.6133 - ACTIVE
+Level 3: BUY at 199.3067 - ACTIVE
+Level 4: BUY at 202.0000 - ACTIVE
+============================================================
+============================================================
+Time 2025-09-29 00:00:00+00:00
+Position TradeSignal.SELL
+Entry price 209.12
+Market trend bullish
+CVD trend bearish
+CVD strength strong
+RSI 75.72041692213375
+ATR 1.7921428571428615
+Signal TradeSignal.SELL
+Confidence 100.0
+Score {'BUY': 0, 'SELL': 100}
+============================================================
+============================================================
+Time 2025-09-29 05:00:00+00:00
+Position TradeSignal.SELL
+Entry price 209.04
+Market trend bullish
+CVD trend bearish
+CVD strength strong
+RSI 75.65139263252476
+ATR 1.5442857142857207
+Signal TradeSignal.SELL
+Confidence 100.0
+Score {'BUY': 0, 'SELL': 100}
+============================================================
+============================================================
+Time 2025-10-01 17:00:00+00:00
+Position TradeSignal.SELL
+Entry price 217.32
+Market trend bullish
+CVD trend bearish
+CVD strength strong
+RSI 76.40949554896147
+ATR 2.3985714285714255
+Signal TradeSignal.SELL
+Confidence 100.0
+Score {'BUY': 0, 'SELL': 100}
+============================================================
+============================================================
+Time 2025-10-01 21:00:00+00:00
+Position TradeSignal.SELL
+Entry price 218.95
+Market trend bullish
+CVD trend bearish
+CVD strength strong
+RSI 74.11828540423218
+ATR 2.1785714285714266
+Signal TradeSignal.SELL
+Confidence 76.47
+Score {'BUY': 20, 'SELL': 65}
+============================================================
+============================================================
+Time 2025-10-02 19:00:00+00:00
+Position TradeSignal.SELL
+Entry price 232.11
+Market trend bullish
+CVD trend bearish
+CVD strength strong
+RSI 70.64220183486245
+ATR 2.662857142857143
+Signal TradeSignal.SELL
+Confidence 69.23
+Score {'BUY': 20, 'SELL': 45}
+============================================================
+============================================================
+Time 2025-10-02 22:00:00+00:00
+Position TradeSignal.SELL
+Entry price 232.95
+Market trend bullish
+CVD trend bearish
+CVD strength strong
+RSI 76.32241813602016
+ATR 2.5250000000000017
+Signal TradeSignal.SELL
+Confidence 75.0
+Score {'BUY': 20, 'SELL': 60}
+============================================================
+============================================================
+Time 2025-10-03 04:00:00+00:00
+Position TradeSignal.SELL
+Entry price 231.96
+Market trend bullish
+CVD trend bearish
+CVD strength strong
+RSI 72.79094827586219
+ATR 2.625000000000002
+Signal TradeSignal.SELL
+Confidence 69.23
+Score {'BUY': 20, 'SELL': 45}
+============================================================
+============================================================
+Time 2025-10-03 07:00:00+00:00
+Position TradeSignal.BUY
+Entry price 229.33
+Market trend neutral
+CVD trend bullish
+CVD strength strong
+RSI 48.91375905200795
+ATR 2.355000000000004
+Signal TradeSignal.BUY
+Confidence 100.0
+Score {'BUY': 50, 'SELL': 0}
+Level 1: BUY at 220.1568 - ACTIVE
+Level 2: BUY at 223.2145 - ACTIVE
+Level 3: BUY at 226.2723 - ACTIVE
+Level 4: BUY at 229.3300 - ACTIVE
+============================================================
+============================================================
+Time 2025-10-03 08:00:00+00:00
+Position TradeSignal.BUY
+Entry price 230.92
+Market trend bullish
+CVD trend bullish
+CVD strength strong
+RSI 45.543859649122744
+ATR 2.3492857142857173
+Signal TradeSignal.BUY
+Confidence 100.0
+Score {'BUY': 85, 'SELL': 0}
+Level 1: BUY at 227.4562 - ACTIVE
+Level 2: BUY at 229.1881 - ACTIVE
+Level 3: BUY at 230.9200 - ACTIVE
+============================================================
+============================================================
+Time 2025-10-04 19:00:00+00:00
+Position TradeSignal.BUY
+Entry price 226.8
+Market trend bearish
+CVD trend bullish
+CVD strength strong
+RSI 35.91874422899363
+ATR 1.5835714285714297
+Signal TradeSignal.BUY
+Confidence 100.0
+Score {'BUY': 70, 'SELL': 0}
+Level 1: BUY at 210.4704 - ACTIVE
+Level 2: BUY at 213.7363 - ACTIVE
+Level 3: BUY at 217.0022 - ACTIVE
+Level 4: BUY at 220.2682 - ACTIVE
+Level 5: BUY at 223.5341 - ACTIVE
+Level 6: BUY at 226.8000 - ACTIVE
+============================================================
+============================================================
+Time 2025-10-05 20:00:00+00:00
+Position TradeSignal.BUY
+Entry price 227.88
+Market trend neutral
+CVD trend bullish
+CVD strength strong
+RSI 27.2035510462905
+ATR 2.377142857142851
+Signal TradeSignal.BUY
+Confidence 76.47
+Score {'BUY': 65, 'SELL': 20}
+Level 1: BUY at 218.7648 - ACTIVE
+Level 2: BUY at 221.8032 - ACTIVE
+Level 3: BUY at 224.8416 - ACTIVE
+Level 4: BUY at 227.8800 - ACTIVE
+============================================================
+============================================================
+Time 2025-10-06 01:00:00+00:00
+Position TradeSignal.BUY
+Entry price 231.3
+Market trend bullish
+CVD trend bullish
+CVD strength strong
+RSI 45.43413173652697
+ATR 2.2757142857142805
+Signal TradeSignal.BUY
+Confidence 100.0
+Score {'BUY': 70, 'SELL': 0}
+Level 1: BUY at 227.8305 - ACTIVE
+Level 2: BUY at 229.5652 - ACTIVE
+Level 3: BUY at 231.3000 - ACTIVE
 ============================================================

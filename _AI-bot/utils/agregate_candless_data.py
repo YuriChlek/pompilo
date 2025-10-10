@@ -5,7 +5,7 @@ import zoneinfo
 from datetime import datetime, timedelta
 from collections import defaultdict
 from decimal import Decimal
-from utils import (
+from .config import (
     DB_HOST,
     DB_PORT,
     DB_NAME,
@@ -443,7 +443,7 @@ async def run_agregate_all_candles_data_job():
     table_schema = SCHEMAS[1]
     table_name = f"{str(TRADING_SYMBOLS[0]).lower()}_p_trades"
     hourly_ranges = await get_hourly_time_ranges_from_db(pool, table_schema, table_name)
-
+    #hourly_ranges = await get_hourly_time_ranges_from_db(pool, 'binance_trading_history_data', "solusdt_p_trades")
     await pool.close()
 
     await set_candles_data(hourly_ranges)
@@ -465,7 +465,7 @@ async def run_agregate_last_1h_candles_data_job():
     """
     print("Agregate last hour candle.")
     kyiv = zoneinfo.ZoneInfo("Europe/Kyiv")
-    now = [datetime.now()]
+    now = [datetime.now(kyiv)]
 
     await set_candles_data(now)
 

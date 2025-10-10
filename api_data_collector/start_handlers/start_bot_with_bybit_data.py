@@ -15,13 +15,14 @@ async def worker(pool):
         if data is None:
             break
         try:
-            await insert_api_data(pool, *data)
             timestamp, symbol, side, price, size, order_id = data[0]
-            threshold = MIN_BIG_TRADES_SIZES.get(symbol.upper())
+            if size > 0 and price > 0:
+                await insert_api_data(pool, *data)
 
+            threshold = MIN_BIG_TRADES_SIZES.get(symbol.upper())
             # ---- Перевірка на великий трейд ----
             if size and threshold and float(size) >= float(threshold):
-                emitter.emit('big_order_open', timestamp, symbol, side, price, size, exchange)
+                emitter.emit('big_order_open', symbol, side, price)
 
         except Exception as e:
             print(f"[WORKER ERROR] {e}")
@@ -40,10 +41,6 @@ def process_data_factory(tr_symbol):
                 size = float(trade["v"])
                 ord_id = f"{Decimal(trade['T'])}{trade['p']}{trade['v']}"
                 queue.put_nowait(((timestamp, symbol, side, price, size, ord_id), exchange, symbol))
-
-                # ---- Перевірка на великий трейд ----
-                # threshold = BIG_TRADES_MULTIPLIERS.get(symbol_upper)
-
         except Exception as e:
             print(f"[ERROR] While processing trade data for {tr_symbol}: {e}")
 
@@ -58,7 +55,7 @@ async def start_bot_with_bybit_data():
 
     for symbol in TRADING_SYMBOLS:
         ws.trade_stream(symbol=symbol, callback=process_data_factory(symbol))
-        print(f"[CONNECTED] Subscribed to {symbol} trades on Bybit.")
+        print(f"Connected to {symbol} trades on Bybit.")
 
     while True:
         await asyncio.sleep(1)

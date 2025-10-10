@@ -39,20 +39,19 @@ TRADING_SYMBOLS = [
 
 MIN_BIG_TRADES_SIZES = {
     'AAVEUSDT': 3000,
-    'ADAUSDT': 500000,
+    'ADAUSDT': 3500000,
     'APTUSDT': 38000,
     'AVAXUSDT': 80000,
-    'BNBUSDT': 10000,
-    'DOGEUSDT': 4000000,
+    'DOGEUSDT': 2000000,
     'DOTUSDT': 80000,
     'JUPUSDT': 300000,
-    'SOLUSDT': 20000,
-    'SUIUSDT': 300000,
+    'SOLUSDT': 10000,
+    'SUIUSDT': 250000,
     'TIAUSDT': 150000,
     'TAIUSDT': 1000000,
-    'WIFUSDT': 250000,
-    'WLDUSDT': 150000,
-    'XRPUSDT': 600000
+    'WIFUSDT': 150000,
+    'WLDUSDT': 80000,
+    'XRPUSDT': 300000
 }
 
 # Кількість знаків після коми для кожного символу

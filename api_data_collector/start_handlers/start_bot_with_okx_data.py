@@ -60,12 +60,16 @@ async def worker(pool):
         if data is None:
             break
         try:
-            await insert_api_data(pool, *data)
+
             timestamp, symbol, side, price, size, order_id = data[0]
+            if size > 0 and price > 0:
+                await insert_api_data(pool, *data)
+
             threshold = MIN_BIG_TRADES_SIZES.get(symbol.upper())
 
+            # ---- Перевірка на великий трейд ----
             if size and threshold and float(size) >= float(threshold):
-                emitter.emit('big_order_open', timestamp, symbol, side, price, size, exchange)
+                emitter.emit('big_order_open', symbol, side, price)
 
         except Exception as e:
             print(f"[WORKER ERROR] {e}")
@@ -104,7 +108,8 @@ async def okx_listener(pool, ct_val_map):
     uri = "wss://ws.okx.com:8443/ws/v5/public"
     async with websockets.connect(uri) as ws:
         await subscribe(ws, OKX_TRADING_SYMBOLS)
-        print(f"Subscribed to {OKX_TRADING_SYMBOLS} trades on OKX.")
+        for symbol in OKX_TRADING_SYMBOLS:
+            print(f"Connected to {symbol} trades on OKX.")
 
         while True:
             try:

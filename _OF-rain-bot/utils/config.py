@@ -21,8 +21,6 @@ SCHEMAS = [
     'bybit_trading_history_data',
     'binance_trading_history_data',
     'okx_trading_history_data',
-    'bitget_trading_history_data',
-    'gateio_trading_history_data',
 ]
 
 CANDLES_SHEMA = '_candles_trading_data'
@@ -33,9 +31,18 @@ SCHEMAS_CANDLES = [
 
 # Торгові символи
 TRADING_SYMBOLS = [
+    'AAVEUSDT',
+    'ADAUSDT',
+    'APTUSDT',
     'AVAXUSDT',
     'DOTUSDT',
+    'DOGEUSDT',
+    'JUPUSDT',
     'SOLUSDT',
+    'SUIUSDT',
+    'TIAUSDT',
+    'WIFUSDT',
+    'WLDUSDT',
     'XRPUSDT',
 ]
 
