@@ -18,7 +18,7 @@ async def delete_old_records():
                 # Видалення старих записів
                 delete_sql = f'''
                     DELETE FROM "{schema}"."{table_name}"
-                    WHERE timestamp < NOW() - INTERVAL '3 hours';
+                    WHERE timestamp < NOW() - INTERVAL '12 hours';
                 '''
                 delete_result = await conn.execute(delete_sql)
                 print(f"[{schema}.{table_name}] Deleted: {delete_result}")

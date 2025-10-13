@@ -15,6 +15,7 @@ class MarketAnalysis:
     cvd: Dict
     price: Dict
     market_trend: str
+    enhanced_market_trend: str
     indicators: pd.Series
 
 
@@ -485,6 +486,118 @@ class PriceActionAnalyzer:
             return base_type
 
 
+class EnhancedMarketTrendAnalyzer:
+    """Покращений аналізатор тренду з Bollinger Bands"""
+
+    def __init__(self, bb_period: int = 20, bb_std: int = 2):
+        self.bb_period = bb_period
+        self.bb_std = bb_std
+
+    def determine_trend_with_bb(self, df: pd.DataFrame) -> str:
+        """
+        Визначає тренд з використанням Bollinger Bands + MA
+        """
+        if len(df) < self.bb_period:
+            return "neutral"
+
+        # Розраховуємо Bollinger Bands
+        df = self._calculate_bollinger_bands(df)
+
+        current_price = df['close'].iloc[-1]
+        bb_upper = df['bb_upper'].iloc[-1]
+        bb_lower = df['bb_lower'].iloc[-1]
+        bb_middle = df['bb_middle'].iloc[-1]
+
+        # Комбінована логіка
+        bb_signal = self._analyze_bb_position(current_price, bb_upper, bb_lower, bb_middle)
+        ma_signal = self._analyze_ma_cross(df)
+        volatility_signal = self._analyze_bb_volatility(df)
+
+        return self._combine_signals(bb_signal, ma_signal, volatility_signal)
+
+    def _calculate_bollinger_bands(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Розраховує Bollinger Bands"""
+        df['bb_middle'] = df['close'].rolling(window=self.bb_period).mean()
+        df['bb_std'] = df['close'].rolling(window=self.bb_period).std()
+        df['bb_upper'] = df['bb_middle'] + (df['bb_std'] * self.bb_std)
+        df['bb_lower'] = df['bb_middle'] - (df['bb_std'] * self.bb_std)
+        return df
+
+    def _analyze_bb_position(self, price: float, bb_upper: float,  # ⬅️ ВИДАЛИТЬ @staticmethod
+                             bb_lower: float, bb_middle: float) -> str:
+        """
+        Аналізує позицію ціни відносно Bollinger Bands
+        """
+        bb_position = (price - bb_lower) / (bb_upper - bb_lower) if (bb_upper - bb_lower) > 0 else 0.5
+
+        if price > bb_upper:
+            return "strong_bullish"  # Сильний бичачий тренд
+        elif price < bb_lower:
+            return "strong_bearish"  # Сильний ведмежий тренд
+        elif bb_position > 0.7:
+            return "bullish"  # Бичачий тренд (верхня частина каналу)
+        elif bb_position < 0.3:
+            return "bearish"  # Ведмежий тренд (нижня частина каналу)
+        elif bb_position > 0.5:
+            return "weak_bullish"  # Слабкий бичачий
+        elif bb_position < 0.5:
+            return "weak_bearish"  # Слабкий ведмежий
+        else:
+            return "neutral"
+
+    def _analyze_ma_cross(self, df: pd.DataFrame) -> str:  # ⬅️ ВИДАЛИТЬ @staticmethod
+        """Аналіз перетину ковзних середніх"""
+        ma_fast = df['close'].rolling(20).mean()
+        ma_slow = df['close'].rolling(50).mean()
+
+        if ma_fast.iloc[-1] > ma_slow.iloc[-1] and ma_fast.iloc[-2] <= ma_slow.iloc[-2]:
+            return "bullish_cross"
+        elif ma_fast.iloc[-1] < ma_slow.iloc[-1] and ma_fast.iloc[-2] >= ma_slow.iloc[-2]:
+            return "bearish_cross"
+        elif ma_fast.iloc[-1] > ma_slow.iloc[-1]:
+            return "bullish_ma"
+        elif ma_fast.iloc[-1] < ma_slow.iloc[-1]:
+            return "bearish_ma"
+        else:
+            return "neutral_ma"
+
+    def _analyze_bb_volatility(self, df: pd.DataFrame) -> str:  # ⬅️ ВИДАЛИТЬ @staticmethod
+        """Аналіз волатильності за Bollinger Bands"""
+        bb_width = (df['bb_upper'] - df['bb_lower']) / df['bb_middle']
+        current_width = bb_width.iloc[-1]
+        avg_width = bb_width.mean()
+
+        if current_width > avg_width * 1.5:
+            return "high_volatility"  # Сильний тренд
+        elif current_width < avg_width * 0.7:
+            return "low_volatility"  # Консолідація
+        else:
+            return "normal_volatility"
+
+    def _combine_signals(self, bb_signal: str, ma_signal: str, volatility_signal: str) -> str:  # ⬅️ ВИДАЛИТЬ @staticmethod
+        """Комбінує всі сигнали в остаточний тренд"""
+
+        # Ваги для різних сигналів
+        signals_score = {
+            "strong_bullish": 3, "bullish": 2, "weak_bullish": 1,
+            "strong_bearish": -3, "bearish": -2, "weak_bearish": -1,
+            "bullish_cross": 2, "bearish_cross": -2,
+            "bullish_ma": 1, "bearish_ma": -1,
+            "high_volatility": 1, "low_volatility": -1
+        }
+
+        score = (signals_score.get(bb_signal, 0) +
+                 signals_score.get(ma_signal, 0) +
+                 signals_score.get(volatility_signal, 0))
+
+        if score >= 3:
+            return "bullish"
+        elif score <= -3:
+            return "bearish"
+        else:
+            return "neutral"
+
+
 class MarketTrendAnalyzer:
     """Аналізатор ринкового тренду"""
 
@@ -527,6 +640,7 @@ class CryptoTraderBot:
         self.cvd_analyzer = CVDAnalyzer()
         self.price_action_analyzer = PriceActionAnalyzer()
         self.trend_analyzer = MarketTrendAnalyzer()
+        self.enhanced_trend_analyzer = EnhancedMarketTrendAnalyzer()
 
     def generate_signal(self, df: pd.DataFrame) -> MarketAnalysis:
         """
@@ -566,6 +680,7 @@ class CryptoTraderBot:
             cvd=self.cvd_analyzer.analyze(latest, df),
             price=self.price_action_analyzer.analyze(latest, prev),
             market_trend=self.trend_analyzer.determine_trend(df),
+            enhanced_market_trend=self.enhanced_trend_analyzer.determine_trend_with_bb(df),
             indicators=latest
         )
 
