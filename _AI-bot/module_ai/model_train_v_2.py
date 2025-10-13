@@ -1,4 +1,5 @@
 import argparse
+from decimal import Decimal
 from pathlib import Path
 import warnings
 
@@ -25,6 +26,7 @@ from pytorch_forecasting.models.temporal_fusion_transformer import TemporalFusio
 from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint, LearningRateMonitor
 from lightning.pytorch.callbacks import Callback
 import gc
+import matplotlib.pyplot as plt
 
 target = "relative_change"
 # Відомі часові ознаки (не залежать від майбутнього)
@@ -40,29 +42,27 @@ UNKNOWN_REALS = [
 
 class EnhancedTemporalLoss(MultiHorizonMetric):
     """
-    Комбінована loss function, яка включає:
-    1. Quantile Loss для розподілу прогнозів
-    2. DTW (Dynamic Time Warping) для часового вирівнювання
-    3. Phase penalty для штрафування фазового зсуву
+    Комбінована loss function з правильним обробленням типів даних.
     """
 
     def __init__(self, quantiles=[0.1, 0.5, 0.9], alpha=0.3, beta=0.2, gamma=0.1, **kwargs):
         super().__init__(**kwargs)
         self.quantile_loss = QuantileLoss(quantiles)
-        self.alpha = alpha  # Вага для DTW
-        self.beta = beta  # Вага для phase penalty
-        self.gamma = gamma  # Вага для directional penalty
+        self.alpha = alpha
+        self.beta = beta
+        self.gamma = gamma
         self.quantiles = quantiles
 
     def dtw_distance(self, preds, targets):
         """
-        Обчислює Dynamic Time Warping distance між прогнозами та цілями.
-        Спрощена версія для батчів.
+        Обчислює Dynamic Time Warping distance з правильними типами.
         """
-        batch_size, seq_len = preds.shape
+        # Переконуємося, що тензори в float32
+        preds = preds.float()
+        targets = targets.float()
 
-        # Створюємо матрицю відстаней
-        dtw_matrix = torch.zeros(batch_size, seq_len, seq_len, device=preds.device)
+        batch_size, seq_len = preds.shape
+        dtw_matrix = torch.zeros(batch_size, seq_len, seq_len, device=preds.device, dtype=torch.float32)
 
         for i in range(seq_len):
             for j in range(seq_len):
@@ -91,18 +91,15 @@ class EnhancedTemporalLoss(MultiHorizonMetric):
         return acc_matrix[:, -1, -1].mean()
 
     def phase_penalty(self, preds, targets):
-        """
-        Штраф за фазовий зсув між прогнозами та цілями.
-        Використовує кореляцію та різницю в градієнтах.
-        """
-        # Обчислюємо градієнти (похідні)
+        """Phase penalty з правильними типами"""
+        preds = preds.float()
+        targets = targets.float()
+
         pred_gradients = preds[:, 1:] - preds[:, :-1]
         target_gradients = targets[:, 1:] - targets[:, :-1]
 
-        # Штраф за різницю в градієнтах
         gradient_penalty = F.mse_loss(pred_gradients, target_gradients)
 
-        # Штраф за кореляцію (менша кореляція = більший штраф)
         batch_size = preds.shape[0]
         correlation_penalty = 0
 
@@ -113,54 +110,41 @@ class EnhancedTemporalLoss(MultiHorizonMetric):
             if pred_series.norm() > 1e-8 and target_series.norm() > 1e-8:
                 correlation = torch.dot(pred_series, target_series) / (
                         pred_series.norm() * target_series.norm() + 1e-8)
-                # Перетворюємо кореляцію [-1, 1] у штраф [0, 2]
                 correlation_penalty += (1 - correlation) / 2
             else:
-                correlation_penalty += 1  # Максимальний штраф для постійних рядів
+                correlation_penalty += 1
 
         correlation_penalty /= batch_size
-
         return gradient_penalty + correlation_penalty
 
     def directional_penalty(self, preds, targets):
-        """
-        Штраф за неправильний напрямок руху.
-        """
+        """Directional penalty з правильними типами"""
+        preds = preds.float()
+        targets = targets.float()
+
         pred_direction = (preds[:, -1] - preds[:, 0]) > 0
         target_direction = (targets[:, -1] - targets[:, 0]) > 0
 
-        # Бінарна втрата за напрямком
         direction_loss = F.binary_cross_entropy_with_logits(
             (preds[:, -1] - preds[:, 0]).float(),
             target_direction.float()
         )
-
         return direction_loss
 
     def loss(self, y_pred, y_actual):
         """
-        Обчислює комбіновану втрату.
-
-        Args:
-            y_pred: Прогнози моделі [batch_size, seq_len, n_quantiles]
-            y_actual: Цільові значення [batch_size, seq_len]
+        Обчислює комбіновану втрату з правильними типами.
         """
-        # Базовий quantile loss
+        # Переконуємося, що цільові значення в float32
+        y_actual = y_actual.float()
+
         quant_loss = self.quantile_loss(y_pred, y_actual)
+        median_preds = y_pred[..., 1].float()  # Примусово до float32
 
-        # Витягуємо медіанний прогноз (quantile 0.5)
-        median_preds = y_pred[..., 1]  # [batch_size, seq_len]
-
-        # DTW loss
         dtw_loss = self.dtw_distance(median_preds, y_actual)
-
-        # Phase penalty
         phase_loss = self.phase_penalty(median_preds, y_actual)
-
-        # Directional penalty
         direction_loss = self.directional_penalty(median_preds, y_actual)
 
-        # Комбінована втрата
         total_loss = (quant_loss +
                       self.alpha * dtw_loss +
                       self.beta * phase_loss +
@@ -169,15 +153,12 @@ class EnhancedTemporalLoss(MultiHorizonMetric):
         return total_loss
 
     def to_prediction(self, y_pred: torch.Tensor) -> torch.Tensor:
-        """
-        Конвертує прогнози у точкові прогнози (медіану).
-        """
         if y_pred.ndim == 3:
-            return y_pred[..., 1]  # медіана
+            return y_pred[..., 1].float()  # Примусово до float32
         elif y_pred.ndim == 2:
-            return y_pred
+            return y_pred.float()
         else:
-            return y_pred
+            return y_pred.float()
 
     def to_quantiles(self, y_pred: torch.Tensor, quantiles=None) -> torch.Tensor:
         """
@@ -187,11 +168,9 @@ class EnhancedTemporalLoss(MultiHorizonMetric):
             quantiles = self.quantiles
 
         if y_pred.ndim == 3:
-            return y_pred
+            return y_pred.float()  # Примусово до float32
         else:
-            # Якщо вхід вже квантилі, повертаємо як є
-            return y_pred.unsqueeze(-1).expand(-1, -1, len(quantiles))
-
+            return y_pred.unsqueeze(-1).expand(-1, -1, len(quantiles)).float()
 
 def build_argparser():
     p = argparse.ArgumentParser()
@@ -443,7 +422,7 @@ def build_datasets(train_df: pd.DataFrame, val_df: pd.DataFrame, encoder_len: in
 
 def create_optimized_tft_model(training_ds, dataset_size: int, args):
     """
-    Створює TFT модель з оптимізованими параметрами на основі розміру датасету.
+    Створює TFT модель з оптимізованими параметрами та правильними типами даних.
     """
     quantiles = [0.1, 0.5, 0.9]
 
@@ -469,7 +448,17 @@ def create_optimized_tft_model(training_ds, dataset_size: int, args):
         "hidden_continuous_size": 32,
         "learning_rate": 8e-4,
     }
-
+    """
+    config = {
+        "hidden_size": 128,
+        "attention_head_size": 4,
+        "hidden_continuous_size": 16,
+        "dropout": 0.3,
+        "weight_decay": 2e-2,  # L2 регуляризація
+        # ІНШІ ПАРАМЕТРИ
+        "learning_rate": 8e-4
+    }
+    """
     model = TemporalFusionTransformer.from_dataset(
         training_ds,
         loss=loss,
@@ -490,11 +479,11 @@ def create_optimized_dataloaders(training_ds, validation_ds, dataset_size: int):
     # Адаптивний batch size на основі розміру датасету
 
     if dataset_size < 10000:
-        batch_size = 32
+        batch_size = 16
     elif dataset_size < 50000:
-        batch_size = 64
+        batch_size = 32
     else:
-        batch_size = 128
+        batch_size = 64
 
     print(f"Using batch size: {batch_size} for dataset size: {dataset_size}")
 
@@ -529,26 +518,123 @@ class MemoryCleanupCallback(Callback):
 class LossMonitoringCallback(Callback):
     """Callback для моніторингу компонентів loss function"""
 
+    def __init__(self):
+        self.train_losses = []
+        self.val_losses = []
+
     def on_train_epoch_end(self, trainer, pl_module):
-        # Для спрощення, ми не будемо моніторити компоненти окремо
-        # Можна додати цю функціональність пізніше
-        pass
+        # Збираємо train loss (якщо доступний)
+        current_train_loss = None
+        current_val_loss = None
+
+        # Спробуємо отримати train loss з логів
+        if 'train_loss' in trainer.callback_metrics:
+            current_train_loss = trainer.callback_metrics['train_loss'].item()
+            self.train_losses.append(current_train_loss)
+
+        # Спробуємо отримати val loss з логів
+        if 'val_loss' in trainer.callback_metrics:
+            current_val_loss = trainer.callback_metrics['val_loss'].item()
+            self.val_losses.append(current_val_loss)
+
+        # Перевірка на overfitting після достатньої кількості епох
+        if len(self.train_losses) > 10 and len(self.val_losses) > 10:
+            self._check_overfitting(current_train_loss, current_val_loss)
+
+
+    def on_fit_end(self, trainer, pl_module):
+        """Глибокий аналіз після завершення навчання"""
+        train = np.array(self.train_losses, dtype=np.float64)
+        val = np.array(self.val_losses, dtype=np.float64)
+
+        if len(train) < 5 or len(val) < 5:
+            print("⚠️ Недостатньо епох для аналізу (потрібно ≥5).")
+            return
+
+        # --- 1️⃣ Фінальні середні значення ---
+        avg_train, avg_val = np.mean(train[-5:]), np.mean(val[-5:])
+        print(f"\n📊 Фінальний аналіз overfitting:")
+        print(f"   ▫️ Середній train loss (останні 5 епох): {avg_train:.5f}")
+        print(f"   ▫️ Середній val loss (останні 5 епох):   {avg_val:.5f}")
+        print(f"   ▫️ Різниця: {avg_val - avg_train:.5f} ({(avg_val / avg_train - 1) * 100:.1f}%)")
+
+        # --- 2️⃣ Момент початку перенавчення ---
+        best_val_idx = np.argmin(val)
+        if best_val_idx < len(val) - 3:
+            print(f"   ⚠️ Val loss почав зростати після {best_val_idx+1}-ї епохи — "
+                  f"рекомендований early stop на {best_val_idx+1}-й епосі.")
+        else:
+            print("   ✅ Val loss стабільний — перенавчення незначне або відсутнє.")
+
+        # --- 3️⃣ Коефіцієнт узагальнення ---
+        generalization_gap = val / (train + 1e-8)
+        mean_gap = np.mean(generalization_gap[-5:])
+        if mean_gap > 1.3:
+            status = "🚨 Сильний overfitting"
+        elif mean_gap > 1.1:
+            status = "⚠️ Помірний overfitting"
+        else:
+            status = "✅ Добра узагальнююча здатність"
+        print(f"   ▫️ Середній коефіцієнт узагальнення (val/train): {mean_gap:.3f} → {status}")
+
+        # --- 4️⃣ Візуалізація ---
+        plt.figure(figsize=(8, 4))
+        plt.plot(train, label='Train loss', linewidth=2)
+        plt.plot(val, label='Val loss', linewidth=2)
+        plt.axvline(best_val_idx, color='gray', linestyle='--', alpha=0.6, label='Min val loss')
+        plt.title("Loss Dynamics (Train vs Validation)")
+        plt.xlabel("Epoch")
+        plt.ylabel("Loss")
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.show()
+
+class PrecisionFixCallback(Callback):
+    def on_train_batch_start(self, trainer, pl_module, batch, batch_idx):
+        self._ensure_float32(batch)
+
+    def on_validation_batch_start(self, trainer, pl_module, batch, batch_idx):
+        self._ensure_float32(batch)
+
+    def _ensure_float32(self, batch):
+        """Переконуємося, що всі тензори в batch мають float32"""
+        if isinstance(batch, (list, tuple)):
+            for i, item in enumerate(batch):
+                if isinstance(item, dict):
+                    for key, tensor in item.items():
+                        if tensor.dtype == torch.float16:
+                            batch[i][key] = tensor.float()
+                elif isinstance(item, torch.Tensor) and item.dtype == torch.float16:
+                    batch[i] = item.float()
+        elif isinstance(batch, dict):
+            for key, tensor in batch.items():
+                if tensor.dtype == torch.float16:
+                    batch[key] = tensor.float()
 
 
 class EnhancedTrainingCallbacks:
-    """Покращені callback-и для навчання"""
+    """Покращені callback-и для навчання з фіксом precision"""
 
     @staticmethod
     def get_callbacks(save_dir: Path, use_temporal_loss=False):
         ckpt_dir = save_dir / "checkpoints"
         ckpt_dir.mkdir(parents=True, exist_ok=True)
 
-        callbacks = [
+        """
             EarlyStopping(
                 monitor="val_loss",
                 patience=12,
                 mode="min",
                 min_delta=0.001
+            ),
+        """
+
+        callbacks = [
+            EarlyStopping(
+                monitor="val_loss",
+                patience=6,
+                mode="min",
+                min_delta=0.002
             ),
 
             ModelCheckpoint(
@@ -563,10 +649,13 @@ class EnhancedTrainingCallbacks:
 
             LearningRateMonitor(logging_interval="epoch"),
             MemoryCleanupCallback(),
+            PrecisionFixCallback(),  # Додаємо фікс для precision
+            LossMonitoringCallback(),
         ]
 
-        if use_temporal_loss:
-            callbacks.append(LossMonitoringCallback())
+        #callbacks.append(LossMonitoringCallback())
+        #if use_temporal_loss:
+            #callbacks.append(LossMonitoringCallback())
 
         return callbacks
 
@@ -583,6 +672,24 @@ def get_symbol_from_data(df: pd.DataFrame) -> str:
 def main():
     args = build_argparser().parse_args()
     seed_everything(args.seed)
+
+    # ВИПРАВЛЕННЯ: Вимкнути детерміністичні алгоритми
+    torch.use_deterministic_algorithms(False)
+
+    # Додатково: встановити детерміністичні операції тільки для CPU
+    if not torch.cuda.is_available():
+        torch.use_deterministic_algorithms(True)
+
+    print(f"CUDA available: {torch.cuda.is_available()}")
+    if torch.cuda.is_available():
+        print(f"GPU device: {torch.cuda.get_device_name()}")
+        # Додаткові налаштування для CUDA
+        torch.backends.cudnn.deterministic = False
+        torch.backends.cudnn.benchmark = True
+    else:
+        print("WARNING: CUDA not available, using CPU")
+
+    torch.set_float32_matmul_precision('high')
 
     print("[1/8] Loading data from PostgreSQL (chunked)…")
     df = read_postgres_chunked(args.db, args.table)
@@ -644,17 +751,18 @@ def main():
 
     accelerator = "gpu" if torch.cuda.is_available() else "cpu"
     accumulate_grad_batches = max(1, 64 // batch_size)
+    logger = CSVLogger(save_dir=str(save_dir), name="tft_logs")
 
     trainer = Trainer(
         max_epochs=args.epochs,
         accelerator=accelerator,
         devices=1,
-        gradient_clip_val=0.1,
+        gradient_clip_val=0.05,
         accumulate_grad_batches=accumulate_grad_batches,
-        deterministic=True,
-        precision="16-mixed" if accelerator == "gpu" else "32-true",
+        deterministic=False,
+        precision="32-true",
         callbacks=callbacks,
-        logger=CSVLogger(save_dir=str(save_dir), name="tft_logs"),
+        logger=logger,
         enable_progress_bar=True,
     )
 

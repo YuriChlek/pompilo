@@ -26,6 +26,7 @@ TRADING_SYMBOLS = [
 ]
 
 AI_TRADING_SYMBOLS = [
+    'AVAXUSDT',
     'SOLUSDT',
     'XRPUSDT',
 ]

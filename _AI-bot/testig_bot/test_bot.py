@@ -18,10 +18,10 @@ async def get_db_pool():
 async def start_test_bot(symbol):
     pool = await get_db_pool()
     number_of_rows = Decimal(39061)
-
+    testing_range = Decimal(39677) - number_of_rows
     async with pool.acquire() as conn:
         await conn.execute(f"TRUNCATE TABLE _candles_trading_data.{symbol.lower()}_p_candles_test_data CASCADE;")
-        for i in range(0, 617):
+        for i in range(0, int(testing_range)):
             async with conn.transaction():
 
                 await conn.execute(f"""
