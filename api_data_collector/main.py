@@ -1,6 +1,8 @@
 import asyncio
 from datetime import datetime, timedelta
-from utils import delete_old_records, run_agregate_last_1h_candles_data_job
+
+from bot_events import run_h1_bot
+from utils import delete_old_records, run_agregate_last_1h_candles_data_job, TRADING_SYMBOLS
 from start_handlers import (
     start_bot_with_bybit_data,
     start_bot_with_binance_data,
@@ -43,6 +45,8 @@ async def run_db_clean():
         await wait_until_next_run(target_minute=0, target_second=10)
         await run_agregate_last_1h_candles_data_job()
         await delete_old_records()
+        for symbol in TRADING_SYMBOLS:
+            await run_h1_bot(symbol, False)
 
 
 async def start_data_collector():

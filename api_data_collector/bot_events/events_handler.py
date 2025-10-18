@@ -12,9 +12,11 @@ emitter = AsyncIOEventEmitter()
 @emitter.on('big_order_open')
 async def handle_order(
         symbol,
-        max_order_direction,
-        max_order_price):
+        max_order_direction=None,
+        max_order_price=None):
     try:
+        print('Big order')
+        """
         position = await generate_signal(
             symbol,
             max_order_direction,
@@ -30,6 +32,6 @@ async def handle_order(
             print(position)
             await open_position(position)
         print('Send order data.')
-
+        """
     except Exception as e:
         print(f"[EVENT HANDLER ERROR]: {e}")

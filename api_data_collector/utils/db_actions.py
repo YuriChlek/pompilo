@@ -73,9 +73,9 @@ async def delete_old_records():
                 deleted_count = int(delete_result.split()[-1])
 
                 if deleted_count > 0:
-                    reindex_sql = f'REINDEX TABLE CONCURRENTLY "{schema}"."{table_name}";'
+                    reindex_sql = f'VACUUM FULL "{schema}"."{table_name}";'
                     await conn.execute(reindex_sql)
-                    print(f"[{schema}.{table_name}] REINDEX TABLE completed")
+                    print(f"[{schema}.{table_name}] VACUUM FULL completed")
 
             except Exception as e:
                 print(f"[ERROR] While processing {schema}.{table_name}: {e}")

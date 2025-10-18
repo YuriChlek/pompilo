@@ -1,7 +1,10 @@
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass
+
+from numpy import ndarray, dtype, float64
+
 from utils import DB_NAME, DB_HOST, DB_PASS, DB_PORT, DB_USER, TradeSignal
 from sqlalchemy import create_engine, text
 
@@ -254,8 +257,9 @@ class VPOCCalculator:
 class VolumeAnalyzer:
     """Аналіз об'єму торгів"""
 
-    def __init__(self, volume_threshold: float = 1.5):
+    def __init__(self, volume_threshold: float = 1.5, momentum_window: int = 24):
         self.volume_threshold = volume_threshold
+        self.momentum_window = momentum_window
 
     def analyze(self, candle: pd.Series, df: pd.DataFrame) -> Dict:
         """
@@ -271,12 +275,15 @@ class VolumeAnalyzer:
         volume_ratio = self._calculate_volume_ratio(candle, df)
         volume_spike = volume_ratio > self.volume_threshold
         volume_trend = self._determine_volume_trend(candle, df)
+        volume_momentum, volume_momentum_ratio = self._calculate_volume_momentum(df)
 
         return {
             'current': candle['volume'],
             'ratio': volume_ratio,
             'spike': volume_spike,
-            'trend': volume_trend
+            'trend': volume_trend,
+            'volume_momentum': volume_momentum,
+            'volume_momentum_ratio': volume_momentum_ratio
         }
 
     def _calculate_volume_ratio(self, candle: pd.Series, df: pd.DataFrame) -> float:
@@ -306,6 +313,29 @@ class VolumeAnalyzer:
         """
         return 'increasing' if candle['volume'] > df['volume'].iloc[-2] else 'decreasing'
 
+    def _calculate_volume_momentum(self, df: pd.DataFrame) -> (float, float):
+        """
+        Обчислює моментум об’єму — зміну обсягу відносно попереднього періоду.
+
+        Returns:
+            (momentum, momentum_ratio)
+        """
+        if len(df) < self.momentum_window + 1:
+            return 0.0, 1.0
+
+        current_volume = df['volume'].iloc[-1]
+        past_volume = df['volume'].iloc[-self.momentum_window - 1]
+
+        volume_momentum = current_volume - past_volume
+        volume_momentum_ratio = (current_volume / past_volume) if past_volume > 0 else 1.0
+
+        return volume_momentum, volume_momentum_ratio
+
+import pandas as pd
+import numpy as np
+from typing import Dict, Optional, Tuple, List
+from numpy.typing import NDArray
+
 
 class CVDAnalyzer:
     """Аналіз Cumulative Volume Delta"""
@@ -327,70 +357,288 @@ class CVDAnalyzer:
         cvd_trend = self._determine_cvd_trend(candle, df)
         cvd_strength = self._calculate_cvd_strength(candle, df)
         divergence = self._check_divergence(df)
+        confidence = self._calculate_cvd_confidence(df)
+
+        # Комбінована оцінка
+        signal_quality = self._assess_signal_quality(
+            cvd_trend, cvd_strength, divergence, confidence
+        )
 
         return {
             'value': candle['cvd'],
             'trend': cvd_trend,
             'strength': cvd_strength,
-            'divergence': divergence
+            'divergence': divergence,
+            'confidence': round(confidence, 2),
+            'signal_quality': signal_quality,
+            'timestamp': candle.name if hasattr(candle, 'name') else None
         }
+
+    def _assess_signal_quality(self, trend: str, strength: str,
+                               divergence: Optional[str], confidence: float) -> str:
+        """Оцінює загальну якість сигналу."""
+        quality_score = 0
+
+        # Бали за тренд
+        if trend != "neutral":
+            quality_score += 1
+
+        # Бали за силу
+        strength_scores = {'weak': 0, 'medium': 1, 'strong': 2}
+        quality_score += strength_scores.get(strength, 0)
+
+        # Бали за дивергенцію
+        if divergence:
+            quality_score += 2
+
+        # Множник довіри
+        quality_score *= confidence
+
+        if quality_score >= 3:
+            return "high"
+        elif quality_score >= 1.5:
+            return "medium"
+        else:
+            return "low"
+
+    def _calculate_cvd_confidence(self, df: pd.DataFrame) -> float:
+        """
+        Розраховує рівень довіри до сигналів CVD.
+        """
+        if len(df) < 20:
+            return 0.5
+
+        # Обсяг підтвердження (перетворюємо boolean в float)
+        volume_trend = float(df['volume'].tail(5).mean() > df['volume'].tail(20).mean())
+
+        # Консистентність тренду
+        cvd_trend_consistency = self._calculate_trend_consistency(df)
+
+        # Волатильність ринку
+        market_volatility = df['close'].pct_change().std()
+        if pd.isna(market_volatility):
+            market_volatility = 0.1
+
+        # Комбінована довіра
+        confidence = (cvd_trend_consistency * 0.5 +
+                      volume_trend * 0.3 +
+                      (1 - min(market_volatility, 0.1)) * 0.2)
+
+        return max(0, min(1, confidence))
+
+    def _calculate_trend_consistency(self, df: pd.DataFrame, period: int = 10) -> float:
+        """Розраховує консистентність тренду CVD."""
+        if len(df) < period:
+            return 0.5
+
+        cvd_changes = df['cvd'].diff().tail(period)
+        if len(cvd_changes) == 0:
+            return 0.5
+
+        consistent_moves = (cvd_changes > 0).sum() if cvd_changes.mean() > 0 else (cvd_changes < 0).sum()
+
+        return consistent_moves / period
 
     def _determine_cvd_trend(self, candle: pd.Series, df: pd.DataFrame) -> str:
         """
-        Визначає тренд CVD (бичачий або ведмежий).
-
-        Args:
-            candle: Поточна свічка.
-            df: Історичні дані.
-
-        Returns:
-            'bullish' або 'bearish'.
+        Визначає тренд CVD з використанням ковзних середніх та підтвердження.
         """
-        return "bullish" if candle['cvd'] > df['cvd'].iloc[-2] else "bearish"
+        if len(df) < 5:
+            return "neutral"
+
+        current_cvd = candle['cvd']
+        prev_cvd = df['cvd'].iloc[-2]
+
+        # Ковзна середня для згладжування
+        cvd_ma_5 = df['cvd'].tail(5).mean()
+        cvd_ma_10 = df['cvd'].tail(min(10, len(df))).mean()
+
+        # Мульти-таймфрейм аналіз
+        short_trend = "bullish" if current_cvd > prev_cvd else "bearish"
+
+        # Підтвердження ковзними середніми
+        if current_cvd > cvd_ma_5 > cvd_ma_10:
+            return "bullish"
+        elif current_cvd < cvd_ma_5 < cvd_ma_10:
+            return "bearish"
+
+        # Додаткова перевірка міцності тренду
+        cvd_slope = self._calculate_cvd_slope(df)
+        if abs(cvd_slope) > 0.1:  # Порог для значущого нахилу
+            if cvd_slope > 0 and short_trend == "bullish":
+                return "bullish"
+            elif cvd_slope < 0 and short_trend == "bearish":
+                return "bearish"
+
+        return "neutral"
+
+    def _calculate_cvd_slope(self, df: pd.DataFrame, period: int = 5) -> float:
+        """Розраховує нахил CVD за останній період."""
+        if len(df) < period:
+            return 0.0
+
+        recent_cvd = df['cvd'].tail(period).values
+        x = np.arange(len(recent_cvd))
+        slope = np.polyfit(x, recent_cvd, 1)[0]
+        return float(slope)
 
     def _calculate_cvd_strength(self, candle: pd.Series, df: pd.DataFrame) -> str:
         """
         Розраховує силу сигналу CVD.
-
-        Args:
-            candle: Поточна свічка.
-            df: Історичні дані.
-
-        Returns:
-            Рядок: 'strong', 'medium' або 'weak'.
         """
-        cvd_change = abs(candle['cvd'] - df['cvd'].iloc[-2])
-        avg_cvd_change = df['cvd'].abs().mean()
-        strength_ratio = cvd_change / avg_cvd_change if avg_cvd_change > 0 else 0
+        if len(df) < 10:
+            return "weak"
 
-        if strength_ratio > 0.8:
+        current_cvd = candle['cvd']
+        prev_cvd = df['cvd'].iloc[-2]
+        cvd_change = current_cvd - prev_cvd
+
+        # Відносна зміна
+        if prev_cvd != 0:
+            relative_change = abs(cvd_change / abs(prev_cvd))
+        else:
+            relative_change = 0
+
+        # Стандартне відхилення для контексту
+        cvd_std = df['cvd'].tail(20).std()
+        if pd.isna(cvd_std):
+            cvd_std = 0
+
+        avg_cvd_change = df['cvd'].diff().abs().tail(20).mean()
+        if pd.isna(avg_cvd_change):
+            avg_cvd_change = 0
+
+        # Комбінована оцінка сили з використанням avg_cvd_change
+        if cvd_std > 0:
+            z_score = abs(cvd_change) / cvd_std
+        else:
+            z_score = 0
+
+        # Нормалізація зміни відносно середньої зміни
+        if avg_cvd_change > 0:
+            normalized_change = abs(cvd_change) / avg_cvd_change
+        else:
+            normalized_change = 0
+
+        # Оновлена формула з використанням усіх метрик
+        strength_score = (
+                z_score * 0.4 +  # 40% - статистична значущість
+                normalized_change * 0.4 +  # 40% - відносно середньої зміни
+                relative_change * 0.2  # 20% - відносна зміна
+        )
+
+        # Класифікація
+        if strength_score > 2.0:
             return 'strong'
-        elif strength_ratio > 0.5:
+        elif strength_score > 1.0:
             return 'medium'
         else:
             return 'weak'
 
+    def _find_extremes(self, series: pd.Series, period: int = 5) -> Tuple[List[int], List[int]]:
+        """Знаходить максимуми та мінімуми в ряді."""
+        highs = []
+        lows = []
+
+        for i in range(period, len(series) - period):
+            window = series.iloc[i - period:i + period + 1]
+            if series.iloc[i] == window.max():
+                highs.append(i)
+            elif series.iloc[i] == window.min():
+                lows.append(i)
+
+        return highs, lows
+
+    def _detect_bearish_divergence(self, df: pd.DataFrame, price_highs: List[int], cvd_highs: List[int]) -> bool:
+        """Виявляє ведмежу дивергенцію."""
+        if len(price_highs) < 2 or len(cvd_highs) < 2:
+            return False
+
+        # Останні два максимуми
+        recent_price_high_idx = price_highs[-1]
+        prev_price_high_idx = price_highs[-2]
+        recent_cvd_high_idx = cvd_highs[-1]
+        prev_cvd_high_idx = cvd_highs[-2]
+
+        # Отримуємо фактичні значення за індексами
+        recent_price_high = df['close'].iloc[recent_price_high_idx]
+        prev_price_high = df['close'].iloc[prev_price_high_idx]
+        recent_cvd_high = df['cvd'].iloc[recent_cvd_high_idx]
+        prev_cvd_high = df['cvd'].iloc[prev_cvd_high_idx]
+
+        # Ведмежа дивергенція: ціна робить вищий максимум, CVD - нижчий
+        bearish_divergence = (recent_price_high > prev_price_high and
+                              recent_cvd_high < prev_cvd_high)
+
+        # Додаткові умови для підтвердження
+        if bearish_divergence:
+            # Перевіряємо, що дивергенція не застаріла
+            is_recent = (len(df) - recent_price_high_idx) <= 5
+
+            # Перевіряємо міцність сигналу
+            price_change_pct = (recent_price_high - prev_price_high) / prev_price_high
+            cvd_change_pct = (prev_cvd_high - recent_cvd_high) / abs(prev_cvd_high) if prev_cvd_high != 0 else 0
+
+            strong_signal = (price_change_pct > 0.01 and cvd_change_pct > 0.1)
+
+            return is_recent and strong_signal
+
+        return False
+
+    def _detect_bullish_divergence(self, df: pd.DataFrame, price_lows: List[int], cvd_lows: List[int]) -> bool:
+        """Виявляє бичу дивергенцію."""
+        if len(price_lows) < 2 or len(cvd_lows) < 2:
+            return False
+
+        # Останні два мінімуми
+        recent_price_low_idx = price_lows[-1]
+        prev_price_low_idx = price_lows[-2]
+        recent_cvd_low_idx = cvd_lows[-1]
+        prev_cvd_low_idx = cvd_lows[-2]
+
+        # Отримуємо фактичні значення за індексами
+        recent_price_low = df['close'].iloc[recent_price_low_idx]
+        prev_price_low = df['close'].iloc[prev_price_low_idx]
+        recent_cvd_low = df['cvd'].iloc[recent_cvd_low_idx]
+        prev_cvd_low = df['cvd'].iloc[prev_cvd_low_idx]
+
+        # Бича дивергенція: ціна робить нижчий мінімум, CVD - вищий
+        bullish_divergence = (recent_price_low < prev_price_low and
+                              recent_cvd_low > prev_cvd_low)
+
+        # Додаткові умови для підтвердження
+        if bullish_divergence:
+            # Перевіряємо, що дивергенція не застаріла
+            is_recent = (len(df) - recent_price_low_idx) <= 5
+
+            # Перевіряємо міцність сигналу
+            price_change_pct = (prev_price_low - recent_price_low) / prev_price_low
+            cvd_change_pct = (recent_cvd_low - prev_cvd_low) / abs(prev_cvd_low) if prev_cvd_low != 0 else 0
+
+            strong_signal = (price_change_pct > 0.01 and cvd_change_pct > 0.1)
+
+            return is_recent and strong_signal
+
+        return False
+
     def _check_divergence(self, df: pd.DataFrame) -> Optional[str]:
         """
         Перевіряє наявність дивергенції між ціною та CVD.
-
-        Args:
-            df: Історичні дані.
-
-        Returns:
-            'bullish_divergence', 'bearish_divergence' або None.
         """
-        if len(df) < 10:
+        if len(df) < 15:
             return None
 
-        # Bullish divergence
-        if (df['close'].iloc[-1] < df['close'].iloc[-3] and
-                df['cvd'].iloc[-1] > df['cvd'].iloc[-3]):
-            return "bullish_divergence"
+        # Знаходимо екстремуми ціни та CVD
+        price_highs, price_lows = self._find_extremes(df['close'], period=5)
+        cvd_highs, cvd_lows = self._find_extremes(df['cvd'], period=5)
 
-        # Bearish divergence
-        if (df['close'].iloc[-1] > df['close'].iloc[-3] and
-                df['cvd'].iloc[-1] < df['cvd'].iloc[-3]):
+        # Перевіряємо дивергенції
+        bullish_div = self._detect_bullish_divergence(df, price_lows, cvd_lows)
+        bearish_div = self._detect_bearish_divergence(df, price_highs, cvd_highs)
+
+        if bullish_div:
+            return "bullish_divergence"
+        elif bearish_div:
             return "bearish_divergence"
 
         return None
@@ -717,7 +965,7 @@ class DataFetcher:
         return df.sort_values(by='open_time')
 
 
-def get_of_data(symbol) -> MarketAnalysis:
+def get_of_data(symbol, is_test=False) -> MarketAnalysis:
     """
     Основна функція для отримання даних і запуску аналізу.
 
@@ -729,7 +977,11 @@ def get_of_data(symbol) -> MarketAnalysis:
     data_fetcher = DataFetcher(DB_USER, DB_PASS, DB_HOST, DB_PORT, DB_NAME)
 
     # Отримання даних
-    table_name = f"_candles_trading_data.{str(symbol).lower()}_p_candles"
+    if is_test:
+        table_name = f"_candles_trading_data.{str(symbol).lower()}_p_candles_test_data"
+    else:
+        table_name = f"_candles_trading_data.{str(symbol).lower()}_p_candles"
+
     data = data_fetcher.fetch_candle_data(table_name, limit=400)
 
     # Генерація сигналу

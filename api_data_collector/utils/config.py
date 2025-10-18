@@ -33,22 +33,29 @@ TRADING_SYMBOLS = [
     'XRPUSDT',
 ]
 
+
+TEST_TRADING_SYMBOLS = [
+    'AVAXUSDT',
+    'SOLUSDT',
+    'XRPUSDT',
+]
+
 """
 Розмір трейдів які вважаються великими
 """
 
 MIN_BIG_TRADES_SIZES = {
-    'AAVEUSDT': 3000,
-    'ADAUSDT': 3500000,
+    'AAVEUSDT': 2000,
+    'ADAUSDT': 1500000,
     'APTUSDT': 38000,
     'AVAXUSDT': 80000,
     'DOGEUSDT': 2000000,
     'DOTUSDT': 80000,
-    'JUPUSDT': 300000,
+    'JUPUSDT': 250000,
     'SOLUSDT': 10000,
-    'SUIUSDT': 250000,
+    'SUIUSDT': 150000,
     'TIAUSDT': 150000,
-    'TAIUSDT': 1000000,
+    'TAIUSDT': 500000,
     'WIFUSDT': 150000,
     'WLDUSDT': 80000,
     'XRPUSDT': 300000
