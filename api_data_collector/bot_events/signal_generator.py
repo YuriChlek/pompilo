@@ -19,64 +19,49 @@ from utils import (
 
 
 async def open_position(position):
-    if not position:
-        return
+    try:
+        if not position:
+            return
 
-    opened_positions = get_open_positions(position['symbol'].upper())
-    active_positions = [
-        p for p in opened_positions
-        if Decimal(p['size']) > 0 and p['symbol'].upper() == position['symbol'].upper()
-    ]
+        opened_positions = get_open_positions(position['symbol'].upper())
+        active_positions = [
+            p for p in opened_positions
+            if Decimal(p['size']) > 0 and p['symbol'].upper() == position['symbol'].upper()
+        ]
 
-    # Якщо немає активних позицій — відкриваємо нову
-    if not active_positions:
-        open_order(
-            position['symbol'],
-            position['direction'],
-            Decimal(position['size']),
-            position['stop_loss'],
-            position['take_profit'],
-            "Market",
-            position['price']
-        )
-        """
-        await send_scalping_message(
-            position['symbol'],
-            position['direction'],
-            position['price'],
-            position['take_profit'],
-            position['direction'],
-        )
-        """
-        return
+        # Якщо немає активних позицій — відкриваємо нову
+        if not active_positions:
+            open_order(
+                position['symbol'],
+                position['direction'],
+                Decimal(position['size']),
+                position['stop_loss'],
+                position['take_profit'],
+                "Market",
+                position['price']
+            )
+            return
 
         # Є вже відкрита позиція — перевірити напрямок
-    existing = active_positions[0]
-    if str(existing['direction']).lower() != str(position['direction']).lower():
+        existing = active_positions[0]
+        if str(existing['direction']).lower() != str(position['direction']).lower():
 
-        print(f"[CLOSE OPPOSITE POSITION]: {existing}")
-        order_size = Decimal(position['size']) + Decimal(existing['size'])
+            print(f"[CLOSE OPPOSITE POSITION]: {existing}")
+            order_size = Decimal(position['size']) + Decimal(existing['size'])
 
-        open_order(
-            position['symbol'],
-            position['direction'],
-            order_size,
-            position['stop_loss'],
-            position['take_profit'],
-            "Market",
-            position['price'] if position['order_type'] == 'Limit' else None
-        )
-        """
-        await send_scalping_message(
-            position['symbol'],
-            position['direction'],
-            position['price'],
-            position['take_profit'],
-            position['direction'],
-        )
-        """
-    else:
-        print(f"[SKIP]: Already have same direction position for {position['symbol']}")
+            open_order(
+                position['symbol'],
+                position['direction'],
+                order_size,
+                position['stop_loss'],
+                position['take_profit'],
+                "Market",
+                position['price']
+            )
+        else:
+            print(f"[SKIP]: Already have same direction position for {position['symbol']}")
+    except Exception as e:
+        print(f"[OPEN POSITION ERROR]: {e}")
 
 
 def calculate_position_size(
@@ -197,50 +182,6 @@ async def generate_signal(
                 'take_profit': round(tp, SYMBOLS_ROUNDING[symbol]),
                 'stop_loss': round(sl, SYMBOLS_ROUNDING[symbol])
             }
-        """
-        elif (
-                str(max_order_direction).lower() == BUY_DIRECTION and
-                of_data.cvd['trend'] == 'bullish' and
-                (of_data.cvd['strength'] == 'strong' or of_data.cvd['strength'] == 'very_strong') and
-                of_data.enhanced_market_trend == 'neutral' and
-                of_data.market_trend == 'bullish' and
-                weight['signal'] == TradeSignal.BUY and
-                Decimal(weight['confidence']) > Decimal('60')
-        ):
-            tp = Decimal(max_order_price) + Decimal(of_data.indicators['atr']) * Decimal('1.5')
-            sl = Decimal(max_order_price) - Decimal(of_data.indicators['atr'])
-            position_size = calculate_position_size(symbol, Decimal('0.1'), max_order_price, sl)
-
-            return {
-                'symbol': symbol,
-                'direction': max_order_direction.capitalize(),
-                'price': round(max_order_price, SYMBOLS_ROUNDING[symbol]),
-                'size': position_size,
-                'take_profit': round(tp, SYMBOLS_ROUNDING[symbol]),
-                'stop_loss': round(sl, SYMBOLS_ROUNDING[symbol])
-            }
-        elif (
-                str(max_order_direction).lower() == SELL_DIRECTION and
-                of_data.cvd['trend'] == 'bearish' and
-                (of_data.cvd['strength'] == 'strong' or of_data.cvd['strength'] == 'very_strong') and
-                of_data.enhanced_market_trend == 'neutral' and
-                of_data.market_trend == 'bearish' and
-                weight['signal'] == TradeSignal.SELL and
-                Decimal(weight['confidence']) > Decimal('60')
-        ):
-            tp = Decimal(max_order_price) - Decimal(of_data.indicators['atr']) * Decimal('1.5')
-            sl = Decimal(max_order_price) + Decimal(of_data.indicators['atr'])
-            position_size = calculate_position_size(symbol, Decimal('0.1'), max_order_price, sl)
-
-            return {
-                'symbol': symbol,
-                'direction': max_order_direction.capitalize(),
-                'price': round(max_order_price, SYMBOLS_ROUNDING[symbol]),
-                'size': position_size,
-                'take_profit': round(tp, SYMBOLS_ROUNDING[symbol]),
-                'stop_loss': round(sl, SYMBOLS_ROUNDING[symbol])
-            }
-        """
         return None
     except Exception as e:
         print(f"[EVENT HANDLER ERROR]: {e}")
@@ -274,6 +215,14 @@ async def generate_signal_1h_strategy(symbol, of_data):
         if min_strength == 0 or max_strength / min_strength > 1.4:
             return None
 
+        if (
+                (of_data.market_trend == of_data.cvd['trend'] == 'bearish' and TradeSignal.SELL or
+                 of_data.market_trend == of_data.cvd['trend'] == 'bullish' and TradeSignal.BUY) and
+                of_data.cvd['strength'] == 'strong' and
+                Decimal(of_data.volume['volume_momentum']) < Decimal(0)
+        ):
+            return None
+
         weight = weighted_signal(of_data)
         order_price = of_data.indicators['close']
         sl_size = get_sl_size(order_price, of_data.indicators['atr'])
@@ -283,8 +232,8 @@ async def generate_signal_1h_strategy(symbol, of_data):
                 weight['signal'] == TradeSignal.BUY and
                 Decimal(weight['confidence']) > Decimal('70') and
                 not (
-                    of_data.market_trend == 'bearish' and
-                    of_data.enhanced_market_trend == 'bearish'
+                        of_data.market_trend == 'bearish' and
+                        of_data.enhanced_market_trend == 'bearish'
                 )
         ):
             tp = Decimal(order_price) + sl_size * Decimal('2')
@@ -305,8 +254,8 @@ async def generate_signal_1h_strategy(symbol, of_data):
                 weight['signal'] == TradeSignal.SELL and
                 Decimal(weight['confidence']) > Decimal('70') and
                 not (
-                    of_data.market_trend == 'bullish' and
-                    of_data.enhanced_market_trend == 'bullish'
+                        of_data.market_trend == 'bullish' and
+                        of_data.enhanced_market_trend == 'bullish'
                 )
         ):
             tp = Decimal(order_price) - sl_size * Decimal('2')

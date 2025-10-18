@@ -1,11 +1,8 @@
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass
-
-from numpy import ndarray, dtype, float64
-
-from utils import DB_NAME, DB_HOST, DB_PASS, DB_PORT, DB_USER, TradeSignal
+from typing import Dict, Optional, Tuple, List
+from utils import DB_NAME, DB_HOST, DB_PASS, DB_PORT, DB_USER
 from sqlalchemy import create_engine, text
 
 
@@ -331,10 +328,7 @@ class VolumeAnalyzer:
 
         return volume_momentum, volume_momentum_ratio
 
-import pandas as pd
-import numpy as np
-from typing import Dict, Optional, Tuple, List
-from numpy.typing import NDArray
+
 
 
 class CVDAnalyzer:
