@@ -17,8 +17,7 @@ from .db_actions import (
     delete_old_records,
     create_tables
 )
-from .types import TradeSignal
-from .agregate_candless_data import run_agregate_last_1h_candles_data_job
+
 
 __all__ = [
     # Константи
@@ -32,12 +31,10 @@ __all__ = [
     'MIN_BIG_TRADES_SIZES',
     'TRADING_SYMBOLS',
     'SYMBOLS_ROUNDING',
-    'TradeSignal',
     'TEST_TRADING_SYMBOLS',
     # Функції
     'get_db_pool',
     'insert_api_data',
     'delete_old_records',
     'create_tables',
-    'run_agregate_last_1h_candles_data_job'
 ]

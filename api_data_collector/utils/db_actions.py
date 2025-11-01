@@ -55,7 +55,6 @@ async def insert_api_data(pool, data, exchange, symbol):
 
         return None
 
-
 async def delete_old_records():
     conn = await create_connection()
 
@@ -82,7 +81,6 @@ async def delete_old_records():
 
     await conn.close()
 
-
 # SQL шаблон для створення таблиці
 create_tick_data_table_sql = '''
 CREATE TABLE IF NOT EXISTS {schema}.{table_name} (
@@ -94,6 +92,7 @@ CREATE TABLE IF NOT EXISTS {schema}.{table_name} (
     order_id TEXT NOT NULL UNIQUE
 );
 '''
+
 
 create_candles_data_table_sql = '''
 CREATE TABLE IF NOT EXISTS {schema}.{table_name} (

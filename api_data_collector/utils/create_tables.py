@@ -2,18 +2,6 @@ import asyncio
 import asyncpg
 from config import TRADING_SYMBOLS, SCHEMAS
 
-# SQL шаблон для створення таблиці
-create_tick_data_table_sql = '''
-CREATE TABLE IF NOT EXISTS {schema}.{table_name} (
-    timestamp TIMESTAMP NOT NULL,
-    symbol TEXT NOT NULL,
-    side CHAR(4) NOT NULL,
-    size NUMERIC NOT NULL,
-    price NUMERIC NOT NULL,
-    order_id TEXT NOT NULL UNIQUE
-);
-'''
-
 create_candles_data_table_sql = '''
 CREATE TABLE IF NOT EXISTS {schema}.{table_name} (
     open_time TIMESTAMP NOT NULL,
@@ -24,8 +12,6 @@ CREATE TABLE IF NOT EXISTS {schema}.{table_name} (
     high NUMERIC NOT NULL,
     low NUMERIC NOT NULL,
     cvd NUMERIC NOT NULL,
-    poc NUMERIC NOT NULL,
-    vpoc_zone TEXT NOT NULL,
     volume NUMERIC NOT NULL,
     candle_id TEXT NOT NULL UNIQUE
 );
@@ -51,21 +37,11 @@ async def create_tables():
         port='5432'
     )
 
-    for schema in SCHEMAS:
-        # Створення схеми, якщо її немає
-        await conn.execute(create_schema_sql.format(schema=schema))
-
-        for symbol in TRADING_SYMBOLS:
-            table_name = f"{symbol.lower()}_p_trades"
-            sql = create_tick_data_table_sql.format(schema=schema, table_name=table_name)
-            await conn.execute(sql)
-            print(f"Created table {schema}.{table_name}")
-
     candles_data_schema = '_candles_trading_data'
     await conn.execute(create_schema_sql.format(schema=candles_data_schema))
 
     for symbol in TRADING_SYMBOLS:
-        table_name = f"{symbol.lower()}_p_candles"
+        table_name = f"{symbol.lower()}_p_candles_m15"
         sql = create_candles_data_table_sql.format(schema=candles_data_schema, table_name=table_name)
         await conn.execute(sql)
         print(f"Created table {candles_data_schema}.{table_name}")

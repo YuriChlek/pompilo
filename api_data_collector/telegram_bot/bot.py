@@ -9,10 +9,11 @@ CHAT_ID = ""
 bot = Bot(token=TOKEN)
 
 
-async def send_scalping_message(symbol, direction, price, take_profit, stop_loss):
+async def send_message(symbol, direction, price, take_profit, stop_loss):
     chat_id = "-4734898285"
     position = get_position_icon(str(direction).lower())
     time  = datetime.now(zoneinfo.ZoneInfo("Europe/Kyiv"))
+    time = time.replace(microsecond=0)
 
     message = f"""🚀 NEW TRADE
     

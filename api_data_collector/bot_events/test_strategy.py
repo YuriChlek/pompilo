@@ -1,5 +1,7 @@
 import asyncio
 from decimal import Decimal
+from pprint import pprint
+
 import asyncpg
 
 from indicators import get_of_data
@@ -17,8 +19,9 @@ async def get_db_pool():
 
 async def start_test_bot(symbol):
     pool = await get_db_pool()
-    number_of_rows = Decimal(38221)
-    testing_range = Decimal(39854) - number_of_rows
+    number_of_rows = Decimal(40500)
+    testing_range = Decimal(42296) - number_of_rows
+
     async with pool.acquire() as conn:
         await conn.execute(f"TRUNCATE TABLE _candles_trading_data.{symbol.lower()}_p_candles_test_data CASCADE;")
         for i in range(0, int(testing_range)):
@@ -26,9 +29,9 @@ async def start_test_bot(symbol):
 
                 await conn.execute(f"""
                 INSERT INTO _candles_trading_data.{symbol.lower()}_p_candles_test_data (
-                    open_time, close_time, symbol, open, close, high, low, cvd, poc, vpoc_zone, volume, candle_id
+                    open_time, close_time, symbol, open, close, high, low, cvd, volume, candle_id
                 )
-                SELECT open_time, close_time, symbol, open, close, high, low, cvd, poc, vpoc_zone, volume, candle_id
+                SELECT open_time, close_time, symbol, open, close, high, low, cvd, volume, candle_id
                 FROM _candles_trading_data.{symbol.lower()}_p_candles
                 ORDER BY open_time ASC
                 LIMIT {Decimal(number_of_rows + i)}
@@ -36,16 +39,17 @@ async def start_test_bot(symbol):
                 """)
 
             #await asyncio.to_thread(start_grid_bot)
-            of_data = get_of_data(symbol, True)
-            data = await generate_signal_1h_strategy(symbol, of_data)
+            alpha_trend_data, indicators_history = get_of_data(symbol, True)
+
+            data = await generate_signal_1h_strategy(symbol, alpha_trend_data, indicators_history, True)
             if data:
-                print(data)
-                await log_rez(data, of_data)
+                #print(data)
+                await log_rez(data, alpha_trend_data)
 
 
     await pool.close()
 
-async def log_rez(data, of_data):
+async def log_rez(data, alpha_trend_data):
     rez_path = f"_{str(data['symbol']).lower()}_of_rez.txt"
 
     with open(rez_path, 'a', encoding='utf-8') as f:
@@ -56,16 +60,21 @@ async def log_rez(data, of_data):
         f.write(f"Entry price: {data['price']}\n")
         f.write(f"Take profit: {data['take_profit']}\n")
         f.write(f"Stop Loss: {data['stop_loss']}\n")
-        f.write(f"Resistance cluster strength: {of_data.vpoc_cluster['resistance_cluster_strength']}\n")
-        f.write(f"Support cluster strength: {of_data.vpoc_cluster['support_cluster_strength']}\n")
-        f.write(f"ATR: {of_data.indicators['atr']}\n")
-        f.write(f"RSI: {of_data.indicators['rsi']}\n")
-        f.write(f"Cvd: {of_data.cvd['trend']}\n")
-        f.write(f"Cvd strength: {of_data.cvd['strength']}\n")
-        f.write(f"Volume: {of_data.indicators['volume']}\n")
-        f.write(f"Volume sma: {of_data.indicators['volume_sma']}\n")
-        f.write(f"Volume momentum: {of_data.volume['volume_momentum']}\n")
-        f.write(f"Volume momentum ratio: {of_data.volume['volume_momentum_ratio']}\n")
-        f.write(f"Market trend: {of_data.market_trend}\n")
-        f.write(f"Enhanced Market trend: {of_data.enhanced_market_trend}\n")
+        f.write(f"Поточний AlphaTrend: {alpha_trend_data.alpha_trend:.4f}\n")
+        f.write(f"Поточний SuperTrend: {alpha_trend_data.super_trend:.4f}\n")
+        #f.write(f"AD сигнал: {alpha_trend_data.ad_signal}\n")
+        #f.write(f"Тренд AD: {alpha_trend_data.indicators['ad_trend']}\n")
+        #f.write(f"Сила AD: {alpha_trend_data.indicators['ad_strength']}\n")
+        f.write(f"ATR: {alpha_trend_data.atr}\n")
+        f.write(f"MFI signal: {alpha_trend_data.mfi_signal}\n")
+        f.write(f"MFI trend: {alpha_trend_data.indicators['mfi_trend']}\n")
+        f.write(f"CVD trend: {alpha_trend_data.cvd_analysis.get('trend', 'N/A')}\n")
+        f.write(f"CVD Якість сигналу: {alpha_trend_data.cvd_analysis.get('signal_quality', 'N/A')}\n")
+        f.write(f"=== Even Better SineWave ===\n")
+        f.write(f"Значення SineWave: {alpha_trend_data.sinewave_analysis.get('sinewave', 'N/A'):.4f}\n")
+        f.write(f"Сигнал: {alpha_trend_data.sinewave_analysis.get('signal', 'N/A')}\n")
+        f.write(f"Тренд: {alpha_trend_data.sinewave_analysis.get('trend', 'N/A')}\n")
+        f.write(f"Сила: {alpha_trend_data.sinewave_analysis.get('strength', 'N/A')}\n")
+        f.write(f"📈 Market Trend Analyzer Results:\n")
+        f.write(f"Ринковий тренд: {alpha_trend_data.indicators.get('market_trend', 'neutral')}\n")
         f.write("=" * 60 + "\n")

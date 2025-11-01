@@ -1,10 +1,10 @@
 from pyee.asyncio import AsyncIOEventEmitter
 
-from indicators import get_of_data, weighted_signal
-from telegram_bot import send_scalping_message
-from utils import TradeSignal, SYMBOLS_ROUNDING
+from indicators import get_of_data
+from telegram_bot import send_message
+from utils import SYMBOLS_ROUNDING
 from pprint import pprint
-from .signal_generator import generate_signal, open_position
+from .signal_generator import open_position
 
 emitter = AsyncIOEventEmitter()
 

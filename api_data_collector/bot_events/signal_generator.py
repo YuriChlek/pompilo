@@ -2,19 +2,18 @@ from decimal import Decimal
 from typing import Union
 from pprint import pprint
 
-from indicators import get_of_data, weighted_signal
+from indicators import get_of_data
 from .trader import (
     open_order,
     get_open_positions,
     check_balance
 )
-from telegram_bot import send_scalping_message
+from telegram_bot import send_message
 
 from utils import (
     BUY_DIRECTION,
     SELL_DIRECTION,
-    SYMBOLS_ROUNDING,
-    TradeSignal
+    SYMBOLS_ROUNDING
 )
 
 
@@ -49,10 +48,13 @@ async def open_position(position):
             print(f"[CLOSE OPPOSITE POSITION]: {existing}")
             order_size = Decimal(position['size']) + Decimal(existing['size'])
 
+            if not order_size:
+                order_size = Decimal(position['size']) * Decimal(2)
+
             open_order(
                 position['symbol'],
                 position['direction'],
-                order_size,
+                Decimal(order_size),
                 position['stop_loss'],
                 position['take_profit'],
                 "Market",
@@ -112,136 +114,51 @@ def calculate_position_size(
     return round(position_size)
 
 
-def get_sl_size(price, atr):
+def get_sl_size(price, atr, sl_size):
+    if atr < sl_size > Decimal(price) * Decimal('0.02'):
+        return sl_size
     return Decimal(atr) if Decimal(atr) > Decimal(price) * Decimal('0.02') else Decimal(price) * Decimal('0.02')
 
 
-async def generate_signal(
-        symbol,
-        max_order_direction,
-        max_order_price):
+async def generate_signal_1h_strategy(symbol, alpha_trend_data, indicators_history, is_test):
     try:
-        of_data = get_of_data(symbol)
-        weight = weighted_signal(of_data)
-
-        print('*' * 60)
-        print(symbol)
-        print('Direction:', max_order_direction)
-        print('Price:', max_order_price)
-        print('*' * 60)
-        pprint(weight)
-        print('*' * 60)
-        pprint(of_data)
-        print('*' * 60)
-
-        if (
-                Decimal(40) > Decimal(of_data.indicators['rsi']) or
-                Decimal(of_data.indicators['rsi']) > Decimal(60)
-        ):
-            return None
+        candle_close = Decimal(alpha_trend_data.candle['close'])
+        candle_open = Decimal(alpha_trend_data.candle['open'])
+        order_price = candle_close
+        rsi_overbought = indicators_history.rsi_signal.isin(["overbought"]).any()
+        rsi_oversold = indicators_history.rsi_signal.isin(["oversold"]).any()
+        mfi_signal = alpha_trend_data.mfi_signal
+        cvd_trend = alpha_trend_data.cvd_analysis.get('trend', 'N/A')
+        cvd_strength = alpha_trend_data.cvd_analysis.get('strength', 'N/A')
+        sine_wave_signal = alpha_trend_data.sinewave_analysis.get('signal', 'N/A')
+        sine_wave_signal_pover = alpha_trend_data.sinewave_analysis.get('strength', 'N/A')
+        atr_size = alpha_trend_data.atr
+        market_trend = alpha_trend_data.indicators.get('market_trend', 'neutral')
 
         if (
-                str(max_order_direction).lower() == BUY_DIRECTION and
-                of_data.vpoc_cluster.get('support_cluster_strength') and
-                Decimal(of_data.vpoc_cluster['support_cluster_strength']) > Decimal(5) and
-                of_data.cvd['trend'] == 'bullish' and
-                weight['signal'] == TradeSignal.BUY and
-                Decimal(weight['confidence']) > Decimal('70') and
-                of_data.indicators['volume_sma'] < of_data.indicators['volume']
+                sine_wave_signal == 'buy' and
+                alpha_trend_data.alpha_trend_signal == 'bullish' and
+                # alpha_trend_data.super_trend_signal == 'bullish' and
+                candle_close > candle_open and
+                ((alpha_trend_data.indicators['mfi_trend'] == 'bullish' and
+                    alpha_trend_data.indicators['rsi_trend'] == 'bullish' or rsi_oversold) and
+                    not rsi_overbought
+                ) and mfi_signal != 'overbought' and
+                cvd_trend == 'bullish' and cvd_strength != 'low' and
+                market_trend != 'bearish'
         ):
-            tp = Decimal(max_order_price) + Decimal(of_data.indicators['atr']) * Decimal('2')
-            sl = Decimal(max_order_price) - Decimal(of_data.indicators['atr'])
-            position_size = calculate_position_size(symbol, Decimal('0.1'), max_order_price, sl)
-
-            return {
-                'symbol': symbol,
-                'direction': max_order_direction.capitalize(),
-                'price': round(max_order_price, SYMBOLS_ROUNDING[symbol]),
-                'size': position_size,
-                'take_profit': round(tp, SYMBOLS_ROUNDING[symbol]),
-                'stop_loss': round(sl, SYMBOLS_ROUNDING[symbol])
-            }
-        elif (
-                str(max_order_direction).lower() == SELL_DIRECTION and
-                of_data.vpoc_cluster.get('resistance_cluster_strength') and
-                Decimal(of_data.vpoc_cluster['resistance_cluster_strength']) > Decimal(5) and
-                of_data.cvd['trend'] == 'bearish' and
-                weight['signal'] == TradeSignal.SELL and
-                Decimal(weight['confidence']) > Decimal('70') and
-                of_data.indicators['volume_sma'] < of_data.indicators['volume']
-        ):
-            tp = Decimal(max_order_price) - Decimal(of_data.indicators['atr']) * Decimal('2')
-            sl = Decimal(max_order_price) + Decimal(of_data.indicators['atr'])
-            position_size = calculate_position_size(symbol, Decimal('0.1'), max_order_price, sl)
-
-            return {
-                'symbol': symbol,
-                'direction': max_order_direction.capitalize(),
-                'price': round(max_order_price, SYMBOLS_ROUNDING[symbol]),
-                'size': position_size,
-                'take_profit': round(tp, SYMBOLS_ROUNDING[symbol]),
-                'stop_loss': round(sl, SYMBOLS_ROUNDING[symbol])
-            }
-        return None
-    except Exception as e:
-        print(f"[EVENT HANDLER ERROR]: {e}")
-
-
-async def generate_signal_1h_strategy(symbol, of_data):
-    try:
-        print(f"generate_signal_1h_strategy: {symbol}")
-
-        if (
-                of_data.market_trend == 'neutral' and
-                of_data.enhanced_market_trend == 'neutral'
-        ):
-            return None
-
-        if (
-                Decimal(40) > Decimal(of_data.indicators['rsi']) or
-                Decimal(of_data.indicators['rsi']) > Decimal(60)
-        ):
-            return None
-
-        min_strength = min(
-            Decimal(of_data.vpoc_cluster['support_cluster_strength']),
-            Decimal(of_data.vpoc_cluster['resistance_cluster_strength'])
-        )
-        max_strength = max(
-            Decimal(of_data.vpoc_cluster['support_cluster_strength']),
-            Decimal(of_data.vpoc_cluster['resistance_cluster_strength'])
-        )
-
-        if min_strength == 0 or max_strength / min_strength > 1.4:
-            return None
-
-        if (
-                (of_data.market_trend == of_data.cvd['trend'] == 'bearish' and TradeSignal.SELL or
-                 of_data.market_trend == of_data.cvd['trend'] == 'bullish' and TradeSignal.BUY) and
-                of_data.cvd['strength'] == 'strong' and
-                Decimal(of_data.volume['volume_momentum']) < Decimal(0)
-        ):
-            return None
-
-        weight = weighted_signal(of_data)
-        order_price = of_data.indicators['close']
-        sl_size = get_sl_size(order_price, of_data.indicators['atr'])
-
-        if (
-                of_data.cvd['trend'] == 'bullish' and
-                weight['signal'] == TradeSignal.BUY and
-                Decimal(weight['confidence']) > Decimal('70') and
-                not (
-                        of_data.market_trend == 'bearish' and
-                        of_data.enhanced_market_trend == 'bearish'
-                )
-        ):
-            tp = Decimal(order_price) + sl_size * Decimal('2')
+            sl_size_by_candle = Decimal(order_price) - Decimal(alpha_trend_data.candle['low']) * Decimal('0.995')
+            sl_size = get_sl_size(order_price, atr_size, sl_size_by_candle)
             sl = Decimal(order_price) - sl_size
-            position_size = calculate_position_size(symbol, Decimal('0.1'), order_price, sl)
+            multiplier = Decimal('2.5') if alpha_trend_data.super_trend_signal == 'bullish' else Decimal('2.0')
+            tp = Decimal(order_price) + sl_size * multiplier
+
+            position_size = calculate_position_size(symbol, Decimal('0.5'), order_price, sl) if not is_test else 0
+
+            print('BUY', order_price)
 
             return {
-                'time': of_data.indicators['close_time'],
+                'time': alpha_trend_data.candle['close_time'],
                 'symbol': symbol,
                 'direction': str(BUY_DIRECTION).capitalize(),
                 'price': round(order_price, SYMBOLS_ROUNDING[symbol]),
@@ -249,21 +166,30 @@ async def generate_signal_1h_strategy(symbol, of_data):
                 'take_profit': round(tp, SYMBOLS_ROUNDING[symbol]),
                 'stop_loss': round(sl, SYMBOLS_ROUNDING[symbol])
             }
-        elif (
-                of_data.cvd['trend'] == 'bearish' and
-                weight['signal'] == TradeSignal.SELL and
-                Decimal(weight['confidence']) > Decimal('70') and
-                not (
-                        of_data.market_trend == 'bullish' and
-                        of_data.enhanced_market_trend == 'bullish'
-                )
+        if (
+                sine_wave_signal == 'sell' and
+                alpha_trend_data.alpha_trend_signal == 'bearish' and
+                # alpha_trend_data.super_trend_signal == 'bearish' and
+                candle_close < candle_open and
+                ((alpha_trend_data.indicators['mfi_trend'] == 'bearish' and alpha_trend_data.indicators[
+                    'rsi_trend'] == 'bearish' or rsi_overbought) and
+                    not rsi_oversold
+                ) and mfi_signal != 'oversold' and
+                cvd_trend == 'bearish' and cvd_strength != 'low' and
+                market_trend != 'bullish'
         ):
-            tp = Decimal(order_price) - sl_size * Decimal('2')
+            sl_size_by_candle = Decimal(alpha_trend_data.candle['high']) * Decimal('1.005') - Decimal(order_price)
+            sl_size = get_sl_size(order_price, atr_size, sl_size_by_candle)
             sl = Decimal(order_price) + sl_size
-            position_size = calculate_position_size(symbol, Decimal('0.1'), order_price, sl)
+            multiplier = Decimal('2.5') if alpha_trend_data.super_trend_signal == 'bearish' else Decimal('2.0')
+            tp = Decimal(order_price) - sl_size * multiplier
+
+            position_size = calculate_position_size(symbol, Decimal('0.5'), order_price, sl) if not is_test else 0
+
+            print('SELL', order_price)
 
             return {
-                'time': of_data.indicators['close_time'],
+                'time': alpha_trend_data.timestamp,
                 'symbol': symbol,
                 'direction': str(SELL_DIRECTION).capitalize(),
                 'price': round(order_price, SYMBOLS_ROUNDING[symbol]),
@@ -271,17 +197,19 @@ async def generate_signal_1h_strategy(symbol, of_data):
                 'take_profit': round(tp, SYMBOLS_ROUNDING[symbol]),
                 'stop_loss': round(sl, SYMBOLS_ROUNDING[symbol])
             }
+
         return None
+
     except Exception as e:
-        print(f"[EVENT HANDLER ERROR]: {e}")
+        print(f"[SIGNAL GENERATOR ERROR]: {e}")
 
 
-async def run_h1_bot(symbol, is_test):
-    of_data = get_of_data(symbol, is_test)
-    position = await generate_signal_1h_strategy(symbol, of_data)
+async def run_bot(symbol, is_test):
+    alpha_trend_data, indicators_history = get_of_data(symbol, is_test)
+    position = await generate_signal_1h_strategy(symbol, alpha_trend_data, indicators_history, is_test)
 
     if position:
-        await send_scalping_message(
+        await send_message(
             position['symbol'],
             position['direction'],
             position['price'],

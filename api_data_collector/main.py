@@ -1,14 +1,9 @@
 import asyncio
 from datetime import datetime, timedelta
 
-from bot_events import run_h1_bot
-from utils import delete_old_records, run_agregate_last_1h_candles_data_job, TRADING_SYMBOLS
-from start_handlers import (
-    start_bot_with_bybit_data,
-    start_bot_with_binance_data,
-    start_bot_with_okx_data,
-)
-
+from bot_events import run_bot
+from utils import TRADING_SYMBOLS
+from api import run_api
 
 async def wait_until_next_run(target_minute=0, target_second=10):
     """
@@ -40,25 +35,20 @@ async def wait_until_next_run(target_minute=0, target_second=10):
     await asyncio.sleep(sleep_seconds)
 
 
-async def run_db_clean():
+async def start ():
     while True:
-        await wait_until_next_run(target_minute=0, target_second=10)
-        await run_agregate_last_1h_candles_data_job()
-        await delete_old_records()
+        await wait_until_next_run(target_minute=0, target_second=5)
+        await run_api()
+
         for symbol in TRADING_SYMBOLS:
-            await run_h1_bot(symbol, False)
-
-
-async def start_data_collector():
-    print('Starting pompilo data ')
-
-    await asyncio.gather(
-        start_bot_with_bybit_data(),
-        start_bot_with_binance_data(),
-        start_bot_with_okx_data(),
-        run_db_clean(),
-    )
+            await run_bot(symbol, False)
 
 
 if __name__ == '__main__':
-    asyncio.run(start_data_collector())
+    try:
+        asyncio.run(start())
+    except KeyboardInterrupt:
+        print("⏹️ Скрипт зупинено користувачем")
+    except Exception as e:
+        print(f"💥 Неочікувана помилка: {e}")
+        import traceback
