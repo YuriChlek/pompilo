@@ -108,7 +108,7 @@ def calculate_position_size(
         return int(round(position_size, -1))
     elif symbol == "SOLUSDT" or symbol == "AVAXUSDT":
         return round(position_size, 1)
-    elif symbol == "APTUSDT" or symbol == "AAVEUSDT":
+    elif symbol == "APTUSDT" or symbol == "AAVEUSDT" or symbol == "ETHUSDT" or symbol == "TAOUSDT":
         return round(position_size, 2)
 
     return round(position_size)
@@ -131,24 +131,31 @@ async def generate_signal_1h_strategy(symbol, alpha_trend_data, indicators_histo
         cvd_trend = alpha_trend_data.cvd_analysis.get('trend', 'N/A')
         cvd_strength = alpha_trend_data.cvd_analysis.get('strength', 'N/A')
         sine_wave_signal = alpha_trend_data.sinewave_analysis.get('signal', 'N/A')
-        sine_wave_signal_pover = alpha_trend_data.sinewave_analysis.get('strength', 'N/A')
+        sine_wave_trend = alpha_trend_data.sinewave_analysis.get('trend', 'N/A')
         atr_size = alpha_trend_data.atr
         market_trend = alpha_trend_data.indicators.get('market_trend', 'neutral')
+        candle = alpha_trend_data.candle
 
         if (
-                sine_wave_signal == 'buy' and
-                alpha_trend_data.alpha_trend_signal == 'bullish' and
-                # alpha_trend_data.super_trend_signal == 'bullish' and
-                candle_close > candle_open and
-                ((alpha_trend_data.indicators['mfi_trend'] == 'bullish' and
-                    alpha_trend_data.indicators['rsi_trend'] == 'bullish' or rsi_oversold) and
-                    not rsi_overbought
-                ) and mfi_signal != 'overbought' and
-                cvd_trend == 'bullish' and cvd_strength != 'low' and
-                market_trend != 'bearish'
+                alpha_trend_data.super_trend_signal == 'bullish' and
+                (
+                        # Безпосереднє торкання
+                        Decimal(candle['low']) <= Decimal(alpha_trend_data.super_trend) or
+                        # Або дуже близько (в межах 1% від SuperTrend)
+                        abs((Decimal(alpha_trend_data.super_trend) - Decimal(candle['low']))) / Decimal(
+                    alpha_trend_data.super_trend) <= Decimal('0.01')
+                ) and
+                Decimal(candle['close']) > Decimal(alpha_trend_data.super_trend) and  # Закрилися вище
+                (
+                        # Або бульша свічка
+                        Decimal(candle['close']) > Decimal(candle['open']) or
+                        # Або закриття у верхній 50% діапазону свічки
+                        (Decimal(candle['close']) - Decimal(candle['low'])) /
+                        (Decimal(candle['high']) - Decimal(candle['low'])) >= Decimal('0.5')
+                ) and
+                (cvd_trend == 'bullish' or alpha_trend_data.indicators['mfi_trend'] == 'bullish')
         ):
-            sl_size_by_candle = Decimal(order_price) - Decimal(alpha_trend_data.candle['low']) * Decimal('0.995')
-            sl_size = get_sl_size(order_price, atr_size, sl_size_by_candle)
+            sl_size = Decimal(atr_size) * Decimal(1.1)
             sl = Decimal(order_price) - sl_size
             multiplier = Decimal('2.5') if alpha_trend_data.super_trend_signal == 'bullish' else Decimal('2.0')
             tp = Decimal(order_price) + sl_size * multiplier
@@ -167,19 +174,81 @@ async def generate_signal_1h_strategy(symbol, alpha_trend_data, indicators_histo
                 'stop_loss': round(sl, SYMBOLS_ROUNDING[symbol])
             }
         if (
-                sine_wave_signal == 'sell' and
+                alpha_trend_data.super_trend_signal == 'bearish' and
+                (
+                        # Безпосереднє торкання
+                        Decimal(candle['high']) >= Decimal(alpha_trend_data.super_trend) or
+                        # Або дуже близько (в межах 1% від SuperTrend)
+                        abs((Decimal(candle['high']) - Decimal(alpha_trend_data.super_trend))) / Decimal(
+                    alpha_trend_data.super_trend) <= Decimal('0.01')
+                ) and
+                Decimal(candle['close']) < Decimal(alpha_trend_data.super_trend) and  # Закрилися нижче
+                (
+                        # Або ведмежа свічка
+                        Decimal(candle['close']) < Decimal(candle['open']) or
+                        # Або закриття у нижній 50% діапазону свічки
+                        (Decimal(candle['high']) - Decimal(candle['close'])) /
+                        (Decimal(candle['high']) - Decimal(candle['low'])) >= Decimal('0.5')
+                ) and
+                (cvd_trend == 'bearish' or alpha_trend_data.indicators['mfi_trend'] == 'bearish')
+        ):
+            sl_size = Decimal(atr_size) * Decimal(1.1)
+            sl = Decimal(order_price) + sl_size
+            multiplier = Decimal('2.5') if alpha_trend_data.super_trend_signal == 'bearish' else Decimal('2.0')
+            tp = Decimal(order_price) - sl_size * multiplier
+
+            position_size = calculate_position_size(symbol, Decimal('0.5'), order_price, sl) if not is_test else 0
+
+            print('SELL', order_price)
+
+            return {
+                'time': alpha_trend_data.timestamp,
+                'symbol': symbol,
+                'direction': str(SELL_DIRECTION).capitalize(),
+                'price': round(order_price, SYMBOLS_ROUNDING[symbol]),
+                'size': position_size,
+                'take_profit': round(tp, SYMBOLS_ROUNDING[symbol]),
+                'stop_loss': round(sl, SYMBOLS_ROUNDING[symbol])
+            }
+        if (
+                (sine_wave_signal == 'buy' or sine_wave_trend == 'neutral') and
+                alpha_trend_data.alpha_trend_signal == 'bullish' and
+                alpha_trend_data.super_trend_signal == 'bullish' and
+                candle_close > candle_open and
+                not rsi_overbought and Decimal(alpha_trend_data.rsi) < Decimal(60) and
+                alpha_trend_data.indicators['mfi_trend'] == 'bullish' and
+                cvd_trend == 'bullish' and
+                market_trend != 'bearish'
+        ):
+            sl_size = Decimal(atr_size) * Decimal(1.1)
+            sl = Decimal(order_price) - sl_size
+            multiplier = Decimal('2.5') if alpha_trend_data.super_trend_signal == 'bullish' else Decimal('2.0')
+            tp = Decimal(order_price) + sl_size * multiplier
+
+            position_size = calculate_position_size(symbol, Decimal('0.5'), order_price, sl) if not is_test else 0
+
+            print('BUY', order_price)
+
+            return {
+                'time': alpha_trend_data.candle['close_time'],
+                'symbol': symbol,
+                'direction': str(BUY_DIRECTION).capitalize(),
+                'price': round(order_price, SYMBOLS_ROUNDING[symbol]),
+                'size': position_size,
+                'take_profit': round(tp, SYMBOLS_ROUNDING[symbol]),
+                'stop_loss': round(sl, SYMBOLS_ROUNDING[symbol])
+            }
+        if (
+                (sine_wave_signal == 'sell' or sine_wave_trend == 'neutral') and
                 alpha_trend_data.alpha_trend_signal == 'bearish' and
-                # alpha_trend_data.super_trend_signal == 'bearish' and
+                alpha_trend_data.super_trend_signal == 'bearish' and
                 candle_close < candle_open and
-                ((alpha_trend_data.indicators['mfi_trend'] == 'bearish' and alpha_trend_data.indicators[
-                    'rsi_trend'] == 'bearish' or rsi_overbought) and
-                    not rsi_oversold
-                ) and mfi_signal != 'oversold' and
-                cvd_trend == 'bearish' and cvd_strength != 'low' and
+                not rsi_oversold and Decimal(alpha_trend_data.rsi) > Decimal(40) and
+                alpha_trend_data.indicators['mfi_trend'] == 'bearish' and
+                cvd_trend == 'bearish' and
                 market_trend != 'bullish'
         ):
-            sl_size_by_candle = Decimal(alpha_trend_data.candle['high']) * Decimal('1.005') - Decimal(order_price)
-            sl_size = get_sl_size(order_price, atr_size, sl_size_by_candle)
+            sl_size = Decimal(atr_size) * Decimal(1.1)
             sl = Decimal(order_price) + sl_size
             multiplier = Decimal('2.5') if alpha_trend_data.super_trend_signal == 'bearish' else Decimal('2.0')
             tp = Decimal(order_price) - sl_size * multiplier
