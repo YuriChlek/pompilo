@@ -46,26 +46,23 @@ class CVDAnalyzer:
         """
         cvd_trend = self._determine_cvd_trend(candle, df)
         cvd_strength = self._calculate_cvd_strength(candle, df)
-        divergence = self._check_divergence(df)
         confidence = self._calculate_cvd_confidence(df)
 
         # Комбінована оцінка
         signal_quality = self._assess_signal_quality(
-            cvd_trend, cvd_strength, divergence, confidence
+            cvd_trend, cvd_strength, confidence
         )
 
         return {
             'value': candle['cvd'],
             'trend': cvd_trend,
             'strength': cvd_strength,
-            'divergence': divergence,
             'confidence': round(confidence, 2),
             'signal_quality': signal_quality,
             'timestamp': candle.name if hasattr(candle, 'name') else None
         }
 
-    def _assess_signal_quality(self, trend: str, strength: str,
-                               divergence: Optional[str], confidence: float) -> str:
+    def _assess_signal_quality(self, trend: str, strength: str, confidence: float) -> str:
         """Оцінює загальну якість сигналу."""
         quality_score = 0
 
@@ -76,10 +73,6 @@ class CVDAnalyzer:
         # Бали за силу
         strength_scores = {'weak': 0, 'medium': 1, 'strong': 2}
         quality_score += strength_scores.get(strength, 0)
-
-        # Бали за дивергенцію
-        if divergence:
-            quality_score += 2
 
         # Множник довіри
         quality_score *= confidence
@@ -224,114 +217,6 @@ class CVDAnalyzer:
             return 'medium'
         else:
             return 'weak'
-
-    def _find_extremes(self, series: pd.Series, period: int = 5) -> Tuple[List[int], List[int]]:
-        """Знаходить максимуми та мінімуми в ряді."""
-        highs = []
-        lows = []
-
-        for i in range(period, len(series) - period):
-            window = series.iloc[i - period:i + period + 1]
-            if series.iloc[i] == window.max():
-                highs.append(i)
-            elif series.iloc[i] == window.min():
-                lows.append(i)
-
-        return highs, lows
-
-    def _detect_bearish_divergence(self, df: pd.DataFrame, price_highs: List[int], cvd_highs: List[int]) -> bool:
-        """Виявляє ведмежу дивергенцію."""
-        if len(price_highs) < 2 or len(cvd_highs) < 2:
-            return False
-
-        # Останні два максимуми
-        recent_price_high_idx = price_highs[-1]
-        prev_price_high_idx = price_highs[-2]
-        recent_cvd_high_idx = cvd_highs[-1]
-        prev_cvd_high_idx = cvd_highs[-2]
-
-        # Отримуємо фактичні значення за індексами
-        recent_price_high = df['close'].iloc[recent_price_high_idx]
-        prev_price_high = df['close'].iloc[prev_price_high_idx]
-        recent_cvd_high = df['cvd'].iloc[recent_cvd_high_idx]
-        prev_cvd_high = df['cvd'].iloc[prev_cvd_high_idx]
-
-        # Ведмежа дивергенція: ціна робить вищий максимум, CVD - нижчий
-        bearish_divergence = (recent_price_high > prev_price_high and
-                              recent_cvd_high < prev_cvd_high)
-
-        # Додаткові умови для підтвердження
-        if bearish_divergence:
-            # Перевіряємо, що дивергенція не застаріла
-            is_recent = (len(df) - recent_price_high_idx) <= 5
-
-            # Перевіряємо міцність сигналу
-            price_change_pct = (recent_price_high - prev_price_high) / prev_price_high
-            cvd_change_pct = (prev_cvd_high - recent_cvd_high) / abs(prev_cvd_high) if prev_cvd_high != 0 else 0
-
-            strong_signal = (price_change_pct > 0.01 and cvd_change_pct > 0.1)
-
-            return is_recent and strong_signal
-
-        return False
-
-    def _detect_bullish_divergence(self, df: pd.DataFrame, price_lows: List[int], cvd_lows: List[int]) -> bool:
-        """Виявляє бичу дивергенцію."""
-        if len(price_lows) < 2 or len(cvd_lows) < 2:
-            return False
-
-        # Останні два мінімуми
-        recent_price_low_idx = price_lows[-1]
-        prev_price_low_idx = price_lows[-2]
-        recent_cvd_low_idx = cvd_lows[-1]
-        prev_cvd_low_idx = cvd_lows[-2]
-
-        # Отримуємо фактичні значення за індексами
-        recent_price_low = df['close'].iloc[recent_price_low_idx]
-        prev_price_low = df['close'].iloc[prev_price_low_idx]
-        recent_cvd_low = df['cvd'].iloc[recent_cvd_low_idx]
-        prev_cvd_low = df['cvd'].iloc[prev_cvd_low_idx]
-
-        # Бича дивергенція: ціна робить нижчий мінімум, CVD - вищий
-        bullish_divergence = (recent_price_low < prev_price_low and
-                              recent_cvd_low > prev_cvd_low)
-
-        # Додаткові умови для підтвердження
-        if bullish_divergence:
-            # Перевіряємо, що дивергенція не застаріла
-            is_recent = (len(df) - recent_price_low_idx) <= 5
-
-            # Перевіряємо міцність сигналу
-            price_change_pct = (prev_price_low - recent_price_low) / prev_price_low
-            cvd_change_pct = (recent_cvd_low - prev_cvd_low) / abs(prev_cvd_low) if prev_cvd_low != 0 else 0
-
-            strong_signal = (price_change_pct > 0.01 and cvd_change_pct > 0.1)
-
-            return is_recent and strong_signal
-
-        return False
-
-    def _check_divergence(self, df: pd.DataFrame) -> Optional[str]:
-        """
-        Перевіряє наявність дивергенції між ціною та CVD.
-        """
-        if len(df) < 15:
-            return None
-
-        # Знаходимо екстремуми ціни та CVD
-        price_highs, price_lows = self._find_extremes(df['close'], period=5)
-        cvd_highs, cvd_lows = self._find_extremes(df['cvd'], period=5)
-
-        # Перевіряємо дивергенції
-        bullish_div = self._detect_bullish_divergence(df, price_lows, cvd_lows)
-        bearish_div = self._detect_bearish_divergence(df, price_highs, cvd_highs)
-
-        if bullish_div:
-            return "bullish_divergence"
-        elif bearish_div:
-            return "bearish_divergence"
-
-        return None
 
 
 class SineWaveAnalyzer:
@@ -608,7 +493,7 @@ class RSIAnalyzer:
 class SuperTrendAnalyzer:
     """Клас для розрахунку SuperTrend індикатора"""
 
-    def __init__(self, period: int = 14, multiplier: float = 3):
+    def __init__(self, period: int = 10, multiplier: float = 3):
         self.period = period
         self.multiplier = multiplier
 
@@ -800,8 +685,7 @@ class MarketTrendAnalyzer:
         df['bb_lower'] = df['bb_middle'] - (df['bb_std'] * self.bb_std)
         return df
 
-    def _analyze_bb_position(self, price: float, bb_upper: float,  # ⬅️ ВИДАЛИТЬ @staticmethod
-                             bb_lower: float, bb_middle: float) -> str:
+    def _analyze_bb_position(self, price: float, bb_upper: float, bb_lower: float, bb_middle: float) -> str:
         """
         Аналізує позицію ціни відносно Bollinger Bands
         """
@@ -822,7 +706,7 @@ class MarketTrendAnalyzer:
         else:
             return "neutral"
 
-    def _analyze_ma_cross(self, df: pd.DataFrame) -> str:  # ⬅️ ВИДАЛИТЬ @staticmethod
+    def _analyze_ma_cross(self, df: pd.DataFrame) -> str:
         """Аналіз перетину ковзних середніх"""
         ma_fast = df['close'].rolling(20).mean()
         ma_slow = df['close'].rolling(50).mean()
@@ -838,7 +722,7 @@ class MarketTrendAnalyzer:
         else:
             return "neutral_ma"
 
-    def _analyze_bb_volatility(self, df: pd.DataFrame) -> str:  # ⬅️ ВИДАЛИТЬ @staticmethod
+    def _analyze_bb_volatility(self, df: pd.DataFrame) -> str:
         """Аналіз волатильності за Bollinger Bands"""
         bb_width = (df['bb_upper'] - df['bb_lower']) / df['bb_middle']
         current_width = bb_width.iloc[-1]
@@ -851,7 +735,7 @@ class MarketTrendAnalyzer:
         else:
             return "normal_volatility"
 
-    def _combine_signals(self, bb_signal: str, ma_signal: str, volatility_signal: str) -> str:  # ⬅️ ВИДАЛИТЬ @staticmethod
+    def _combine_signals(self, bb_signal: str, ma_signal: str, volatility_signal: str) -> str:
         """Комбінує всі сигнали в остаточний тренд"""
 
         # Ваги для різних сигналів
@@ -881,7 +765,7 @@ class DataFetcher:
     def __init__(self, db_user: str, db_pass: str, db_host: str, db_port: str, db_name: str):
         self.db_url = f"postgresql://{db_user}:{db_pass}@{db_host}:{db_port}/{db_name}"
 
-    def fetch_candle_data(self, table: str, limit: int = 200) -> pd.DataFrame:
+    def fetch_candle_data(self, table: str, limit: int = 500) -> pd.DataFrame:
         """
         Отримує дані свічок з таблиці PostgreSQL.
         """
@@ -918,7 +802,7 @@ class AlphaTrendBot:
     """
 
     def __init__(self, atr_period: int = 14, atr_multiplier: float = 1.5, rsi_period: int = 14, mfi_period: int = 14,
-                 sinewave_period: int = 40):
+                 sinewave_period: int = 60):
         self.alpha_trend_analyzer = AlphaTrendAnalyzer(atr_period, atr_multiplier)
         self.rsi_analyzer = RSIAnalyzer(rsi_period)
         self.super_trend_analyzer = SuperTrendAnalyzer()
@@ -1152,7 +1036,6 @@ def get_of_data(symbol: str, is_test: bool = False):
                 print(f"Значення CVD: {cvd.get('value', 'N/A')}")
                 print(f"Тренд CVD: {cvd.get('trend', 'N/A')}")
                 print(f"Сила CVD: {cvd.get('strength', 'N/A')}")
-                print(f"Дивергенція: {cvd.get('divergence', 'N/A')}")
                 print(f"Довіра: {cvd.get('confidence', 'N/A')}")
                 print(f"Якість сигналу: {cvd.get('signal_quality', 'N/A')}")
 
@@ -1207,7 +1090,7 @@ def get_of_data(symbol: str, is_test: bool = False):
 
 if __name__ == "__main__":
     try:
-        # Приклад використання
+        # Приклад використанся
         symbol = 'SOLUSDT'
 
         # Отримання поточних даних

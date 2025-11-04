@@ -45,7 +45,6 @@ TRADING_SYMBOLS = [
 
 
 TEST_TRADING_SYMBOLS = [
-    'SOLUSDT',
     'XRPUSDT',
 ]
 
