@@ -58,7 +58,6 @@ def get_position_icon(direction: str) -> str:
 
 
 async def test_run():
-    await send_big_order_message('SOLUSDT', 1999, 1999, datetime.now(), 'Buy', 'Binance')
     await send_pompilo_order_message('SOLUSDT', 1999, 1999, 1999, 'sell')
 
 

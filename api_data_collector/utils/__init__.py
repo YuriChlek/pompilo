@@ -6,15 +6,13 @@ from .config import (
     DB_PASS,
     DB_PORT,
     DB_USER,
-    MIN_BIG_TRADES_SIZES,
     TRADING_SYMBOLS,
     SYMBOLS_ROUNDING,
-    TEST_TRADING_SYMBOLS
+    TEST_TRADING_SYMBOLS,
+    POSITION_ROUNDING_RULES
 )
 from .db_actions import (
-    insert_api_data,
     get_db_pool,
-    delete_old_records,
     create_tables
 )
 
@@ -28,13 +26,11 @@ __all__ = [
     'DB_PASS',
     'DB_PORT',
     'DB_USER',
-    'MIN_BIG_TRADES_SIZES',
     'TRADING_SYMBOLS',
     'SYMBOLS_ROUNDING',
     'TEST_TRADING_SYMBOLS',
+    'POSITION_ROUNDING_RULES',
     # Функції
     'get_db_pool',
-    'insert_api_data',
-    'delete_old_records',
     'create_tables',
 ]

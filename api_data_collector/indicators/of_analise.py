@@ -1,4 +1,3 @@
-from pprint import pprint
 import numpy as np
 import pandas as pd
 import pandas_ta as ta
@@ -9,22 +8,369 @@ from sqlalchemy import create_engine, text
 
 
 @dataclass
-class AlphaTrendResult:
-    """Результат розрахунку AlphaTrend індикатора"""
-    alpha_trend: float
+class TrendResult:
+    """Результат розрахунку технічних індикаторів"""
     atr: float
-    alpha_trend_signal: str
     rsi: float
     rsi_signal: str
     super_trend: float
     super_trend_signal: str
-    mfi: float  # Додано MFI
-    mfi_signal: str  # Додано MFI сигнал
+    mfi: float
+    mfi_signal: str
     candle: Dict
     indicators: Dict
-    cvd_analysis: Optional[Dict] = None  # Додано CVD аналіз
-    sinewave_analysis: Optional[Dict] = None  # Додано SineWave аналіз
+    ema: float
+    ema_signal: str
+    gmma_analysis: Optional[Dict] = None  # Змінено з alligator_analysis на gmma_analysis
+    volume_analysis: Optional[Dict] = None
+    cvd_analysis: Optional[Dict] = None
     timestamp: Optional[pd.Timestamp] = None
+
+
+class GMMAAnalyzer:
+    """Клас для розрахунку індикатора GMMA (Guppy Multiple Moving Average)"""
+
+    def __init__(self):
+        # Короткострокові EMA (3, 5, 8, 10, 12, 15)
+        self.short_periods = [3, 5, 8, 10, 12, 15]
+        # Довгострокові EMA (30, 35, 40, 45, 50, 60)
+        self.long_periods = [30, 35, 40, 45, 50, 60]
+
+    def calculate_gmma(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Розраховує індикатор GMMA.
+        """
+        df = df.copy()
+
+        # Розрахунок короткострокових EMA
+        for period in self.short_periods:
+            df[f'gmma_short_{period}'] = ta.ema(df['close'], length=period)
+
+        # Розрахунок довгострокових EMA
+        for period in self.long_periods:
+            df[f'gmma_long_{period}'] = ta.ema(df['close'], length=period)
+
+        # Розрахунок сигналів GMMA
+        df = self._calculate_gmma_signals(df)
+
+        return df
+
+    def _calculate_gmma_signals(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Розраховує сигнали на основі GMMA"""
+        df['gmma_signal'] = 'neutral'
+        df['gmma_trend'] = 'neutral'
+        df['gmma_compression'] = False
+        df['gmma_expansion'] = False
+        df['gmma_trend_strength'] = 'neutral'
+
+        for i in range(max(self.long_periods), len(df)):
+            current_close = df['close'].iloc[i]
+
+            # Отримуємо всі EMA значення
+            short_emas = [df[f'gmma_short_{period}'].iloc[i] for period in self.short_periods]
+            long_emas = [df[f'gmma_long_{period}'].iloc[i] for period in self.long_periods]
+
+            # Перевірка на наявність значень
+            if any(pd.isna(ema) for ema in short_emas + long_emas):
+                continue
+
+            # Визначення стану GMMA
+            trend = self._check_gmma_trend(short_emas, long_emas)
+            compression = self._check_compression(short_emas, long_emas)
+            expansion = self._check_expansion(short_emas, long_emas)
+            trend_strength = self._check_trend_strength(short_emas, long_emas, trend)
+
+            # Визначення сигналу
+            signal = self._determine_gmma_signal(trend, compression, expansion, trend_strength, current_close,
+                                                 short_emas)
+
+            df.loc[df.index[i], 'gmma_signal'] = signal
+            df.loc[df.index[i], 'gmma_trend'] = trend
+            df.loc[df.index[i], 'gmma_compression'] = compression
+            df.loc[df.index[i], 'gmma_expansion'] = expansion
+            df.loc[df.index[i], 'gmma_trend_strength'] = trend_strength
+
+        return df
+
+    def _check_gmma_trend(self, short_emas: List[float], long_emas: List[float]) -> str:
+        """Перевіряє тренд GMMA"""
+        avg_short = np.mean(short_emas)
+        avg_long = np.mean(long_emas)
+
+        if avg_short > avg_long:
+            return 'bullish'
+        elif avg_short < avg_long:
+            return 'bearish'
+        else:
+            return 'neutral'
+
+    def _check_compression(self, short_emas: List[float], long_emas: List[float]) -> bool:
+        """Перевіряє компресію (зближення) груп EMA"""
+        short_range = max(short_emas) - min(short_emas)
+        long_range = max(long_emas) - min(long_emas)
+        avg_short = np.mean(short_emas)
+        avg_long = np.mean(long_emas)
+
+        # Компресія - коли групи зближуються
+        distance = abs(avg_short - avg_long)
+        return distance < (avg_long * 0.02)  # 2% відстань
+
+    def _check_expansion(self, short_emas: List[float], long_emas: List[float]) -> bool:
+        """Перевіряє експансію (розширення) груп EMA"""
+        short_range = max(short_emas) - min(short_emas)
+        long_range = max(long_emas) - min(long_emas)
+        avg_short = np.mean(short_emas)
+        avg_long = np.mean(long_emas)
+
+        # Експансія - коли групи розходяться
+        distance = abs(avg_short - avg_long)
+        return distance > (avg_long * 0.05)  # 5% відстань
+
+    def _check_trend_strength(self, short_emas: List[float], long_emas: List[float], trend: str) -> str:
+        """Перевіряє силу тренду"""
+        # Перевірка впорядкованості EMA всередині груп
+        short_ordered = all(
+            short_emas[i] >= short_emas[i + 1] for i in range(len(short_emas) - 1)) if trend == 'bullish' else \
+            all(short_emas[i] <= short_emas[i + 1] for i in range(len(short_emas) - 1))
+
+        long_ordered = all(
+            long_emas[i] >= long_emas[i + 1] for i in range(len(long_emas) - 1)) if trend == 'bullish' else \
+            all(long_emas[i] <= long_emas[i + 1] for i in range(len(long_emas) - 1))
+
+        if short_ordered and long_ordered:
+            return 'strong'
+        elif short_ordered or long_ordered:
+            return 'medium'
+        else:
+            return 'weak'
+
+    def _determine_gmma_signal(self, trend: str, compression: bool, expansion: bool,
+                               trend_strength: str, price: float, short_emas: List[float]) -> str:
+        """Визначає сигнал GMMA"""
+        if trend == 'bullish':
+            if expansion and trend_strength == 'strong' and price > max(short_emas):
+                return 'strong_buy'
+            elif compression and trend_strength in ['medium', 'strong']:
+                return 'buy_compression'
+            elif trend_strength in ['medium', 'strong']:
+                return 'buy'
+            else:
+                return 'hold_bullish'
+
+        elif trend == 'bearish':
+            if expansion and trend_strength == 'strong' and price < min(short_emas):
+                return 'strong_sell'
+            elif compression and trend_strength in ['medium', 'strong']:
+                return 'sell_compression'
+            elif trend_strength in ['medium', 'strong']:
+                return 'sell'
+            else:
+                return 'hold_bearish'
+
+        else:
+            return 'hold'
+
+    def get_gmma_analysis(self, df: pd.DataFrame) -> Dict:
+        """Повертає аналіз GMMA для поточного стану"""
+        if len(df) == 0:
+            return {
+                'short_emas': {},
+                'long_emas': {},
+                'signal': 'neutral',
+                'trend': 'neutral',
+                'compression': False,
+                'expansion': False,
+                'trend_strength': 'neutral',
+                'avg_short': 0,
+                'avg_long': 0
+            }
+
+        latest = df.iloc[-1]
+        current_close = latest['close']
+
+        # Збираємо всі EMA значення
+        short_emas = {}
+        long_emas = {}
+
+        for period in self.short_periods:
+            ema_value = latest.get(f'gmma_short_{period}', current_close)
+            short_emas[f'ema_{period}'] = ema_value
+
+        for period in self.long_periods:
+            ema_value = latest.get(f'gmma_long_{period}', current_close)
+            long_emas[f'ema_{period}'] = ema_value
+
+        # Обчислюємо середні значення
+        avg_short = np.mean(list(short_emas.values())) if short_emas else current_close
+        avg_long = np.mean(list(long_emas.values())) if long_emas else current_close
+
+        return {
+            'short_emas': short_emas,
+            'long_emas': long_emas,
+            'signal': latest.get('gmma_signal', 'neutral'),
+            'trend': latest.get('gmma_trend', 'neutral'),
+            'compression': latest.get('gmma_compression', False),
+            'expansion': latest.get('gmma_expansion', False),
+            'trend_strength': latest.get('gmma_trend_strength', 'neutral'),
+            'avg_short': avg_short,
+            'avg_long': avg_long
+        }
+
+
+class VolumeAnalyzer:
+    """Аналіз об'ємів та ATR для виявлення акумуляції/дистрибуції"""
+
+    def __init__(self, atr_period: int = 14):
+        self.atr_period = atr_period
+
+    def calculate_volume_analysis(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Розраховує аналіз об'ємів та ATR.
+        """
+        df = df.copy()
+
+        # Розрахунок ATR
+        df['atr'] = ta.atr(df['high'], df['low'], df['close'], length=self.atr_period)
+
+        # Розрахунок ковзних середніх об'ємів
+        df['volume_ma_5'] = df['volume'].rolling(window=5).mean()
+        df['volume_ma_10'] = df['volume'].rolling(window=10).mean()
+        df['volume_ma_20'] = df['volume'].rolling(window=20).mean()
+
+        # Аналіз об'ємів та ATR
+        df = self._calculate_volume_atr_signals(df)
+
+        return df
+
+    def _calculate_volume_atr_signals(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Розраховує сигнали на основі об'ємів та ATR"""
+        df['volume_signal'] = 'neutral'
+        df['accumulation_signal'] = 'neutral'
+        df['volume_trend'] = 'neutral'
+        df['atr_trend'] = 'neutral'
+
+        for i in range(20, len(df)):  # Починаємо з 20 для маючи достатньо даних для MA
+            current_volume = df['volume'].iloc[i]
+            current_atr = df['atr'].iloc[i]
+            current_close = df['close'].iloc[i]
+            prev_close = df['close'].iloc[i - 1]
+
+            # Поточні ковзні середні об'ємів
+            volume_ma_5 = df['volume_ma_5'].iloc[i]
+            volume_ma_10 = df['volume_ma_10'].iloc[i]
+            volume_ma_20 = df['volume_ma_20'].iloc[i]
+
+            # ATR за попередній період для порівняння
+            prev_atr = df['atr'].iloc[i - 1] if i > 0 else current_atr
+
+            # Визначення тренду об'ємів
+            if current_volume > volume_ma_10 > volume_ma_20:
+                volume_trend = 'rising'
+            elif current_volume < volume_ma_10 < volume_ma_20:
+                volume_trend = 'falling'
+            else:
+                volume_trend = 'neutral'
+
+            # Визначення тренду ATR
+            if current_atr > prev_atr:
+                atr_trend = 'rising'
+            elif current_atr < prev_atr:
+                atr_trend = 'falling'
+            else:
+                atr_trend = 'stable'
+
+            # Аналіз акумуляції/дистрибуції
+            accumulation_signal = self._analyze_accumulation_distribution(
+                current_volume, volume_ma_10, current_atr, prev_atr, current_close, prev_close
+            )
+
+            # Сигнал об'ємів
+            volume_signal = self._determine_volume_signal(
+                current_volume, volume_ma_5, volume_ma_10, volume_ma_20
+            )
+
+            df.loc[df.index[i], 'volume_signal'] = volume_signal
+            df.loc[df.index[i], 'accumulation_signal'] = accumulation_signal
+            df.loc[df.index[i], 'volume_trend'] = volume_trend
+            df.loc[df.index[i], 'atr_trend'] = atr_trend
+
+        return df
+
+    def _analyze_accumulation_distribution(self, current_volume: float, volume_ma_10: float,
+                                           current_atr: float, prev_atr: float,
+                                           current_close: float, prev_close: float) -> str:
+        """
+        Аналізує акумуляцію/дистрибуцію на основі об'ємів та ATR.
+        """
+        # Перевірка на акумуляцію (volume росте, ATR падає)
+        volume_growing = current_volume > volume_ma_10 * 1.1  # Об'єм вище середнього на 10%
+        atr_falling = current_atr < prev_atr * 0.9  # ATR впав на 10%
+        price_consolidating = abs(current_close - prev_close) / prev_close < 0.02  # Ціна в консолідації (±2%)
+
+        if volume_growing and atr_falling and price_consolidating:
+            return 'accumulation'
+
+        # Перевірка на дистрибуцію (volume росте, ATR росте, ціна падає)
+        volume_high = current_volume > volume_ma_10 * 1.2  # Дуже високий об'єм
+        atr_rising = current_atr > prev_atr * 1.1  # ATR зріс на 10%
+        price_falling = current_close < prev_close * 0.98  # Ціна впала на 2%
+
+        if volume_high and atr_rising and price_falling:
+            return 'distribution'
+
+        # Перевірка на прорив (volume росте, ATR росте, ціна росте)
+        price_rising = current_close > prev_close * 1.02  # Ціна зросла на 2%
+        if volume_growing and atr_rising and price_rising:
+            return 'breakout'
+
+        return 'neutral'
+
+    def _determine_volume_signal(self, current_volume: float, volume_ma_5: float,
+                                 volume_ma_10: float, volume_ma_20: float) -> str:
+        """Визначає сигнал на основі об'ємів"""
+        if pd.isna(volume_ma_5) or pd.isna(volume_ma_10) or pd.isna(volume_ma_20):
+            return 'neutral'
+
+        # Сильний об'ємний сигнал
+        if current_volume > volume_ma_5 * 1.5 and current_volume > volume_ma_10 * 1.3:
+            return 'very_high'
+        elif current_volume > volume_ma_5 * 1.3 and current_volume > volume_ma_10 * 1.2:
+            return 'high'
+        elif current_volume > volume_ma_5 * 1.1:
+            return 'above_average'
+        elif current_volume < volume_ma_5 * 0.9 and current_volume < volume_ma_10 * 0.8:
+            return 'low'
+        else:
+            return 'normal'
+
+    def get_volume_analysis(self, df: pd.DataFrame) -> Dict:
+        """Повертає аналіз об'ємів та ATR для поточного стану"""
+        if len(df) == 0:
+            return {
+                'current_volume': 0,
+                'volume_ma_5': 0,
+                'volume_ma_10': 0,
+                'volume_ma_20': 0,
+                'atr': 0,
+                'volume_signal': 'neutral',
+                'accumulation_signal': 'neutral',
+                'volume_trend': 'neutral',
+                'atr_trend': 'neutral'
+            }
+
+        latest = df.iloc[-1]
+
+        return {
+            'current_volume': latest.get('volume', 0),
+            'volume_ma_5': latest.get('volume_ma_5', 0),
+            'volume_ma_10': latest.get('volume_ma_10', 0),
+            'volume_ma_20': latest.get('volume_ma_20', 0),
+            'atr': latest.get('atr', 0),
+            'volume_signal': latest.get('volume_signal', 'neutral'),
+            'accumulation_signal': latest.get('accumulation_signal', 'neutral'),
+            'volume_trend': latest.get('volume_trend', 'neutral'),
+            'atr_trend': latest.get('atr_trend', 'neutral')
+        }
 
 
 class CVDAnalyzer:
@@ -219,112 +565,103 @@ class CVDAnalyzer:
             return 'weak'
 
 
-class SineWaveAnalyzer:
-    """Клас для розрахунку Even Better SineWave індикатора"""
+class EMAAnalyzer:
+    """Клас для розрахунку EMA 50 індикатора"""
 
-    def __init__(self, period: int = 40):
+    def __init__(self, period: int = 50):
         self.period = period
 
-    def calculate_sinewave(self, df: pd.DataFrame) -> pd.DataFrame:
+    def calculate_ema(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        Розраховує Even Better SineWave індикатор.
+        Розраховує EMA 50 індикатор з використанням pandas_ta.
         """
         df = df.copy()
 
-        try:
-            # Використовуємо pandas_ta для розрахунку Even Better SineWave
-            sinewave_result = ta.ebsw(df['close'], length=self.period)
+        # Розрахунок EMA 50 за допомогою pandas_ta
+        df['ema'] = ta.ema(df['high'], length=self.period)
 
-            if sinewave_result is not None:
-                # Додаємо результати до DataFrame
-                df['sinewave'] = sinewave_result
-
-                # Розрахунок сигналів SineWave
-                df = self._calculate_sinewave_signals(df)
-            else:
-                # Резервний варіант, якщо індикатор не працює
-                df = self._calculate_basic_sinewave(df)
-
-        except Exception as e:
-            print(f"Помилка розрахунку SineWave: {e}")
-            # Резервний розрахунок
-            df = self._calculate_basic_sinewave(df)
+        # Розрахунок сигналів EMA 50
+        df = self._calculate_ema_signals(df)
 
         return df
 
-    def _calculate_basic_sinewave(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Резервний метод розрахунку SineWave"""
-        # Проста реалізація на основі ковзних середніх
-        df['sinewave'] = ta.ema(df['close'], length=self.period)
-        df = self._calculate_sinewave_signals(df)
-        return df
-
-    def _calculate_sinewave_signals(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Розраховує сигнали на основі SineWave"""
-        df['sinewave_signal'] = 'neutral'
-        df['sinewave_trend'] = 'neutral'
-        df['sinewave_strength'] = 'neutral'
+    def _calculate_ema_signals(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Розраховує сигнали на основі EMA 50"""
+        df['ema_signal'] = 'neutral'
+        df['ema_trend'] = 'neutral'
+        df['ema_strength'] = 'neutral'
 
         for i in range(1, len(df)):
-            current_sine = df['sinewave'].iloc[i] if not pd.isna(df['sinewave'].iloc[i]) else 0
-            prev_sine = df['sinewave'].iloc[i - 1] if not pd.isna(df['sinewave'].iloc[i - 1]) else 0
+            current_close = df['close'].iloc[i]
+            current_ema = df['ema'].iloc[i] if not pd.isna(df['ema'].iloc[i]) else current_close
+            prev_close = df['close'].iloc[i - 1]
+            prev_ema = df['ema'].iloc[i - 1] if not pd.isna(df['ema'].iloc[i - 1]) else prev_close
 
             # Визначення тренду
-            if current_sine > prev_sine:
+            if current_close > current_ema and prev_close <= prev_ema:
+                trend = 'bullish_cross'
+                signal = 'buy'
+                strength = 'strong'
+            elif current_close < current_ema and prev_close >= prev_ema:
+                trend = 'bearish_cross'
+                signal = 'sell'
+                strength = 'strong'
+            elif current_close > current_ema:
                 trend = 'bullish'
-            elif current_sine < prev_sine:
+                signal = 'hold_bullish'
+                strength = 'medium'
+            elif current_close < current_ema:
                 trend = 'bearish'
+                signal = 'hold_bearish'
+                strength = 'medium'
             else:
                 trend = 'neutral'
-
-            # Визначення сили на основі зміни
-            sine_change = abs(current_sine - prev_sine)
-            if i > 1:
-                avg_change = df['sinewave'].diff().abs().tail(10).mean()
-                if not pd.isna(avg_change) and avg_change > 0:
-                    relative_strength = sine_change / avg_change
-                    if relative_strength > 2.0:
-                        strength = 'strong'
-                    elif relative_strength > 1.0:
-                        strength = 'medium'
-                    else:
-                        strength = 'weak'
-                else:
-                    strength = 'neutral'
-            else:
-                strength = 'neutral'
-
-            # Визначення сигналу
-            if trend == 'bullish' and strength in ['medium', 'strong']:
-                signal = 'buy'
-            elif trend == 'bearish' and strength in ['medium', 'strong']:
-                signal = 'sell'
-            else:
                 signal = 'hold'
+                strength = 'weak'
 
-            df.loc[df.index[i], 'sinewave_signal'] = signal
-            df.loc[df.index[i], 'sinewave_trend'] = trend
-            df.loc[df.index[i], 'sinewave_strength'] = strength
+            # Розрахунок відстані від EMA для сили сигналу
+            if current_ema != 0:
+                distance_percent = abs((current_close - current_ema) / current_ema) * 100
+                if distance_percent > 2.0:
+                    strength = 'strong'
+                elif distance_percent > 1.0:
+                    strength = 'medium'
+                else:
+                    strength = 'weak'
+
+            df.loc[df.index[i], 'ema_signal'] = signal
+            df.loc[df.index[i], 'ema_trend'] = trend
+            df.loc[df.index[i], 'ema_strength'] = strength
 
         return df
 
-    def get_sinewave_analysis(self, df: pd.DataFrame) -> Dict:
-        """Повертає аналіз SineWave для поточного стану"""
+    def get_ema_analysis(self, df: pd.DataFrame) -> Dict:
+        """Повертає аналіз EMA 50 для поточного стану"""
         if len(df) == 0:
             return {
-                'sinewave': 0,
-                'signal': 'hold',
+                'ema': 0,
+                'signal': 'neutral',
                 'trend': 'neutral',
-                'strength': 'neutral'
+                'strength': 'neutral',
+                'distance_percent': 0
             }
 
         latest = df.iloc[-1]
+        current_close = latest['close']
+        current_ema = latest['ema'] if not pd.isna(latest['ema']) else current_close
+
+        # Розрахунок відстані у відсотках
+        if current_ema != 0:
+            distance_percent = ((current_close - current_ema) / current_ema) * 100
+        else:
+            distance_percent = 0
 
         return {
-            'sinewave': latest['sinewave'] if not pd.isna(latest['sinewave']) else 0,
-            'signal': latest.get('sinewave_signal', 'hold'),
-            'trend': latest.get('sinewave_trend', 'neutral'),
-            'strength': latest.get('sinewave_strength', 'neutral')
+            'ema': current_ema,
+            'signal': latest.get('ema_signal', 'neutral'),
+            'trend': latest.get('ema_trend', 'neutral'),
+            'strength': latest.get('ema_strength', 'neutral'),
+            'distance_percent': round(distance_percent, 2)
         }
 
 
@@ -382,9 +719,9 @@ class MFIAnalyzer:
             # Визначення тренду
             if i > 0 and not pd.isna(df['mfi'].iloc[i - 1]):
                 prev_mfi = df['mfi'].iloc[i - 1]
-                if mfi > prev_mfi and mfi > 40:
+                if mfi > prev_mfi and mfi > 30:
                     trend = 'bullish'
-                elif mfi < prev_mfi and mfi < 60:
+                elif mfi < prev_mfi and mfi < 70:
                     trend = 'bearish'
                 else:
                     trend = 'neutral'
@@ -493,7 +830,7 @@ class RSIAnalyzer:
 class SuperTrendAnalyzer:
     """Клас для розрахунку SuperTrend індикатора"""
 
-    def __init__(self, period: int = 10, multiplier: float = 3):
+    def __init__(self, period: int = 10, multiplier: float = 3.0):
         self.period = period
         self.multiplier = multiplier
 
@@ -563,202 +900,6 @@ class SuperTrendAnalyzer:
         }
 
 
-class AlphaTrendAnalyzer:
-    """Клас для розрахунку AlphaTrend індикатора"""
-
-    def __init__(self, atr_period: int = 10, atr_multiplier: float = 3):
-        self.atr_period = atr_period
-        self.atr_multiplier = atr_multiplier
-
-    def calculate_alpha_trend(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Розраховує AlphaTrend індикатор для DataFrame.
-        """
-        df = df.copy()
-
-        # Розрахунок ATR
-        atr = ta.atr(df['high'], df['low'], df['close'], length=self.atr_period)
-        df['atr'] = atr
-
-        # Розрахунок AlphaTrend
-        df = self._calculate_alpha_trend_signal(df)
-
-        # Видаляємо тільки рядки де alpha_trend все ще NaN (перші atr_period + 1 рядків)
-        return df[df['alpha_trend'].notna()]
-
-    def _calculate_alpha_trend_signal(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Розраховує сигнали AlphaTrend на основі ATR.
-        """
-        # Ініціалізація стовпців
-        df['alpha_trend'] = np.nan
-        df['alpha_trend_signal'] = 'neutral'
-        df['trend_direction'] = 0
-
-        if len(df) == 0:
-            return df
-
-        # Чекаємо поки ATR буде розраховано
-        start_index = self.atr_period
-        if len(df) <= start_index:
-            return df
-
-        # Початкові значення
-        df.loc[df.index[start_index], 'alpha_trend'] = df['close'].iloc[start_index]
-        df.loc[df.index[start_index], 'trend_direction'] = 1
-
-        # Розрахунок AlphaTrend для решти точок
-        for i in range(start_index + 1, len(df)):
-            current_close = df['close'].iloc[i]
-            current_high = df['high'].iloc[i]
-            current_low = df['low'].iloc[i]
-            current_atr = df['atr'].iloc[i]
-
-            prev_alpha_trend = df['alpha_trend'].iloc[i - 1]
-            prev_trend_direction = df['trend_direction'].iloc[i - 1]
-
-            # AlphaTrend logic
-            if prev_trend_direction == 1:  # Попередній тренд bullish
-                alpha_trend_value = prev_alpha_trend
-                new_trend_direction = 1
-
-                if current_close < prev_alpha_trend - self.atr_multiplier * current_atr:
-                    alpha_trend_value = max(prev_alpha_trend, current_high - self.atr_multiplier * current_atr)
-                    new_trend_direction = -1
-                elif current_high > prev_alpha_trend:
-                    alpha_trend_value = current_high - self.atr_multiplier * current_atr
-
-            else:  # Попередній тренд bearish
-                alpha_trend_value = prev_alpha_trend
-                new_trend_direction = -1
-
-                if current_close > prev_alpha_trend + self.atr_multiplier * current_atr:
-                    alpha_trend_value = min(prev_alpha_trend, current_low + self.atr_multiplier * current_atr)
-                    new_trend_direction = 1
-                elif current_low < prev_alpha_trend:
-                    alpha_trend_value = current_low + self.atr_multiplier * current_atr
-
-            # Визначення сигналу
-            signal = 'bullish' if new_trend_direction == 1 else 'bearish'
-
-            df.loc[df.index[i], 'alpha_trend'] = alpha_trend_value
-            df.loc[df.index[i], 'trend_direction'] = new_trend_direction
-            df.loc[df.index[i], 'alpha_trend_signal'] = signal
-
-        return df
-
-
-class MarketTrendAnalyzer:
-    """Покращений аналізатор тренду з Bollinger Bands"""
-
-    def __init__(self, bb_period: int = 20, bb_std: int = 2):
-        self.bb_period = bb_period
-        self.bb_std = bb_std
-
-    def determine_trend_with_bb(self, df: pd.DataFrame) -> str:
-        """
-        Визначає тренд з використанням Bollinger Bands + MA
-        """
-        if len(df) < self.bb_period:
-            return "neutral"
-
-        # Розраховуємо Bollinger Bands
-        df = self._calculate_bollinger_bands(df)
-
-        current_price = df['close'].iloc[-1]
-        bb_upper = df['bb_upper'].iloc[-1]
-        bb_lower = df['bb_lower'].iloc[-1]
-        bb_middle = df['bb_middle'].iloc[-1]
-
-        # Комбінована логіка
-        bb_signal = self._analyze_bb_position(current_price, bb_upper, bb_lower, bb_middle)
-        ma_signal = self._analyze_ma_cross(df)
-        volatility_signal = self._analyze_bb_volatility(df)
-
-        return self._combine_signals(bb_signal, ma_signal, volatility_signal)
-
-    def _calculate_bollinger_bands(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Розраховує Bollinger Bands"""
-        df['bb_middle'] = df['close'].rolling(window=self.bb_period).mean()
-        df['bb_std'] = df['close'].rolling(window=self.bb_period).std()
-        df['bb_upper'] = df['bb_middle'] + (df['bb_std'] * self.bb_std)
-        df['bb_lower'] = df['bb_middle'] - (df['bb_std'] * self.bb_std)
-        return df
-
-    def _analyze_bb_position(self, price: float, bb_upper: float, bb_lower: float, bb_middle: float) -> str:
-        """
-        Аналізує позицію ціни відносно Bollinger Bands
-        """
-        bb_position = (price - bb_lower) / (bb_upper - bb_lower) if (bb_upper - bb_lower) > 0 else 0.5
-
-        if price > bb_upper:
-            return "strong_bullish"  # Сильний бичачий тренд
-        elif price < bb_lower:
-            return "strong_bearish"  # Сильний ведмежий тренд
-        elif bb_position > 0.7:
-            return "bullish"  # Бичачий тренд (верхня частина каналу)
-        elif bb_position < 0.3:
-            return "bearish"  # Ведмежий тренд (нижня частина каналу)
-        elif bb_position > 0.5:
-            return "weak_bullish"  # Слабкий бичачий
-        elif bb_position < 0.5:
-            return "weak_bearish"  # Слабкий ведмежий
-        else:
-            return "neutral"
-
-    def _analyze_ma_cross(self, df: pd.DataFrame) -> str:
-        """Аналіз перетину ковзних середніх"""
-        ma_fast = df['close'].rolling(20).mean()
-        ma_slow = df['close'].rolling(50).mean()
-
-        if ma_fast.iloc[-1] > ma_slow.iloc[-1] and ma_fast.iloc[-2] <= ma_slow.iloc[-2]:
-            return "bullish_cross"
-        elif ma_fast.iloc[-1] < ma_slow.iloc[-1] and ma_fast.iloc[-2] >= ma_slow.iloc[-2]:
-            return "bearish_cross"
-        elif ma_fast.iloc[-1] > ma_slow.iloc[-1]:
-            return "bullish_ma"
-        elif ma_fast.iloc[-1] < ma_slow.iloc[-1]:
-            return "bearish_ma"
-        else:
-            return "neutral_ma"
-
-    def _analyze_bb_volatility(self, df: pd.DataFrame) -> str:
-        """Аналіз волатильності за Bollinger Bands"""
-        bb_width = (df['bb_upper'] - df['bb_lower']) / df['bb_middle']
-        current_width = bb_width.iloc[-1]
-        avg_width = bb_width.mean()
-
-        if current_width > avg_width * 1.5:
-            return "high_volatility"  # Сильний тренд
-        elif current_width < avg_width * 0.7:
-            return "low_volatility"  # Консолідація
-        else:
-            return "normal_volatility"
-
-    def _combine_signals(self, bb_signal: str, ma_signal: str, volatility_signal: str) -> str:
-        """Комбінує всі сигнали в остаточний тренд"""
-
-        # Ваги для різних сигналів
-        signals_score = {
-            "strong_bullish": 3, "bullish": 2, "weak_bullish": 1,
-            "strong_bearish": -3, "bearish": -2, "weak_bearish": -1,
-            "bullish_cross": 2, "bearish_cross": -2,
-            "bullish_ma": 1, "bearish_ma": -1,
-            "high_volatility": 1, "low_volatility": -1
-        }
-
-        score = (signals_score.get(bb_signal, 0) +
-                 signals_score.get(ma_signal, 0) +
-                 signals_score.get(volatility_signal, 0))
-
-        if score >= 3:
-            return "bullish"
-        elif score <= -3:
-            return "bearish"
-        else:
-            return "neutral"
-
-
 class DataFetcher:
     """Клас для отримання даних з бази"""
 
@@ -796,29 +937,28 @@ class DataFetcher:
             raise Exception(f"Помилка отримання даних з бази: {e}")
 
 
-class AlphaTrendBot:
+class TrendBot:
     """
-    Основний клас бота для розрахунку AlphaTrend індикатора
+    Основний клас бота для розрахунку технічних індикаторів
     """
 
-    def __init__(self, atr_period: int = 14, atr_multiplier: float = 1.5, rsi_period: int = 14, mfi_period: int = 14,
-                 sinewave_period: int = 60):
-        self.alpha_trend_analyzer = AlphaTrendAnalyzer(atr_period, atr_multiplier)
+    def __init__(self, rsi_period: int = 14, mfi_period: int = 14):
         self.rsi_analyzer = RSIAnalyzer(rsi_period)
         self.super_trend_analyzer = SuperTrendAnalyzer()
         self.mfi_analyzer = MFIAnalyzer(mfi_period)
-        self.cvd_analyzer = CVDAnalyzer()  # Додано CVD аналізатор
-        self.sinewave_analyzer = SineWaveAnalyzer(sinewave_period)  # Додано SineWave аналізатор
-        self.market_trend_analyzer = MarketTrendAnalyzer()  # Додано MarketTrendAnalyzer
+        self.ema_analyzer = EMAAnalyzer()
+        self.gmma_analyzer = GMMAAnalyzer()  # Змінено з AlligatorAnalyzer на GMMAAnalyzer
+        self.volume_analyzer = VolumeAnalyzer()
+        self.cvd_analyzer = CVDAnalyzer()
         self.data_fetcher = None
 
     def initialize_data_fetcher(self, db_user: str, db_pass: str, db_host: str, db_port: str, db_name: str):
         """Ініціалізує об'єкт для отримання даних"""
         self.data_fetcher = DataFetcher(db_user, db_pass, db_host, db_port, db_name)
 
-    def calculate_alpha_trend_for_symbol(self, symbol: str, is_test: bool = False) -> AlphaTrendResult:
+    def calculate_trend_for_symbol(self, symbol: str, is_test: bool = False) -> TrendResult:
         """
-        Основна функція для розрахунку AlphaTrend індикатора.
+        Основна функція для розрахунку технічних індикаторів.
         """
         if self.data_fetcher is None:
             self.initialize_data_fetcher(DB_USER, DB_PASS, DB_HOST, DB_PORT, DB_NAME)
@@ -834,40 +974,43 @@ class AlphaTrendBot:
         if len(data) < 100:
             raise ValueError(f"Недостатньо даних для аналізу. Отримано {len(data)} свічок, потрібно мінімум 100.")
 
-        # Розрахунок SineWave (додаємо першим, щоб мати більше даних для аналізу)
-        data_with_sinewave = self.sinewave_analyzer.calculate_sinewave(data)
+        # Розрахунок GMMA
+        data_with_gmma = self.gmma_analyzer.calculate_gmma(data)
+
+        # Розрахунок Volume Analysis (включає ATR)
+        data_with_volume = self.volume_analyzer.calculate_volume_analysis(data_with_gmma)
+
+        # Розрахунок EMA 50
+        data_with_ema = self.ema_analyzer.calculate_ema(data_with_volume)
 
         # Розрахунок MFI
-        data_with_mfi = self.mfi_analyzer.calculate_mfi(data_with_sinewave)
+        data_with_mfi = self.mfi_analyzer.calculate_mfi(data_with_ema)
 
         # Розрахунок SuperTrend
         data_with_super_trend = self.super_trend_analyzer.calculate_super_trend(data_with_mfi)
 
         # Розрахунок RSI
-        data_with_rsi = self.rsi_analyzer.calculate_rsi(data_with_super_trend)
-
-        # Розрахунок AlphaTrend
-        data_with_indicators = self.alpha_trend_analyzer.calculate_alpha_trend(data_with_rsi)
+        data_with_indicators = self.rsi_analyzer.calculate_rsi(data_with_super_trend)
 
         if len(data_with_indicators) == 0:
-            raise ValueError(f"Не вдалося розрахувати AlphaTrend. Можливо недостатньо даних після обробки.")
+            raise ValueError(f"Не вдалося розрахувати індикатори. Можливо недостатньо даних після обробки.")
 
         # Аналіз CVD
         cvd_analysis = self.cvd_analyzer.analyze(data_with_indicators.iloc[-1], data_with_indicators)
 
-        # Аналіз SineWave
-        sinewave_analysis = self.sinewave_analyzer.get_sinewave_analysis(data_with_indicators)
+        # Аналіз об'ємів
+        volume_analysis = self.volume_analyzer.get_volume_analysis(data_with_indicators)
 
-        # Аналіз ринкового тренду з використанням MarketTrendAnalyzer
-        alpha_trend_data = self.market_trend_analyzer.determine_trend_with_bb(data_with_indicators)
+        # Аналіз GMMA
+        gmma_analysis = self.gmma_analyzer.get_gmma_analysis(data_with_indicators)
 
         # Отримання поточних значень
-        result = self._get_combined_result(data_with_indicators, cvd_analysis, sinewave_analysis, alpha_trend_data)
+        result = self._get_combined_result(data_with_indicators, cvd_analysis, volume_analysis, gmma_analysis)
 
         return result
 
-    def _get_combined_result(self, df: pd.DataFrame, cvd_analysis: Dict, sinewave_analysis: Dict, alpha_trend_data: str) -> AlphaTrendResult:
-        """Об'єднує результати AlphaTrend, RSI, SuperTrend, MFI, CVD та SineWave аналізу"""
+    def _get_combined_result(self, df: pd.DataFrame, cvd_analysis: Dict, volume_analysis: Dict, gmma_analysis: Dict) -> TrendResult:
+        """Об'єднує результати всіх індикаторів"""
         if len(df) == 0:
             raise ValueError("DataFrame порожній")
 
@@ -882,6 +1025,9 @@ class AlphaTrendBot:
         # Отримуємо аналіз MFI
         mfi_analysis = self.mfi_analyzer.get_mfi_analysis(df)
 
+        # Отримуємо аналіз EMA 50
+        ema_analysis = self.ema_analyzer.get_ema_analysis(df)
+
         # Формуємо дані останньої свічки
         candle_data = {
             'open_time': latest.get('open_time'),
@@ -892,7 +1038,7 @@ class AlphaTrendBot:
             'low': latest['low'],
             'volume': latest.get('volume', 0),
             'symbol': latest.get('symbol', 'UNKNOWN'),
-            'cvd': latest.get('cvd', 0)  # Додано CVD
+            'cvd': latest.get('cvd', 0)
         }
 
         # Оновлюємо словник індикаторів даними всіх індикаторів
@@ -902,9 +1048,7 @@ class AlphaTrendBot:
             'low': latest['low'],
             'open': latest['open'],
             'volume': latest.get('volume', 0),
-            'atr': latest['atr'],
-            'alpha_trend': latest['alpha_trend'],
-            'trend_direction': latest.get('trend_direction', 0),
+            'atr': latest.get('atr', 0),
             'rsi': rsi_analysis['rsi'],
             'rsi_signal': rsi_analysis['signal'],
             'rsi_strength': rsi_analysis['strength'],
@@ -916,47 +1060,49 @@ class AlphaTrendBot:
             'mfi_signal': mfi_analysis['signal'],
             'mfi_strength': mfi_analysis['strength'],
             'mfi_trend': mfi_analysis['trend'],
+            'ema': ema_analysis['ema'],
+            'ema_signal': ema_analysis['signal'],
+            'ema_trend': ema_analysis['trend'],
+            'ema_strength': ema_analysis['strength'],
+            'ema_distance_percent': ema_analysis['distance_percent'],
             'cvd': latest.get('cvd', 0),
             'cvd_analysis': cvd_analysis,
-            'sinewave': sinewave_analysis['sinewave'],
-            'sinewave_signal': sinewave_analysis['signal'],
-            'sinewave_trend': sinewave_analysis['trend'],
-            'sinewave_strength': sinewave_analysis['strength'],
-            'sinewave_analysis': sinewave_analysis,
-            'market_trend': alpha_trend_data  # Додано результати MarketTrendAnalyzer
+            'volume_analysis': volume_analysis,
+            'gmma_analysis': gmma_analysis  # Змінено з alligator_analysis на gmma_analysis
         }
 
-        return AlphaTrendResult(
-            alpha_trend=latest['alpha_trend'],
-            atr=latest['atr'],
-            alpha_trend_signal=latest['alpha_trend_signal'],
+        return TrendResult(
+            atr=latest.get('atr', 0),
             rsi=rsi_analysis['rsi'],
             rsi_signal=rsi_analysis['signal'],
             super_trend=super_trend_analysis['super_trend'],
             super_trend_signal=super_trend_analysis['signal'],
             mfi=mfi_analysis['mfi'],
             mfi_signal=mfi_analysis['signal'],
+            ema=ema_analysis['ema'],
+            ema_signal=ema_analysis['signal'],
             candle=candle_data,
             indicators=indicators_dict,
+            gmma_analysis=gmma_analysis,  # Змінено з alligator_analysis на gmma_analysis
+            volume_analysis=volume_analysis,
             cvd_analysis=cvd_analysis,
-            sinewave_analysis=sinewave_analysis,  # Додано SineWave аналіз до результату
             timestamp=latest.get('open_time') or latest.get('close_time')
         )
 
 
-def get_alpha_trend_data(symbol: str, is_test: bool = False) -> AlphaTrendResult:
+def get_trend_data(symbol: str, is_test: bool = False) -> TrendResult:
     """
-    Зручна функція для отримання даних AlphaTrend індикатора.
+    Зручна функція для отримання даних технічних індикаторів.
     """
-    bot = AlphaTrendBot()
-    return bot.calculate_alpha_trend_for_symbol(symbol, is_test)
+    bot = TrendBot()
+    return bot.calculate_trend_for_symbol(symbol, is_test)
 
 
-def get_alpha_trend_history(symbol: str, period: int = 100, is_test: bool = False) -> pd.DataFrame:
+def get_trend_history(symbol: str, period: int = 100, is_test: bool = False) -> pd.DataFrame:
     """
-    Отримує історичні дані AlphaTrend індикатора.
+    Отримує історичні дані технічних індикаторів.
     """
-    bot = AlphaTrendBot()
+    bot = TrendBot()
     bot.initialize_data_fetcher(DB_USER, DB_PASS, DB_HOST, DB_PORT, DB_NAME)
 
     if is_test:
@@ -969,119 +1115,96 @@ def get_alpha_trend_history(symbol: str, period: int = 100, is_test: bool = Fals
     if len(data) < 100:
         raise ValueError(f"Недостатньо даних для аналізу. Отримано {len(data)} свічок.")
 
-    # Розрахунок всіх індикаторів включаючи SineWave
-    data_with_sinewave = bot.sinewave_analyzer.calculate_sinewave(data)
-    data_with_mfi = bot.mfi_analyzer.calculate_mfi(data_with_sinewave)
+    # Розрахунок всіх індикаторів
+    data_with_gmma = bot.gmma_analyzer.calculate_gmma(data)
+    data_with_volume = bot.volume_analyzer.calculate_volume_analysis(data_with_gmma)
+    data_with_ema = bot.ema_analyzer.calculate_ema(data_with_volume)
+    data_with_mfi = bot.mfi_analyzer.calculate_mfi(data_with_ema)
     data_with_super_trend = bot.super_trend_analyzer.calculate_super_trend(data_with_mfi)
-    data_with_rsi = bot.rsi_analyzer.calculate_rsi(data_with_super_trend)
-    data_with_indicators = bot.alpha_trend_analyzer.calculate_alpha_trend(data_with_rsi)
+    data_with_indicators = bot.rsi_analyzer.calculate_rsi(data_with_super_trend)
 
     if len(data_with_indicators) == 0:
-        raise ValueError(f"Не вдалося розрахувати AlphaTrend історію.")
+        raise ValueError(f"Не вдалося розрахувати історію індикаторів.")
 
     return data_with_indicators.tail(period)
 
 
 def get_of_data(symbol: str, is_test: bool = False):
     """
-    Основна функція для отримання даних AlphaTrend.
+    Основна функція для отримання даних технічних індикаторів.
     """
     try:
-        alpha_trend_data = get_alpha_trend_data(symbol, is_test)
-        indicators_history = get_alpha_trend_history(symbol, period=5, is_test=is_test)
-
-        # Отримуємо результати MarketTrendAnalyzer з alpha_trend_data
-        alpha_trend_data_value = alpha_trend_data.indicators.get('market_trend', 'neutral')
+        trend_data = get_trend_data(symbol, is_test)
+        indicators_history = get_trend_history(symbol, period=5, is_test=is_test)
 
         if is_test:
             # Вивід результатів
-            if alpha_trend_data.timestamp is not None:
-                print(f"Час закриття свічки: {alpha_trend_data.timestamp}")
+            print("=" * 50, "\n")
+            if trend_data.timestamp is not None:
+                print(f"Час закриття свічки: {trend_data.timestamp}")
             print("Технічний аналіз успішно завершено")
             print(f"Символ: {symbol}")
 
             print("\n=== Остання свічка ===")
-            print(f"Час: {alpha_trend_data.candle['open_time']}")
-            print(f"Open: {alpha_trend_data.candle['open']:.4f}")
-            print(f"High: {alpha_trend_data.candle['high']:.4f}")
-            print(f"Low: {alpha_trend_data.candle['low']:.4f}")
-            print(f"Close: {alpha_trend_data.candle['close']:.4f}")
-            print(f"Volume: {alpha_trend_data.candle['volume']:.2f}")
-            print(f"CVD: {alpha_trend_data.candle.get('cvd', 'N/A')}")
+            print(f"Час: {trend_data.candle['open_time']}")
+            print(f"Open: {trend_data.candle['open']:.4f}")
+            print(f"High: {trend_data.candle['high']:.4f}")
+            print(f"Low: {trend_data.candle['low']:.4f}")
+            print(f"Close: {trend_data.candle['close']:.4f}")
+            print(f"Volume: {trend_data.candle['volume']:.2f}")
+            print(f"CVD: {trend_data.candle.get('cvd', 'N/A')}")
 
-            print("\n=== AlphaTrend ===")
-            print(f"Поточний AlphaTrend: {alpha_trend_data.alpha_trend:.4f}")
-            print(f"ATR: {alpha_trend_data.atr:.4f}")
-            print(f"Сигнал: {alpha_trend_data.alpha_trend_signal}")
+            print("\n=== GMMA (Guppy Multiple Moving Average) ===")
+            if trend_data.gmma_analysis:
+                gmma = trend_data.gmma_analysis
+                print(f"Сигнал: {gmma.get('signal', 'N/A')}")
+                print(f"Тренд: {gmma.get('trend', 'N/A')}")
+                print(f"Сила тренду: {gmma.get('trend_strength', 'N/A')}")
+                print(f"Компресія: {'Так' if gmma.get('compression', False) else 'Ні'}")
+                print(f"Експансія: {'Так' if gmma.get('expansion', False) else 'Ні'}")
+                print(f"Середня коротких EMA: {gmma.get('avg_short', 'N/A'):.4f}")
+                print(f"Середня довгих EMA: {gmma.get('avg_long', 'N/A'):.4f}")
+                print(f"Різниця: {(gmma.get('avg_short', 0) - gmma.get('avg_long', 0)):.4f}")
 
             print("\n=== RSI ===")
-            print(f"Поточний RSI: {alpha_trend_data.rsi:.2f}")
-            print(f"RSI сигнал: {alpha_trend_data.rsi_signal}")
-            print(f"Сила сигналу: {alpha_trend_data.indicators['rsi_strength']}")
-            print(f"Тренд RSI: {alpha_trend_data.indicators['rsi_trend']}")
+            print(f"Поточний RSI: {trend_data.rsi:.2f}")
+            print(f"RSI сигнал: {trend_data.rsi_signal}")
 
             print("\n=== SuperTrend ===")
-            print(f"Поточний SuperTrend: {alpha_trend_data.super_trend:.4f}")
-            print(f"SuperTrend сигнал: {alpha_trend_data.super_trend_signal}")
+            print(f"Поточний SuperTrend: {trend_data.super_trend:.4f}")
+            print(f"SuperTrend сигнал: {trend_data.super_trend_signal}")
 
             print("\n=== MFI (Money Flow Index) ===")
-            print(f"Поточний MFI: {alpha_trend_data.mfi:.2f}")
-            print(f"MFI сигнал: {alpha_trend_data.mfi_signal}")
-            print(f"Сила сигналу MFI: {alpha_trend_data.indicators['mfi_strength']}")
-            print(f"Тренд MFI: {alpha_trend_data.indicators['mfi_trend']}")
+            print(f"Поточний MFI: {trend_data.mfi:.2f}")
+            print(f"MFI сигнал: {trend_data.mfi_signal}")
+
+            print("\n=== Volume & ATR Analysis ===")
+            if trend_data.volume_analysis:
+                volume = trend_data.volume_analysis
+                print(f"Поточний об'єм: {volume.get('current_volume', 'N/A'):.2f}")
+                print(f"ATR: {volume.get('atr', 'N/A'):.4f}")
+                print(f"Сигнал об'єму: {volume.get('volume_signal', 'N/A')}")
+                print(f"Сигнал акумуляції: {volume.get('accumulation_signal', 'N/A')}")
 
             print("\n=== CVD (Cumulative Volume Delta) ===")
-            if alpha_trend_data.cvd_analysis:
-                cvd = alpha_trend_data.cvd_analysis
-                print(f"Значення CVD: {cvd.get('value', 'N/A')}")
+            if trend_data.cvd_analysis:
+                cvd = trend_data.cvd_analysis
                 print(f"Тренд CVD: {cvd.get('trend', 'N/A')}")
-                print(f"Сила CVD: {cvd.get('strength', 'N/A')}")
-                print(f"Довіра: {cvd.get('confidence', 'N/A')}")
-                print(f"Якість сигналу: {cvd.get('signal_quality', 'N/A')}")
-
-            print("\n=== Even Better SineWave ===")
-            if alpha_trend_data.sinewave_analysis:
-                sine = alpha_trend_data.sinewave_analysis
-                print(f"Значення SineWave: {sine.get('sinewave', 'N/A'):.4f}")
-                print(f"Сигнал: {sine.get('signal', 'N/A')}")
-                print(f"Тренд: {sine.get('trend', 'N/A')}")
-                print(f"Сила: {sine.get('strength', 'N/A')}")
-
-            print("\n=== Market Trend Analyzer ===")
-            print(f"Ринковий тренд: {alpha_trend_data_value}")
 
             print("\n=== Загальна інформація ===")
-            print(f"Ціна закриття: {alpha_trend_data.indicators['close']:.4f}")
-            print(
-                f"Відношення ціни до AlphaTrend: {(alpha_trend_data.indicators['close'] / alpha_trend_data.alpha_trend - 1) * 100:.2f}%")
+            print(f"Ціна закриття: {trend_data.indicators['close']:.4f}")
+            print(f"ATR: {trend_data.atr:.4f}")
 
         # Отримання історичних даних для контексту
             print("\nОстанні 5 значень індикаторів:")
-            historical_columns = ['open_time', 'close', 'alpha_trend', 'alpha_trend_signal', 'rsi', 'rsi_signal',
-                              'super_trend_value', 'super_trend_signal', 'mfi', 'mfi_signal', 'sinewave',
-                              'sinewave_signal']
+            historical_columns = ['open_time', 'close', 'super_trend_value',
+                              'super_trend_signal', 'mfi', 'mfi_trend', 'mfi_signal',
+                              'ema', 'ema_signal', 'ema_trend', 'volume', 'gmma_signal',
+                              'gmma_trend']
             available_columns = [col for col in historical_columns if col in indicators_history.columns]
             print(indicators_history[available_columns].tail())
-
-        # Додатковий вивід даних свічки
-            #print(f"\n📊 Дані останньої свічки:")
-            #pprint(alpha_trend_data.candle)
-
-        # Вивід CVD аналізу
-            if alpha_trend_data.cvd_analysis:
-                print(f"\n📈 CVD Аналіз:")
-                pprint(alpha_trend_data.cvd_analysis)
-
-        # Вивід SineWave аналізу
-            if alpha_trend_data.sinewave_analysis:
-                print(f"\n📊 SineWave Аналіз:")
-                pprint(alpha_trend_data.sinewave_analysis)
-
-        # Вивід результатів MarketTrendAnalyzer
-            print(f"\n📈 Market Trend Analyzer Results:")
-            print(f"Ринковий тренд: {alpha_trend_data_value}")
-
-        return alpha_trend_data, indicators_history
+            print("=" * 50, "\n")
+        return trend_data, indicators_history
 
     except Exception as e:
         print(f"Помилка при отриманні даних: {e}")
@@ -1090,24 +1213,23 @@ def get_of_data(symbol: str, is_test: bool = False):
 
 if __name__ == "__main__":
     try:
-        # Приклад використанся
+        # Приклад використання
         symbol = 'SOLUSDT'
 
         # Отримання поточних даних
-        alpha_trend_data, indicators_history = get_of_data(symbol)
+        trend_data, indicators_history = get_of_data(symbol)
 
         # Комбінований аналіз сигналів
         print(f"\n🎯 КОМБІНОВАНИЙ АНАЛІЗ СИГНАЛІВ:")
-        print(f"AlphaTrend: {alpha_trend_data.alpha_trend_signal}")
-        print(f"RSI: {alpha_trend_data.rsi_signal}")
-        print(f"SuperTrend: {alpha_trend_data.super_trend_signal}")
-        print(f"MFI: {alpha_trend_data.mfi_signal}")
-        if alpha_trend_data.cvd_analysis:
-            print(f"CVD: {alpha_trend_data.cvd_analysis.get('trend', 'N/A')}")
-        if alpha_trend_data.sinewave_analysis:
-            print(f"SineWave: {alpha_trend_data.sinewave_analysis.get('signal', 'N/A')}")
-        # Додаємо вивід результату MarketTrendAnalyzer
-        print(f"Market Trend: {alpha_trend_data.indicators.get('market_trend', 'N/A')}")
+        print(f"GMMA: {trend_data.gmma_analysis.get('signal', 'N/A') if trend_data.gmma_analysis else 'N/A'}")
+        print(f"RSI: {trend_data.rsi_signal}")
+        print(f"SuperTrend: {trend_data.super_trend_signal}")
+        print(f"MFI: {trend_data.mfi_signal}")
+        print(f"EMA 50: {trend_data.ema_signal}")
+        if trend_data.volume_analysis:
+            print(f"Volume Signal: {trend_data.volume_analysis.get('volume_signal', 'N/A')}")
+        if trend_data.cvd_analysis:
+            print(f"CVD: {trend_data.cvd_analysis.get('trend', 'N/A')}")
 
     except Exception as e:
         print(f"Помилка: {e}")

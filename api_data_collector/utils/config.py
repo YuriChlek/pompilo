@@ -11,11 +11,6 @@ DB_PASS = os.getenv("DB_PASS", "admin_pass")
 BUY_DIRECTION = "buy"
 SELL_DIRECTION = "sell"
 
-SCHEMAS = [
-    'bybit_trading_history_data',
-    'binance_trading_history_data',
-    'okx_trading_history_data',
-]
 # Торгові символи
 TRADING_SYMBOLS = [
     'AAVEUSDT',
@@ -32,6 +27,7 @@ TRADING_SYMBOLS = [
     'LINKUSDT',
     'LTCUSDT',
     'NEARUSDT',
+    'PENGUUSDT',
     'SOLUSDT',
     'SUIUSDT',
     'TAOUSDT',
@@ -43,31 +39,41 @@ TRADING_SYMBOLS = [
     'XRPUSDT'
 ]
 
+POSITION_ROUNDING_RULES = {
+            # Цілі числа
+            'SUIUSDT': lambda x: int(round(x, -1)),
+            'ADAUSDT': lambda x: int(round(x, 0)),
+            'DOGEUSDT': lambda x: int(round(x, 0)),
+            'JUPUSDT': lambda x: int(round(x, 0)),
+            'WIFUSDT': lambda x: int(round(x, 0)),
+            'XRPUSDT': lambda x: int(round(x, 0)),
+            'TIAUSDT': lambda x: round(x, 0),
+            'ENAUSDT': lambda x: round(x, 0),
+            'PENGUUSDT': lambda x: round(x, 0),
+            'VIRTUALUSDT': lambda x: round(x, 0),
+
+            # 1 знак після коми
+            'SOLUSDT': lambda x: round(x, 1),
+            'AVAXUSDT': lambda x: round(x, 1),
+            'NEARUSDT': lambda x: round(x, 1),
+            'WLDUSDT': lambda x: round(x, 1),
+            'LINKUSDT': lambda x: round(x, 1),
+            'LTCUSDT': lambda x: round(x, 1),
+            'UNIUSDT': lambda x: round(x, 1),
+            'ARBUSDT': lambda x: round(x, 1),
+            'DOTUSDT': lambda x: round(x, 1),
+
+            # 2 знаки після коми
+            'AAVEUSDT': lambda x: round(x, 2),
+            'APTUSDT': lambda x: round(x, 2),
+            'ETHUSDT': lambda x: round(x, 2),
+            'TAOUSDT': lambda x: round(x, 2),
+            'BNBUSDT': lambda x: round(x, 2),
+        }
 
 TEST_TRADING_SYMBOLS = [
-    'XRPUSDT',
+    'SOLUSDT',
 ]
-
-"""
-Розмір трейдів які вважаються великими
-"""
-
-MIN_BIG_TRADES_SIZES = {
-    'AAVEUSDT': 2000,
-    'ADAUSDT': 1500000,
-    'APTUSDT': 38000,
-    'AVAXUSDT': 80000,
-    'DOGEUSDT': 2000000,
-    'DOTUSDT': 80000,
-    'JUPUSDT': 250000,
-    'SOLUSDT': 10000,
-    'SUIUSDT': 150000,
-    'TIAUSDT': 150000,
-    'TAIUSDT': 500000,
-    'WIFUSDT': 150000,
-    'WLDUSDT': 80000,
-    'XRPUSDT': 300000
-}
 
 # Кількість знаків після коми для кожного символу
 SYMBOLS_ROUNDING = {
@@ -85,12 +91,13 @@ SYMBOLS_ROUNDING = {
     'LINKUSDT': 3,
     'LTCUSDT': 4,
     'NEARUSDT': 3,
+    'PENGUUSDT': 6,
     'SOLUSDT': 3,
     'SUIUSDT': 5,
     'TAIUSDT': 5,
     'TAOUSDT': 2,
-    'TIAUSDT': 4,
     'UNIUSDT': 3,
+    'VIRTUALUSDT': 4,
     'WIFUSDT': 4,
     'WLDUSDT': 4,
     'XRPUSDT': 4

@@ -1,7 +1,7 @@
 import asyncio
 from datetime import datetime, timedelta
 
-from bot_events import run_bot
+from bot import run_bot
 from utils import TRADING_SYMBOLS
 from api import run_api
 
