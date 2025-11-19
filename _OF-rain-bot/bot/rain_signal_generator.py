@@ -191,7 +191,6 @@ async def generate_rain_signal(candles, symbol):
                 - `is_full_body_candle()`
                 - `get_candle_type()`
                 - `is_bullish_candle()`
-                - `detect_trend_direction()`
                 - `is_strict_hourly_sequence()`
                 - `calculate_position()`
     """
@@ -215,7 +214,7 @@ async def generate_rain_signal(candles, symbol):
     position = None
     signal = 'Order not opened'
 
-    trend_direction = detect_trend_direction(candles)
+
     is_candles_correct = is_strict_hourly_sequence(candles)
 
     if not is_candles_correct:
@@ -227,27 +226,23 @@ async def generate_rain_signal(candles, symbol):
     # Reversal
     if (
             candle_1h_full_body and candle_0h_full_body and
-            trend_direction == "down_trend" and
             candle_1h['close'] < candle_1h['open'] and
             candle_0h['close'] > candle_0h['open'] and
             candle_0h['close'] > candle_0h['poc'] > candle_0h['open'] and
             str(candle_0h['vpoc_zone']).lower() in ('middle', 'lower') and
             candle_1h['close'] < candle_0h['poc'] < candle_1h['open'] and
-            candle_1h['vpoc_zone'] in ('middle', 'lower') and candle_0h['cvd'] > 0 and
-            abs(Decimal(candle_0h['cvd'])) > Decimal('0.25') * abs(Decimal(candle_1h['cvd']))
+            candle_1h['vpoc_zone'] in ('middle', 'lower')
     ):
         signal = '🔼 Buy reversal R'
         position = calculate_position(symbol, BUY_DIRECTION, Decimal(candle_0h['poc']), 'Limit')
     elif (
             candle_1h_full_body and candle_0h_full_body and
-            trend_direction == "up_trend" and
             candle_1h['close'] > candle_1h['open'] and
             candle_0h['close'] < candle_0h['open'] and
             candle_0h['close'] < candle_0h['poc'] < candle_0h['open'] and
             str(candle_0h['vpoc_zone']).lower() in ('middle', 'upper') and
             candle_1h['close'] > candle_0h['poc'] > candle_1h['open'] and
-            candle_1h['vpoc_zone'] in ('middle', 'upper') and candle_0h['cvd'] < 0 and
-            abs(Decimal(candle_0h['cvd'])) > Decimal('0.25') * abs(Decimal(candle_1h['cvd']))
+            candle_1h['vpoc_zone'] in ('middle', 'upper')
     ):
         signal = '🔽 Sell reversal R'
         position = calculate_position(symbol, SELL_DIRECTION, Decimal(candle_0h['poc']), 'Limit')
@@ -255,7 +250,6 @@ async def generate_rain_signal(candles, symbol):
     elif (
             candle_0h_full_body and
             candle_0h['volume'] == max(volumes) and
-            trend_direction == "down_trend" and
             candle_0h['close'] < candle_0h['open'] and
             str(candle_0h['vpoc_zone']).lower() == 'lower' and
             candle_0h['close'] > candle_0h['poc']
@@ -266,7 +260,6 @@ async def generate_rain_signal(candles, symbol):
     elif (
             candle_0h_full_body and
             candle_0h['volume'] == max(volumes) and
-            trend_direction == "up_trend" and
             candle_0h['close'] > candle_0h['open'] and
             str(candle_0h['vpoc_zone']).lower() == 'upper' and
             candle_0h['close'] < candle_0h['poc']
@@ -278,11 +271,10 @@ async def generate_rain_signal(candles, symbol):
     elif (
             candle_0h_full_body and candle_1h_full_body and candle_2h_full_body and
             candle_0h_bullish and not candle_1h_bullish and candle_2h_bullish and
-            trend_direction == "up_trend" and
             candle_0h['open'] < candle_0h['poc'] < candle_0h['close'] and
             candle_1h['close'] < candle_1h['poc'] < candle_1h['open'] and
-            str(candle_1h['vpoc_zone']).lower() in ('middle', 'lower') and
-            candle_0h['cvd'] > 0 and candle_1h['volume'] != max(volumes)
+            str(candle_1h['vpoc_zone']).lower() in ('middle', 'lower')
+
 
     ):
         # candle_2h['open'] < candle_2h['poc'] < candle_2h['close'] and можливо додати в умову
@@ -291,12 +283,9 @@ async def generate_rain_signal(candles, symbol):
     elif (
             candle_0h_full_body and candle_1h_full_body and candle_2h_full_body and
             not candle_0h_bullish and candle_1h_bullish and not candle_2h_bullish and
-            trend_direction == "down_trend" and
             candle_0h['close'] < candle_0h['poc'] < candle_0h['open'] and
             candle_1h['open'] < candle_1h['poc'] < candle_1h['close'] and
-            #candle_2h['close'] < candle_2h['poc'] < candle_2h['open'] and
-            str(candle_1h['vpoc_zone']).lower() in ('middle', 'upper') and
-            candle_0h['cvd'] < 0 and candle_1h['volume'] != max(volumes)
+            str(candle_1h['vpoc_zone']).lower() in ('middle', 'upper')
     ):
         # candle_2h['open'] < candle_2h['poc'] < candle_2h['close'] and можливо додати в умову
         signal = '🔽 Sell trend T'
@@ -304,7 +293,6 @@ async def generate_rain_signal(candles, symbol):
     elif (
             candle_1h_full_body and candle_0h_doji == 'dragonfly_doji' and
             candle_1h['open'] < candle_1h['poc'] < candle_1h['close'] and
-            trend_direction == "up_trend" and
             candle_1h_bullish and candle_2h_bullish and
             str(candle_0h['vpoc_zone']).lower() in ('middle', 'lower') and
             candle_0h['poc'] < candle_0h['close'] and candle_0h['poc'] < candle_0h['open']
@@ -314,7 +302,6 @@ async def generate_rain_signal(candles, symbol):
     elif (
             candle_1h_full_body and candle_0h_doji == 'gravestone_doji' and
             candle_1h['open'] > candle_1h['poc'] > candle_1h['close'] and
-            trend_direction == "down_trend" and
             not candle_1h_bullish and not candle_2h_bullish and
             str(candle_0h['vpoc_zone']).lower() in ('middle', 'upper') and
             candle_0h['poc'] > candle_0h['close'] and candle_0h['poc'] > candle_0h['open']
@@ -380,76 +367,6 @@ def calculate_position(symbol, direction, entry_price, order_type='Limit'):
     position = calculate_order_data(symbol, direction, balance, Decimal(entry_price), order_type)
 
     return position
-
-
-def detect_trend_direction(candles):
-    """
-    Визначає напрямок тренду на основі аналізу останніх 8 свічок.
-
-    Алгоритм розглядає співвідношення бичачих і ведмежих свічок,
-    загальний обʼєм, суму тіл свічок, а також зміну ціни від першої до останньої свічки.
-
-    Умови:
-        - Якщо ціна зросла більш ніж на 0.5% (від 1-ї до 8-ї свічки), і
-          сукупні характеристики бичачих свічок (обʼєм, тіла) переважають — тренд "up_trend".
-        - Якщо ціна впала більш ніж на 0.5%, і сукупні характеристики ведмежих свічок переважають — тренд "down_trend".
-        - В інших випадках — "flat".
-
-    Parameters:
-        candles (list[dict]): Список із 8 свічок (словників), кожна з яких повинна містити поля:
-            - 'open' (float): ціна відкриття
-            - 'close' (float): ціна закриття
-            - 'high' (float): максимальна ціна
-            - 'low' (float): мінімальна ціна
-            - 'cvd' (float): кумулятивна дельта обʼєму (не використовується напряму)
-            - 'poc' (float): точка контролю (не використовується напряму)
-            - 'vpoc_zone' (str): зона максимального обʼєму (не використовується напряму)
-            - 'volume' (float): обʼєм торгів
-
-    Returns:
-        str: Один із трьох варіантів напрямку тренду:
-            - "up_trend" — висхідний тренд
-            - "down_trend" — низхідний тренд
-            - "flat" — відсутність чітко вираженого тренду
-
-    Примітка:
-        Якщо передано менше ніж 5 свічок — метод повертає порожній рядок і виводить попередження.
-    """
-
-    bullish_candles = [c for c in candles if c['close'] > c['open']]
-    bearish_candles = [c for c in candles if c['close'] < c['open']]
-
-    bullish_volume = sum(c['volume'] for c in candles if c['close'] > c['open'])
-    bearish_volume = sum(c['volume'] for c in candles if c['close'] < c['open'])
-
-    bullish_body_sum = sum(abs(c['close'] - c['open']) for c in bullish_candles)
-    bearish_body_sum = sum(abs(c['close'] - c['open']) for c in bearish_candles)
-
-    closes = [c['close'] for c in candles]
-    change_pct = abs((closes[-1] - closes[0]) / closes[0] * 100)
-
-    if len(candles) < 8:
-        print("Недостатньо даних")
-        return ''
-
-    closes = [c['close'] for c in candles]
-
-    if (
-            change_pct > 0.5 and
-            closes[0] > closes[7] and
-            bullish_volume > bearish_volume and
-            bullish_body_sum > bearish_body_sum
-    ):
-        return "up_trend"
-    elif (
-            change_pct > 0.5 and
-            closes[0] < closes[7] and
-            bullish_volume < bearish_volume and
-            bullish_body_sum < bearish_body_sum
-    ):
-        return "down_trend"
-    else:
-        return "flat"
 
 
 async def open_rain_position(position, signal, symbol):

@@ -1,7 +1,21 @@
-psycopg2-binary
-drf-yasg
 asyncpg
-websockets
-pandas
+drf-yasg
+joblib
+lightning
 numpy
+pandas
+psycopg2-binary
+python-telegram-bot
+pytorch-forecasting
+pytorch-lightning
+requests
+scikit-learn
 sqlalchemy
+tenacity
+websockets
+matplotlib
+torchmetrics
+--index-url https://download.pytorch.org/whl/cu118
+torch==2.7.1+cu118
+torchvision==0.22.1+cu118
+torchaudio==2.7.1+cu118

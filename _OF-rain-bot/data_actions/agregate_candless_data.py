@@ -1,23 +1,46 @@
 import asyncpg
 import asyncio
+from typing import Awaitable
 import zoneinfo
 from datetime import datetime, timedelta
 from collections import defaultdict
 from decimal import Decimal
 from utils import (
-    SCHEMAS,
+    DB_HOST,
+    DB_PORT,
+    DB_NAME,
+    DB_USER,
+    DB_PASS,
     SELL_DIRECTION,
     TRADING_SYMBOLS,
-    get_db_pool,
-    insert_candles_data
+    SCHEMAS
 )
 
+
+async def get_db_pool():
+    """
+          Створює та повертає пул з'єднань з базою даних PostgreSQL.
+
+          Використовує параметри з'єднання, визначені у змінних оточення або конфігурації:
+          DB_USER, DB_PASS, DB_NAME, DB_HOST, DB_PORT.
+
+          Returns:
+              asyncpg.pool.Pool: Асинхронний пул з'єднань до бази даних.
+    """
+
+    return await asyncpg.create_pool(
+        user=DB_USER,
+        password=DB_PASS,
+        database=DB_NAME,
+        host=DB_HOST,
+        port=DB_PORT
+    )
 
 def get_hour_window(target_time: datetime, current_time=False):
     """
         Обчислює годинне вікно часу (start і end) для заданого моменту часу.
 
-        Перетворює переданий час у київський часовий пояс (Europe/Kyiv), визначає початок і кінець відповідної години:
+        Визначає початок і кінець відповідної години:
         - Якщо `current_time=False`, то обирається попередня завершена година.
         - Якщо `current_time=True`, то обирається поточна або наступна година.
 
@@ -32,32 +55,19 @@ def get_hour_window(target_time: datetime, current_time=False):
                 - "start" (datetime): Початок години (naive UTC).
                 - "end" (datetime): Кінець години (naive UTC).
     """
-    kyiv = zoneinfo.ZoneInfo("Europe/Kyiv")
 
-    # Якщо target_time не має tzinfo — вважаємо, що це UTC
-    if target_time.tzinfo is None and not current_time:
-        target_time = target_time.replace(tzinfo=zoneinfo.ZoneInfo("UTC"))
+    if target_time.tzinfo is not None:
+        target_time = target_time.astimezone(zoneinfo.ZoneInfo("UTC")).replace(tzinfo=None)
 
-    # Переводимо в київський час
-    local_time = target_time.astimezone(kyiv)
-
-    # Зменшуємо на 1 годину — бо хочемо завершену попередню годину
-    if not current_time:
-        local_time -= timedelta(hours=1)
+    if current_time:
+        reference_hour = target_time + timedelta(hours=1)
     else:
-        local_time += timedelta(hours=1)
+        reference_hour = target_time - timedelta(hours=1)
 
-    # Обрізаємо до початку години
-    start_time = local_time.replace(minute=0, second=0, microsecond=0)
+    start_time = reference_hour.replace(minute=0, second=0, microsecond=0)
     end_time = start_time + timedelta(hours=1)
 
-    start_utc_naive = start_time.replace(tzinfo=None)
-    end_utc_naive = end_time.replace(tzinfo=None)
-
-    return {
-        "start": start_utc_naive,
-        "end": end_utc_naive
-    }
+    return {"start": start_time, "end": end_time}
 
 
 def compute_vpoc_zone(trading_data: list[dict], high, low) -> str | None:
@@ -259,20 +269,9 @@ async def fetch_hourly_tick_data(pool, target_time: datetime):
                     UNION ALL
 
                     SELECT side, size, price, timestamp 
-                    FROM bitget_trading_history_data.{table_name}
-                    WHERE timestamp >= $1 AND timestamp < $2
-
-                    UNION ALL
-
-                    SELECT side, size, price, timestamp 
                     FROM okx_trading_history_data.{table_name}
                     WHERE timestamp >= $1 AND timestamp < $2
 
-                    UNION ALL
-
-                    SELECT side, size, price, timestamp 
-                    FROM gateio_trading_history_data.{table_name}
-                    WHERE timestamp >= $1 AND timestamp < $2
                 ) AS combined
                 ORDER BY timestamp ASC;
             """
@@ -399,7 +398,7 @@ async def set_candles_data(hourly_ranges):
                 poc = candle['poc']
                 poc_zone = candle['vpoc_zone']
                 volume = candle['volume']
-                candle_id = f"{volume}{abs(cvd)}{round(open_price, 5)}{round(close_price, 5)}"
+                candle_id = f"{open_time}"
                 await insert_candles_data(pool, (
                     open_time,
                     close_time,
@@ -441,9 +440,10 @@ async def run_agregate_all_candles_data_job():
     """
     pool = await get_db_pool()
 
-    table_schema = SCHEMAS[0]
+    table_schema = SCHEMAS[1]
     table_name = f"{str(TRADING_SYMBOLS[0]).lower()}_p_trades"
     hourly_ranges = await get_hourly_time_ranges_from_db(pool, table_schema, table_name)
+
     await pool.close()
 
     await set_candles_data(hourly_ranges)
@@ -465,6 +465,45 @@ async def run_agregate_last_1h_candles_data_job():
     """
     print("Agregate last hour candle.")
     kyiv = zoneinfo.ZoneInfo("Europe/Kyiv")
-    now = [datetime.now(kyiv)]
+    now = [datetime.now()]
 
     await set_candles_data(now)
+
+
+async def insert_candles_data(pool, data, symbol):
+    """
+        Вставляє агрегаційні дані свічки (candle) у відповідну таблицю бази даних.
+
+        Функція виконує запис до таблиці свічок для заданого символу у схемі `_candles_trading_data`.
+        Якщо запис із таким `candle_id` вже існує, вставка ігнорується (ON CONFLICT DO NOTHING).
+
+        Parameters:
+            pool: Асинхронний пул з'єднань до бази даних (типу asyncpg.pool.Pool).
+            data (tuple): Кортеж із даними свічки у форматі:
+                (open_time, close_time, symbol, open, close, high, low, cvd, poc, vpoc_zone, volume, candle_id).
+            symbol (str): Назва торгового символу (наприклад, 'BTCUSDT').
+
+        Returns:
+            str | None: Рядок з результатом виконання SQL-запиту або None у разі помилки.
+    """
+
+    db_schema = '_candles_trading_data'
+    table = f"{str(symbol).lower()}_p_candles"
+
+    try:
+        async with pool.acquire() as conn:
+            result = await conn.execute(
+                f"""
+                    INSERT INTO {db_schema}.{table} (open_time, close_time, symbol, open, close, high, low, cvd, poc, vpoc_zone, volume, candle_id)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                    ON CONFLICT (candle_id) DO NOTHING;
+                """,
+                *data
+            )
+
+            return result
+    except Exception as e:
+        print(f"[DB INSERT ERROR]: {e}")
+
+        return None
+

@@ -3,7 +3,7 @@ services:
     container_name: pompilo_scalping_bot
     build:
       context: .
-      dockerfile: ./_OF-scalping-bot/Dockerfile
+      dockerfile: ./api_data_collector/Dockerfile
     image: pompilo_bot
     restart: always
     volumes:

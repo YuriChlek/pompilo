@@ -1,0 +1,14 @@
+psycopg2-binary
+asyncpg
+websockets
+pybit
+okx
+httpx
+tenacity
+pyee
+python-telegram-bot
+python-bitget
+gate_api
+cryptofeed
+sqlalchemy
+pandas-ta

@@ -65,10 +65,14 @@ async def create_tables():
     await conn.execute(create_schema_sql.format(schema=candles_data_schema))
 
     for symbol in TRADING_SYMBOLS:
-        table_name = f"{symbol.lower()}_p_candles"
-        sql = create_candles_data_table_sql.format(schema=candles_data_schema, table_name=table_name)
-        await conn.execute(sql)
-        print(f"Created table {candles_data_schema}.{table_name}")
+        for suffix in ("_p_candles", "_p_candles_test_data"):
+            table_name = f"{symbol.lower()}{suffix}"
+            sql = create_candles_data_table_sql.format(
+                schema=candles_data_schema,
+                table_name=table_name
+            )
+            await conn.execute(sql)
+            print(f"Created table {candles_data_schema}.{table_name}")
     # Створення схеми, якщо її немає
 
     await conn.close()

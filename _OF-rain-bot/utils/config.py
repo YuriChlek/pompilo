@@ -21,8 +21,6 @@ SCHEMAS = [
     'bybit_trading_history_data',
     'binance_trading_history_data',
     'okx_trading_history_data',
-    'bitget_trading_history_data',
-    'gateio_trading_history_data',
 ]
 
 CANDLES_SHEMA = '_candles_trading_data'
@@ -37,10 +35,8 @@ TRADING_SYMBOLS = [
     'ADAUSDT',
     'APTUSDT',
     'AVAXUSDT',
-    'BNBUSDT',
     'DOTUSDT',
     'DOGEUSDT',
-    'ETHUSDT',
     'JUPUSDT',
     'SOLUSDT',
     'SUIUSDT',
@@ -51,7 +47,21 @@ TRADING_SYMBOLS = [
 ]
 
 """
-Розмір трейдів для скальпера
+ 'AAVEUSDT',
+    'ADAUSDT',
+    'APTUSDT',
+    'AVAXUSDT',
+    'BNBUSDT',
+    'DOTUSDT',
+    'DOGEUSDT',
+    'ETHUSDT',
+    'JUPUSDT',
+    'SUIUSDT',
+    'SOLUSDT'
+    'TIAUSDT',
+    'WIFUSDT',
+    'WLDUSDT',
+    'XRPUSDT',
 """
 
 # Кількість знаків після коми для кожного символу

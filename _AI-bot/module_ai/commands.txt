@@ -1,0 +1,6 @@
+Команда для запуску скрипта model_train_v_2.py
+
+python module_ai/model_train_v_2.py --db postgresql://admin:admin_pass@localhost:5432/pompilo_db   --table _candles_trading_data.solusdt_p_candles_test_data --use-temporal-loss --dtw-alpha 0.4 --phase-beta 0.3 --direction-gamma 0.2  --epochs 1000   --batch-size 32   --encoder-len 75   --pred-len 5
+
+
+python module_ai/model_train_v_2.py --db postgresql://admin:admin_pass@localhost:5432/pompilo_db   --table _candles_trading_data.xrpusdt_p_candles_test_data --use-temporal-loss --dtw-alpha 0.4 --phase-beta 0.3 --direction-gamma 0.2  --epochs 1000   --batch-size 32   --encoder-len 75   --pred-len 5
