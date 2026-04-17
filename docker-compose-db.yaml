@@ -1,0 +1,22 @@
+services:
+  postgres:
+    container_name: pompilo_db
+    image: postgres:16-alpine
+    restart: always
+    ports:
+      - "${DB_PORT}:5432"
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DATABASE}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    networks:
+      - pompilo
+
+volumes:
+  postgres_data:
+
+networks:
+  pompilo:
+    driver: bridge

@@ -1,0 +1,14 @@
+.idea
+**/.venv
+**/.idea
+**/.env.production
+_AI-bot/tft_runs/*
+pompilo_analytics/app/.idea
+pompilo_analytics/app/.venv
+_OF-scalping-bot/**/__pycache__/
+_OF-rain-bot/**/__pycache__/
+**/**/__pycache__/*
+**/**/**/__pycache__/*
+**/**/**/**/__pycache__/*
+*_ai_rez.txt
+ideas

@@ -1,0 +1,10 @@
+asyncpg
+catboost
+joblib
+numpy
+pandas
+psycopg2-binary
+python-dotenv
+python-telegram-bot
+scikit-learn
+sqlalchemy
