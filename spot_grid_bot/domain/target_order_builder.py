@@ -219,5 +219,5 @@ def _is_sell_order_allowed(inventory, target_price: float, config) -> bool:
         return False
     min_allowed_price = minimum_exit_price(inventory, config)
     if min_allowed_price is None:
-        return True
+        return False
     return target_price >= min_allowed_price

@@ -7,7 +7,12 @@ from domain.strategy_config import StrategyConfig
 
 def effective_reference_price(inventory: InventorySnapshot) -> float | None:
     """Return the best available inventory reference price for exit-planning logic."""
-    reference_price = inventory.cost_basis_price or inventory.mark_price
+    if inventory.base_balance > 0:
+        reference_price = inventory.cost_basis_price
+    else:
+        reference_price = inventory.mark_price
+    if reference_price is None:
+        return None
     if reference_price <= 0:
         return None
     return reference_price

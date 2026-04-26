@@ -93,7 +93,7 @@ def filter_no_loss_sells(
         return [order for order in target_orders if order.side != OrderSide.SELL]
     min_allowed_price = minimum_exit_price(inventory, strategy_config)
     if min_allowed_price is None:
-        return target_orders
+        return [order for order in target_orders if order.side != OrderSide.SELL]
     return [
         order
         for order in target_orders

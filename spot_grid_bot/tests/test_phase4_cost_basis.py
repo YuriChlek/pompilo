@@ -77,3 +77,20 @@ class Phase4CostBasisTests(unittest.TestCase):
         floor = minimum_take_profit_price(inventory, decision.indicators, DEFAULT_STRATEGY_CONFIG)
         self.assertIsNotNone(floor)
         self.assertGreaterEqual(min(order.price for order in sell_orders), floor)
+
+    def test_planner_does_not_build_sell_targets_when_cost_basis_is_unknown(self):
+        planner = SpotGridPlanner(DEFAULT_STRATEGY_CONFIG)
+        planner.detector.detect = Mock(return_value=RegimeSnapshot(RegimeType.RANGE, 1.0, ["fixed_range"]))
+        candles = _candles(100.0)
+        inventory = InventorySnapshot(
+            base_balance=3.0,
+            quote_balance=1000.0,
+            reserved_quote=0.0,
+            mark_price=100.0,
+            cost_basis_price=None,
+        )
+
+        decision = planner.plan(MarketContext(symbol="SOLUSDT", candles=candles, inventory=inventory, live_orders=[]))
+        sell_orders = [order for order in decision.target_orders if order.side.value == "SELL"]
+
+        self.assertEqual(sell_orders, [])

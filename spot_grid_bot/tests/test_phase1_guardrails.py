@@ -79,6 +79,27 @@ class Phase1GuardrailsTests(unittest.TestCase):
             [("valid-buy", "BUY", 97.9), ("too-close-buy", "BUY", 99.7), ("valid-sell", "SELL", 102.0)],
         )
 
+    def test_guardrails_drop_all_sell_orders_when_cost_basis_is_unknown(self):
+        inventory = InventorySnapshot(
+            base_balance=1.0,
+            quote_balance=1_000.0,
+            reserved_quote=0.0,
+            mark_price=100.0,
+            cost_basis_price=None,
+        )
+        current_orders: list[LiveOrder] = []
+        target_orders = [
+            TargetOrder(client_order_id="buy", symbol="SOLUSDT", side=OrderSide.BUY, price=95.0, size=0.1),
+            TargetOrder(client_order_id="sell", symbol="SOLUSDT", side=OrderSide.SELL, price=101.0, size=0.1),
+        ]
+
+        guarded_orders = _apply_execution_guardrails("SOLUSDT", current_orders, target_orders, inventory, DEFAULT_STRATEGY_CONFIG)
+
+        self.assertEqual(
+            [(order.client_order_id, order.side.value, order.price) for order in guarded_orders],
+            [("buy", "BUY", 95.0)],
+        )
+
 
 def DEFAULT_TRADING_CONFIG_WITH_LIMITS():
     from dataclasses import replace
