@@ -48,12 +48,24 @@ def _to_decimal(value: object) -> Decimal:
     return Decimal(str(value))
 
 
+def _crossover(source: pd.Series, reference: pd.Series) -> pd.Series:
+    return (source.shift(1) <= reference.shift(1)) & (source > reference)
+
+
+def _crossunder(source: pd.Series, reference: pd.Series) -> pd.Series:
+    return (source.shift(1) >= reference.shift(1)) & (source < reference)
+
+
 def build_greenwich_snapshot(df: pd.DataFrame) -> GreenwichSignalSnapshot:
     if len(df) < GREENWICH_LENGTH + 2:
         raise ValueError("Недостатньо історії для Greenwich D1")
 
     working = df.copy().reset_index(drop=True)
-    basis = _basis(working["close"].astype("float64"), GREENWICH_BASIS_TYPE, GREENWICH_LENGTH)
+    working["high"] = working["high"].astype("float64")
+    working["low"] = working["low"].astype("float64")
+    working["close"] = working["close"].astype("float64")
+
+    basis = _basis(working["close"], GREENWICH_BASIS_TYPE, GREENWICH_LENGTH)
     prev_close = working["close"].shift(1)
     true_range = pd.concat(
         [
@@ -73,10 +85,9 @@ def build_greenwich_snapshot(df: pd.DataFrame) -> GreenwichSignalSnapshot:
     working["lower2"] = basis - float(GREENWICH_MULTIPLIER_2) * atr
     working["lower3"] = basis - float(GREENWICH_MULTIPLIER_3) * atr
 
+    buy_cross = _crossover(working["low"], working["lower3"])
+    sell_cross = _crossunder(working["close"], working["upper2"])
     last = working.iloc[-1]
-    prev = working.iloc[-2]
-    buy_signal = prev["low"] <= prev["lower3"] and last["low"] > last["lower3"]
-    sell_signal = prev["close"] >= prev["upper2"] and last["close"] < last["upper2"]
 
     return GreenwichSignalSnapshot(
         basis=_to_decimal(last["basis"]),
@@ -86,8 +97,8 @@ def build_greenwich_snapshot(df: pd.DataFrame) -> GreenwichSignalSnapshot:
         lower1=_to_decimal(last["lower1"]),
         lower2=_to_decimal(last["lower2"]),
         lower3=_to_decimal(last["lower3"]),
-        buy_signal=bool(buy_signal),
-        sell_signal=bool(sell_signal),
+        buy_signal=bool(buy_cross.iloc[-1]),
+        sell_signal=bool(sell_cross.iloc[-1]),
         signal_price=_to_decimal(last["close"]),
         close_time=last["close_time"],
     )

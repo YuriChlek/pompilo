@@ -3,11 +3,9 @@ from __future__ import annotations
 import argparse
 import asyncio
 
-from api import run_api
-from trading.application.bootstrap import build_live_trading_cycle, build_live_trading_scheduler
-from utils.config import DEFAULT_DAILY_TARGET_HOUR, DEFAULT_DAILY_TARGET_MINUTE, DEFAULT_DAILY_TARGET_SECOND, DEFAULT_LOOKBACK_DAYS, SPOT_TRADING_SYMBOLS, THREE_YEARS_DAYS
-from utils.create_tables import main as create_tables_main
-from utils.run_migrations import main as run_migrations_main
+from application.command_dispatcher import dispatch_command
+from application.runtime_commands import RuntimeCommandService
+from utils.config import DEFAULT_LOOKBACK_DAYS, SPOT_TRADING_SYMBOLS
 
 
 def _positive_int(value: str) -> int:
@@ -34,53 +32,9 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dry-run", action="store_true", help="Run the scheduled bot without real Binance orders")
     return parser
 
-
-async def _run_once(symbol: str | None = None, *, dry_run: bool = False) -> None:
-    trading_cycle = build_live_trading_cycle()
-    symbols = [symbol] if symbol else SPOT_TRADING_SYMBOLS
-    print(f"🚀 Starting one-off analysis for {len(symbols)} symbol(s), dry_run={dry_run}")
-    for current_symbol in symbols:
-        print(f"🧠 Running one-off cycle for {current_symbol}")
-        await trading_cycle.run(current_symbol, dry_run=dry_run)
-    print("✅ One-off analysis completed")
-
-
 async def start() -> None:
     args = _build_parser().parse_args()
-    if args.command == "sync":
-        print(f"🚀 Starting D1 sync for {len(SPOT_TRADING_SYMBOLS)} symbol(s)")
-        await run_api(days=args.period)
-        print("✅ D1 sync completed")
-        return
-    if args.command == "sync-3y":
-        print(f"🚀 Starting 3-year D1 sync for {len(SPOT_TRADING_SYMBOLS)} symbol(s)")
-        await run_api(days=THREE_YEARS_DAYS)
-        print("✅ 3-year D1 sync completed")
-        return
-    if args.command == "analyze":
-        await _run_once(args.symbol, dry_run=args.dry_run)
-        return
-    if args.command == "init-db":
-        print("🚀 Creating spot bot tables")
-        await create_tables_main()
-        print("✅ Spot bot tables are ready")
-        return
-    if args.command == "migrate":
-        print("🚀 Running SQL migrations")
-        await run_migrations_main()
-        print("✅ SQL migrations completed")
-        return
-
-    scheduler = build_live_trading_scheduler()
-    print("🚀 Starting spot Greenwich bot")
-    print(f"📊 Symbols: {', '.join(SPOT_TRADING_SYMBOLS)}")
-    await scheduler.run_forever(
-        SPOT_TRADING_SYMBOLS,
-        target_hour=DEFAULT_DAILY_TARGET_HOUR,
-        target_minute=DEFAULT_DAILY_TARGET_MINUTE,
-        target_second=DEFAULT_DAILY_TARGET_SECOND,
-        dry_run=args.dry_run,
-    )
+    await dispatch_command(args, RuntimeCommandService())
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@ import unittest
 
 import pandas as pd
 
-from indicators.grinvich import build_greenwich_snapshot
+from indicators.grinvich import _crossover, _crossunder, build_greenwich_snapshot
 
 
 def _base_frame() -> pd.DataFrame:
@@ -27,6 +27,18 @@ def _base_frame() -> pd.DataFrame:
 
 
 class GreenwichSignalTests(unittest.TestCase):
+    def test_crossover_matches_pine_boundary_semantics(self) -> None:
+        left = pd.Series([95.0, 96.0, 97.0])
+        right = pd.Series([96.0, 96.0, 96.0])
+        result = _crossover(left, right)
+        self.assertEqual(result.tolist(), [False, False, True])
+
+    def test_crossunder_matches_pine_boundary_semantics(self) -> None:
+        left = pd.Series([105.0, 104.0, 103.0])
+        right = pd.Series([104.0, 104.0, 104.0])
+        result = _crossunder(left, right)
+        self.assertEqual(result.tolist(), [False, False, True])
+
     def test_buy_signal_detects_recovery_above_lower3(self) -> None:
         df = _base_frame()
         df.loc[df.index[-2], "low"] = 80

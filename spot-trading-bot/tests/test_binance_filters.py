@@ -3,12 +3,12 @@ from __future__ import annotations
 import unittest
 from decimal import Decimal
 
-from trading.infrastructure.binance_spot import BinanceSymbolFilters, normalize_order_quantity, satisfies_min_notional
+from infrastructure.bybit_spot import BybitSpotFilters, normalize_order_quantity, satisfies_min_notional
 
 
-class BinanceFilterTests(unittest.TestCase):
+class BybitFilterTests(unittest.TestCase):
     def test_quantity_is_rounded_down_to_step_size(self) -> None:
-        filters = BinanceSymbolFilters(
+        filters = BybitSpotFilters(
             symbol="ETHUSDT",
             min_qty=Decimal("0.001"),
             max_qty=Decimal("1000"),
@@ -20,7 +20,7 @@ class BinanceFilterTests(unittest.TestCase):
         self.assertEqual(result, Decimal("0.123"))
 
     def test_quantity_below_min_qty_returns_zero(self) -> None:
-        filters = BinanceSymbolFilters(
+        filters = BybitSpotFilters(
             symbol="ETHUSDT",
             min_qty=Decimal("0.01"),
             max_qty=Decimal("1000"),
@@ -32,7 +32,7 @@ class BinanceFilterTests(unittest.TestCase):
         self.assertEqual(result, Decimal("0"))
 
     def test_min_notional_validation_uses_reference_price(self) -> None:
-        filters = BinanceSymbolFilters(
+        filters = BybitSpotFilters(
             symbol="ETHUSDT",
             min_qty=Decimal("0.001"),
             max_qty=Decimal("1000"),

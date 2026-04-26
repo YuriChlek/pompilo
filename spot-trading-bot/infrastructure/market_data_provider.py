@@ -8,10 +8,14 @@ from utils.db_actions import d1_table_name
 
 
 class DatabaseMarketDataProvider:
+    """Load candle history for one symbol from PostgreSQL."""
+
     def __init__(self) -> None:
         self.engine = create_engine(f"postgresql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}")
 
     def get_symbol_history(self, symbol: str) -> pd.DataFrame:
+        """Return the analysis window of candles for one symbol ordered from oldest to newest."""
+
         table_name = d1_table_name(symbol)
         query = text(
             f"""

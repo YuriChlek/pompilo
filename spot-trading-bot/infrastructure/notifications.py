@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import logging
 
-from trading.domain.models import ExecutionResult, SpotSignal
+from domain.models import ExecutionResult, SpotSignal
 
 logger = logging.getLogger(__name__)
 
 
 class LoggingSignalNotifier:
+    """Log the result of processing one trading signal."""
+
     async def notify(self, signal: SpotSignal, result: ExecutionResult) -> None:
         logger.info(
             "spot_signal_processed symbol=%s signal=%s action=%s executed=%s dry_run=%s reason=%s signal_price=%s executed_price=%s",

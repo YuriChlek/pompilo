@@ -3,18 +3,27 @@ from __future__ import annotations
 import json
 from decimal import Decimal
 
-from trading.domain.models import ExecutionDecision, ExecutionResult, PositionState
-from trading.infrastructure.binance_spot import BinanceSpotClient, base_asset_from_symbol, derive_avg_entry_price_from_trades, normalize_order_quantity, satisfies_min_notional
+from domain.models import ExecutionDecision, ExecutionResult, PositionState
+from infrastructure.bybit_spot import BybitSpotClient, derive_avg_entry_price_from_trades, normalize_order_quantity, satisfies_min_notional, split_symbol
 from utils.config import SPOT_BOT_SCHEMA
-from utils.db_actions import create_connection
 
 
-class BinanceSpotExecutor:
-    def __init__(self, client: BinanceSpotClient | None = None) -> None:
-        self.client = client or BinanceSpotClient()
+def _create_connection():
+    from utils.db_actions import create_connection
+
+    return create_connection()
+
+
+class BybitSpotExecutor:
+    """Execute spot market decisions on Bybit and persist position/ledger updates."""
+
+    def __init__(self, client: BybitSpotClient | None = None) -> None:
+        self.client = client or BybitSpotClient()
 
     async def get_position_state(self, symbol: str) -> PositionState:
-        conn = await create_connection()
+        """Return the local position state reconciled against Bybit balances and trades."""
+
+        conn = await _create_connection()
         try:
             row = await conn.fetchrow(
                 f"""
@@ -36,6 +45,13 @@ class BinanceSpotExecutor:
         finally:
             await conn.close()
 
+    async def get_quote_balance(self, symbol: str) -> Decimal:
+        """Return the free quote-asset balance available for a buy order."""
+
+        _, quote_asset = split_symbol(symbol)
+        balance = self.client.fetch_asset_balance(quote_asset)
+        return balance.free
+
     async def _reconcile_position_state(
         self,
         conn,
@@ -43,7 +59,7 @@ class BinanceSpotExecutor:
         local_state: PositionState,
     ) -> PositionState:
         try:
-            asset = base_asset_from_symbol(symbol)
+            asset, _ = split_symbol(symbol)
             balance = self.client.fetch_asset_balance(asset)
             exchange_quantity = balance.total
             if exchange_quantity <= 0:
@@ -94,6 +110,8 @@ class BinanceSpotExecutor:
         *,
         dry_run: bool = False,
     ) -> ExecutionResult:
+        """Execute one decision or record a skipped/dry-run outcome."""
+
         if decision.action == "skip":
             await self._record_ledger(decision, position_state, None, None, "skipped")
             return ExecutionResult(False, decision.symbol, decision.action, decision.reason, decision.signal_price, dry_run=dry_run)
@@ -129,7 +147,7 @@ class BinanceSpotExecutor:
                 False,
                 decision.symbol,
                 "skip",
-                "quantity_below_binance_min_qty",
+                "quantity_below_bybit_min_qty",
                 decision.signal_price,
                 dry_run=dry_run,
             )
@@ -139,7 +157,7 @@ class BinanceSpotExecutor:
                 False,
                 decision.symbol,
                 "skip",
-                "quantity_below_binance_min_notional",
+                "quantity_below_bybit_min_notional",
                 decision.signal_price,
                 quantity=normalized_quantity,
                 dry_run=dry_run,
@@ -178,7 +196,7 @@ class BinanceSpotExecutor:
         exchange_order_id: str,
         order_payload: dict,
     ) -> None:
-        conn = await create_connection()
+        conn = await _create_connection()
         try:
             if decision.action == "buy":
                 new_quantity = position_state.quantity + decision.quantity
@@ -204,7 +222,16 @@ class BinanceSpotExecutor:
                 new_avg_entry,
                 new_total_cost,
             )
-            await self._record_ledger(decision, position_state, executed_price, exchange_order_id, "executed", conn=conn, payload=order_payload, avg_entry_after=new_avg_entry)
+            await self._record_ledger(
+                decision,
+                position_state,
+                executed_price,
+                exchange_order_id,
+                "executed",
+                conn=conn,
+                payload=order_payload,
+                avg_entry_after=new_avg_entry,
+            )
         finally:
             await conn.close()
 
@@ -221,7 +248,7 @@ class BinanceSpotExecutor:
         avg_entry_after: Decimal | None = None,
     ) -> None:
         owns_connection = conn is None
-        conn = conn or await create_connection()
+        conn = conn or await _create_connection()
         try:
             await conn.execute(
                 f"""
