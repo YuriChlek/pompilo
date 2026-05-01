@@ -192,10 +192,10 @@ LIVE_PRICE_MONITOR_COOLDOWN_SECONDS=60
 
 Бот сам повністю відповідає за candle-ingestion path.
 
-- Свічки беруться з Binance Spot.
-- Свічки зберігаються в PostgreSQL у `_candles_trading_data.<symbol>_p_candles`.
+- Свічки беруться з Binance Spot для обох таймфреймів (1h та 4h).
+- Свічки зберігаються в PostgreSQL у `_candles_trading_data.<symbol>_1h` та `_candles_trading_data.<symbol>_4h`.
 - Candle schema/tables створюються автоматично.
-- Scheduler оновлює market data перед кожним scheduled cycle.
+- Scheduler оновлює обидва набори market data (1h та 4h) перед кожним scheduled cycle.
 - Planner працює з історією із PostgreSQL, а не напряму з біржовими klines.
 
 Код:

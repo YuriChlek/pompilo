@@ -228,7 +228,7 @@ Regime detection combines:
 
 The detector now also uses higher-timeframe confirmation:
 
-- the market-data provider builds a coarser candle stream from the base 1h history
+- the market-data provider loads actual 4h candles from the database
 - if the higher timeframe is in `DOWNTREND`, fresh entries are paused even when the lower timeframe still looks like `RANGE`
 
 Relevant code:
@@ -544,6 +544,13 @@ Run:
 
 ```bash
 ./.venv/bin/python -m unittest discover -s tests -p 'test_*.py'
+```
+
+Current suite status:
+
+- `94` tests passing locally in `.venv`
+
+s tests -p 'test_*.py'
 ```
 
 Current suite status:
