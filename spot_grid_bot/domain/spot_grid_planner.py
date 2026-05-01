@@ -195,20 +195,6 @@ class SpotGridPlanner:
         """Return the latest cached mark-price and ATR reference for one symbol."""
         return self._live_price_references.get(symbol.upper())
 
-    def export_runtime_state_summary(self) -> dict[str, dict[str, object]]:
-        """Return a compact per-symbol runtime summary for health/state reporting."""
-        summary: dict[str, dict[str, object]] = {}
-        for symbol, runtime in self._runtime_by_symbol.items():
-            live_reference = self._live_price_references.get(symbol)
-            summary[symbol] = {
-                "regime": runtime.strategy_state.regime.value,
-                "kill_switch_count": runtime.risk_state.kill_switch_count,
-                "cost_basis_price": runtime.cost_basis_price,
-                "cached_price": live_reference.cached_price if live_reference is not None else None,
-                "atr14": live_reference.atr14 if live_reference is not None else None,
-            }
-        return summary
-
     def _ensure_runtime(self, symbol: str) -> SymbolRuntimeState:
         """Return the mutable in-memory runtime state for one symbol."""
         key = symbol.upper()

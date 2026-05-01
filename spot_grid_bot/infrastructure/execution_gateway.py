@@ -14,12 +14,7 @@ from domain.models import InventorySnapshot, LiveOrder, OrderSide, TargetOrder
 from domain.strategy_config import StrategyConfig
 from infrastructure.bybit_account_client import BybitSpotAccountClient
 from infrastructure.bybit_market_client import BybitSpotMarketClient
-from infrastructure.bybit_spot_types import (
-    SpotInstrumentFilters,
-    UnsupportedSpotSymbolError,
-    quantize_down,
-    split_symbol,
-)
+from infrastructure.bybit_spot_types import SpotInstrumentFilters, UnsupportedSpotSymbolError, quantize_down
 from infrastructure.cost_basis_resolver import calculate_cost_basis_from_executions, to_decimal
 from infrastructure.execution_guardrails import apply_execution_guardrails, order_key
 from utils.config import BYBIT_API_ENDPOINT, BYBIT_API_KEY, BYBIT_API_SECRET, BYBIT_RECV_WINDOW
@@ -335,10 +330,6 @@ class BybitSpotExchange:
         minimum = minimum.quantize(Decimal("0.01"))
         return notional >= minimum
 
-    def _split_symbol(self, symbol: str) -> tuple[str, str]:
-        """Split a spot symbol into base and quote assets using known quote suffixes."""
-        return split_symbol(symbol)
-
     def _find_existing_order_id_by_link_id(self, symbol: str, order_link_id: str) -> str | None:
         """Return a matching live order id for a previously used ``orderLinkId``."""
         for order in self.get_open_orders(symbol):
@@ -368,20 +359,6 @@ class BybitSpotExchange:
         """Fail fast when a symbol was previously marked unsupported on the venue."""
         if symbol.upper() in self._unsupported_symbols:
             raise UnsupportedSpotSymbolError(f"Unsupported Bybit spot symbol: {symbol.upper()}")
-
-    def resolve_cost_basis_price(self, symbol: str, base_balance: float, ttl_seconds: int = 30) -> float | None:
-        """Derive spot cost basis from recent executions and cache it briefly."""
-        return self._cost_basis_resolver.resolve(symbol, base_balance, ttl_seconds=ttl_seconds)
-
-    def _fetch_executions(self, symbol: str) -> list[dict]:
-        """Fetch recent spot executions for one symbol."""
-        response = self.client.get_executions(
-            category=SPOT_CATEGORY,
-            symbol=symbol.upper(),
-            limit=100,
-        )
-        return ((response.get("result") or {}).get("list")) or []
-
 
 class BybitSpotExecutionService:
     """Execution adapter that applies guarded target orders to the live Bybit spot venue."""
@@ -499,8 +476,3 @@ def _build_exchange_order_link_id(order: TargetOrder) -> str:
     base = order.client_order_id.replace("_", "-")[:16]
     unique_suffix = uuid4().hex[:20]
     return f"{base}-{unique_suffix}"[:36]
-
-
-def _calculate_cost_basis_from_executions(executions: list[dict], base_balance: float) -> float | None:
-    """Backward-compatible wrapper around the extracted cost-basis resolver helper."""
-    return calculate_cost_basis_from_executions(executions, base_balance)

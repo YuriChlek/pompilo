@@ -80,6 +80,9 @@ LIVE_PRICE_MONITOR_COOLDOWN_SECONDS=60
 ```bash
 ./.venv/bin/python main.py sync --period 365 --timeframe 1h
 ```
+```bash
+./.venv/bin/python main.py sync --period 365 --timeframe 4h
+```
 
 ### 4. Run one planning/execution cycle
 

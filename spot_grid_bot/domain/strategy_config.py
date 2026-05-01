@@ -12,10 +12,6 @@ class MarketDataConfig:
     candle_table_suffix_1h: str = "_1h"
     candle_table_suffix_4h: str = "_4h"
 
-    @property
-    def supported_timeframes(self) -> tuple[str, str]:
-        return (self.candle_interval, self.higher_timeframe_interval)
-
     def table_suffix_for(self, timeframe: str) -> str:
         normalized_timeframe = str(timeframe).strip().lower()
         if normalized_timeframe == self.candle_interval:

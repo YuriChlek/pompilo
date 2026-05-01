@@ -7,12 +7,6 @@ from domain.models import LiveOrder, OrderSide, TargetOrder
 BOT_ORDER_LINK_ID_RE = re.compile(r"^[a-z0-9-]{1,16}-[0-9a-f]{16,32}$")
 
 
-def is_entry_order_tag(tag: str) -> bool:
-    """Return whether an order tag represents a buy-side entry ladder order."""
-    normalized = tag.strip().lower()
-    return normalized in {"range_buy", "trend_pullback_buy", "live_open_order_buy"}
-
-
 def is_bot_managed_order_link_id(client_order_id: str) -> bool:
     """Return whether a live order link id appears to be created by this bot."""
     normalized = (client_order_id or "").strip().lower()

@@ -60,11 +60,3 @@ class DatabaseMarketDataProvider:
             ),
             higher_timeframe_candles=higher_timeframe_candles,
         )
-
-
-class NoOpMarketDataSynchronizer:
-    """No-op synchronization adapter used when external refresh is not required."""
-
-    async def synchronize(self) -> None:
-        """Skip market-data synchronization and return immediately."""
-        return None

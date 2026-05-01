@@ -4,7 +4,7 @@ from unittest.mock import Mock
 from domain.models import Candle, InventorySnapshot, LiveOrder, MarketContext, OrderSide, RegimeSnapshot, RegimeType, StrategyState, SymbolRuntimeState
 from domain.spot_grid_planner import SpotGridPlanner
 from domain.strategy_config import DEFAULT_STRATEGY_CONFIG
-from infrastructure.execution_gateway import _calculate_cost_basis_from_executions
+from infrastructure.cost_basis_resolver import calculate_cost_basis_from_executions
 
 
 def _build_candles() -> list[Candle]:
@@ -125,7 +125,7 @@ class Phase2DeRiskTests(unittest.TestCase):
             {"side": "Sell", "execQty": "1", "execPrice": "150", "execFee": "0.0", "feeCurrency": "USDT"},
         ]
 
-        cost_basis = _calculate_cost_basis_from_executions(executions, base_balance=1.0)
+        cost_basis = calculate_cost_basis_from_executions(executions, base_balance=1.0)
 
         self.assertIsNotNone(cost_basis)
         self.assertAlmostEqual(cost_basis, 110.1, places=6)
