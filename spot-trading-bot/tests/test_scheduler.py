@@ -39,8 +39,8 @@ class TradingSchedulerTests(unittest.TestCase):
                     scheduler.run_forever(
                         ["ETHUSDT"],
                         target_hour=0,
-                        target_minute=5,
-                        target_second=0,
+                        target_minute=0,
+                        target_second=1,
                         dry_run=True,
                     )
                 )
