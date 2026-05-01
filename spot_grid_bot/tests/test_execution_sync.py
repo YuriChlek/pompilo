@@ -16,7 +16,7 @@ class _FakeExchange:
     def __init__(self, final_orders):
         self.final_orders = final_orders
 
-    def get_balances(self, symbol: str):
+    def get_balances(self, symbol: str, *, persisted_cost_basis: float | None = None):
         return InventorySnapshot(base_balance=0.0, quote_balance=1000.0, reserved_quote=0.0, mark_price=100.0)
 
     def get_open_orders(self, symbol: str):

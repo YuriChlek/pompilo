@@ -8,7 +8,7 @@ from domain.models import MarketContext, StrategyDecision, SymbolRuntimeState, T
 class MarketDataProvider(Protocol):
     """Application port for loading market context before one trading cycle."""
 
-    async def get_market_context(self, symbol: str) -> MarketContext:
+    async def get_market_context(self, symbol: str, *, persisted_cost_basis: float | None = None) -> MarketContext:
         """Return candles, balances, and currently open orders for one symbol."""
 
 

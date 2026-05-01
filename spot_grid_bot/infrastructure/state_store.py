@@ -2,18 +2,30 @@ from __future__ import annotations
 
 import json
 
+import asyncpg
+
 from domain.models import RegimeType, RiskRuntimeState, StrategyState, SymbolRuntimeState
-from infrastructure.db import create_connection
+from infrastructure.db import get_db_pool
 from utils.config import STATE_SCHEMA, STATE_TABLE
 
 
 class PostgresStateStore:
     """PostgreSQL-backed persistence adapter for per-symbol runtime state."""
 
+    def __init__(self) -> None:
+        """Initialize the lazy database connection pool holder."""
+        self._pool: asyncpg.Pool | None = None
+
+    async def _get_pool(self) -> asyncpg.Pool:
+        """Return the shared asyncpg pool, creating it on first use."""
+        if self._pool is None:
+            self._pool = await get_db_pool()
+        return self._pool
+
     async def initialize(self) -> None:
         """Create the runtime state schema and table when they do not exist."""
-        conn = await create_connection()
-        try:
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
             await conn.execute(f"CREATE SCHEMA IF NOT EXISTS {STATE_SCHEMA}")
             await conn.execute(
                 f"""
@@ -27,18 +39,23 @@ class PostgresStateStore:
                     pending_count INTEGER NOT NULL DEFAULT 0,
                     last_rebuild_price DOUBLE PRECISION NULL,
                     kill_switch_count INTEGER NOT NULL DEFAULT 0,
+                    cost_basis_price DOUBLE PRECISION NULL,
                     recent_equity JSONB NOT NULL DEFAULT '[]'::jsonb,
                     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
                 )
                 """
             )
-        finally:
-            await conn.close()
+            await conn.execute(
+                f"""
+                ALTER TABLE {STATE_SCHEMA}.{STATE_TABLE}
+                ADD COLUMN IF NOT EXISTS cost_basis_price DOUBLE PRECISION NULL
+                """
+            )
 
     async def load_symbol_state(self, symbol: str) -> SymbolRuntimeState | None:
         """Load persisted runtime state for one symbol when a row exists."""
-        conn = await create_connection()
-        try:
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
             row = await conn.fetchrow(
                 f"""
                 SELECT
@@ -51,14 +68,13 @@ class PostgresStateStore:
                     pending_count,
                     last_rebuild_price,
                     kill_switch_count,
+                    cost_basis_price,
                     recent_equity
                 FROM {STATE_SCHEMA}.{STATE_TABLE}
                 WHERE symbol = $1
                 """,
                 symbol.upper(),
             )
-        finally:
-            await conn.close()
 
         if row is None:
             return None
@@ -83,12 +99,13 @@ class PostgresStateStore:
                 kill_switch_count=int(row["kill_switch_count"]),
                 recent_equity=[float(value) for value in recent_equity],
             ),
+            cost_basis_price=float(row["cost_basis_price"]) if row["cost_basis_price"] is not None else None,
         )
 
     async def save_symbol_state(self, state: SymbolRuntimeState) -> None:
         """Insert or update the persisted runtime snapshot for one symbol."""
-        conn = await create_connection()
-        try:
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
             await conn.execute(
                 f"""
                 INSERT INTO {STATE_SCHEMA}.{STATE_TABLE} (
@@ -101,10 +118,11 @@ class PostgresStateStore:
                     pending_count,
                     last_rebuild_price,
                     kill_switch_count,
+                    cost_basis_price,
                     recent_equity,
                     updated_at
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, NOW())
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, NOW())
                 ON CONFLICT (symbol) DO UPDATE
                 SET
                     regime = EXCLUDED.regime,
@@ -115,6 +133,7 @@ class PostgresStateStore:
                     pending_count = EXCLUDED.pending_count,
                     last_rebuild_price = EXCLUDED.last_rebuild_price,
                     kill_switch_count = EXCLUDED.kill_switch_count,
+                    cost_basis_price = EXCLUDED.cost_basis_price,
                     recent_equity = EXCLUDED.recent_equity,
                     updated_at = NOW()
                 """,
@@ -127,7 +146,6 @@ class PostgresStateStore:
                 state.strategy_state.pending_count,
                 state.strategy_state.last_rebuild_price,
                 state.risk_state.kill_switch_count,
+                state.cost_basis_price,
                 json.dumps(state.risk_state.recent_equity),
             )
-        finally:
-            await conn.close()

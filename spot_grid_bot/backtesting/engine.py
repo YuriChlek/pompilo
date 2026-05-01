@@ -117,14 +117,20 @@ class BacktestEngine:
 
     def _apply_fills(self, inventory: InventorySnapshot, fills: list[FillEvent]) -> float:
         """Apply simulated fills to inventory state and return realized PnL delta."""
-        fee_rate = self.config.execution.maker_fee_bps / 10_000
+        fee_rate = (
+            self.config.execution.maker_fee_bps / 10_000
+            if self.config.execution.apply_maker_fee_in_backtest
+            else 0.0
+        )
+        slippage_rate = self.config.execution.simulated_slippage_bps / 10_000
         realized_pnl = 0.0
         for fill in fills:
             if fill.side == OrderSide.BUY:
-                notional = fill.price * fill.size
+                effective_price = fill.price * (1 + slippage_rate)
+                notional = effective_price * fill.size
                 fee = notional * fee_rate
                 previous_size = inventory.base_balance
-                previous_cost = (inventory.cost_basis_price or fill.price) * previous_size if previous_size > 0 else 0.0
+                previous_cost = (inventory.cost_basis_price or effective_price) * previous_size if previous_size > 0 else 0.0
                 inventory.base_balance += fill.size
                 inventory.quote_balance -= notional + fee
                 total_size = previous_size + fill.size
@@ -132,12 +138,13 @@ class BacktestEngine:
                 inventory.cost_basis_price = total_cost / total_size if total_size > 0 else None
             else:
                 size = min(fill.size, inventory.base_balance)
-                notional = fill.price * size
+                effective_price = fill.price * (1 - slippage_rate)
+                notional = effective_price * size
                 fee = notional * fee_rate
-                cost_basis_price = inventory.cost_basis_price or fill.price
+                cost_basis_price = inventory.cost_basis_price or effective_price
                 inventory.base_balance -= size
                 inventory.quote_balance += notional - fee
-                realized_pnl += (fill.price - cost_basis_price) * size - fee
+                realized_pnl += (effective_price - cost_basis_price) * size - fee
                 if inventory.base_balance <= 0:
                     inventory.base_balance = 0.0
                     inventory.cost_basis_price = None

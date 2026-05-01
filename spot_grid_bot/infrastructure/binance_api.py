@@ -12,10 +12,14 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from infrastructure.db import CANDLES_DATA_SCHEMA, DEFAULT_CANDLE_TABLE_SUFFIX, get_db_pool
+from infrastructure.db import (
+    CANDLES_DATA_SCHEMA,
+    get_db_pool,
+    resolve_candle_table_name,
+    resolve_candle_table_suffix,
+)
 from utils.config import TRADING_SYMBOLS
 
-TABLE_SUFFIX = DEFAULT_CANDLE_TABLE_SUFFIX
 API_REQUEST_PAUSE_SECONDS = 0.5
 SYMBOL_PAUSE_SECONDS = 1.0
 MAX_FETCH_RETRIES = 3
@@ -23,6 +27,7 @@ DEFAULT_TIMEFRAME = "1h"
 DEFAULT_LOOKBACK_DAYS = 1
 DEFAULT_BINANCE_ENDPOINT = "https://api.binance.com"
 MAX_BINANCE_LIMIT = 1000
+HIGHER_TIMEFRAME = "4h"
 
 
 @dataclass(frozen=True, slots=True)
@@ -167,7 +172,7 @@ async def fetch_and_store(
     days: int = DEFAULT_LOOKBACK_DAYS,
     *,
     pool: asyncpg.Pool | None = None,
-    table_suffix: str = TABLE_SUFFIX,
+    table_suffix: str | None = None,
     api: BinanceAPI | None = None,
 ) -> None:
     """Fetch historical candles for one symbol and upsert them into PostgreSQL."""
@@ -176,7 +181,8 @@ async def fetch_and_store(
     pool = pool or await get_db_pool()
     api = api or BinanceAPI()
 
-    table = f"{symbol.lower()}{table_suffix}"
+    resolved_table_suffix = table_suffix or resolve_candle_table_suffix(timeframe)
+    table = resolve_candle_table_name(symbol, table_suffix=resolved_table_suffix)
     end_time = datetime.now()
     start_time = end_time - timedelta(days=days)
     current_start = start_time

@@ -9,6 +9,7 @@ def target_orders_diff_count(
     *,
     price_diff_bps: float,
     size_diff_ratio: float,
+    tick_size: float = 0.0,
 ) -> int:
     unmatched_live = list(live_orders)
     unmatched_target: list[TargetOrder] = []
@@ -19,6 +20,7 @@ def target_orders_diff_count(
             target,
             price_diff_bps=price_diff_bps,
             size_diff_ratio=size_diff_ratio,
+            tick_size=tick_size,
         )
         if match_index is None:
             unmatched_target.append(target)
@@ -34,13 +36,14 @@ def _find_matching_live_order(
     *,
     price_diff_bps: float,
     size_diff_ratio: float,
+    tick_size: float,
 ) -> int | None:
     for index, live in enumerate(live_orders):
         if live.symbol.upper() != target.symbol.upper():
             continue
         if live.side != target.side:
             continue
-        if not _price_matches(live.price, target.price, price_diff_bps):
+        if not _price_matches(live.price, target.price, price_diff_bps, tick_size=tick_size):
             continue
         if not _size_matches(live.size, target.size, size_diff_ratio):
             continue
@@ -48,8 +51,10 @@ def _find_matching_live_order(
     return None
 
 
-def _price_matches(live_price: float, target_price: float, price_diff_bps: float) -> bool:
-    reference = max(abs(live_price), abs(target_price), 1e-9)
+def _price_matches(live_price: float, target_price: float, price_diff_bps: float, *, tick_size: float = 0.0) -> bool:
+    if tick_size > 0 and abs(live_price - target_price) <= tick_size + 1e-12:
+        return True
+    reference = max(abs(live_price), abs(target_price), abs(tick_size), 1e-9)
     diff_bps = abs(live_price - target_price) / reference * 10_000
     return diff_bps <= price_diff_bps
 

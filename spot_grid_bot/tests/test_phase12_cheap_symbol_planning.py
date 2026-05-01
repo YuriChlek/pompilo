@@ -14,7 +14,7 @@ from domain.spot_grid_planner import SpotGridPlanner
 
 
 class _FakeExchange:
-    def get_balances(self, symbol: str):
+    def get_balances(self, symbol: str, *, persisted_cost_basis: float | None = None):
         return InventorySnapshot(base_balance=0.0, quote_balance=1_000.0, reserved_quote=0.0, mark_price=0.08173)
 
     def get_open_orders(self, symbol: str):
@@ -33,13 +33,29 @@ class Phase12CheapSymbolPlanningTests(unittest.IsolatedAsyncioTestCase):
     async def test_market_context_contains_symbol_specific_venue_constraints(self):
         provider = DatabaseMarketDataProvider(DEFAULT_STRATEGY_CONFIG, _FakeExchange())
         fake_candles = [SimpleNamespace(close=0.08173, timestamp=1, open=0.081, high=0.082, low=0.08, volume=1000.0)] * 260
+        fake_higher_timeframe_candles = [
+            SimpleNamespace(close=0.08173, timestamp=1, open=0.081, high=0.082, low=0.08, volume=4000.0)
+        ] * 200
 
-        with patch.object(provider.repository, "fetch_recent_candles", AsyncMock(return_value=fake_candles)):
-            context = await provider.get_market_context("ENAUSDT")
+        with patch.object(provider.repository, "fetch_recent_candles", AsyncMock(return_value=fake_candles)) as fetch_1h_mock, patch.object(
+            provider.higher_timeframe_repository,
+            "fetch_recent_candles",
+            AsyncMock(return_value=fake_higher_timeframe_candles),
+        ) as fetch_4h_mock:
+            context = await provider.get_market_context("ENAUSDT", persisted_cost_basis=None)
 
         self.assertIsNotNone(context.venue_constraints)
         self.assertEqual(context.venue_constraints.tick_size, 0.00001)
         self.assertEqual(context.venue_constraints.min_order_amt, 5.0)
+        self.assertEqual(context.higher_timeframe_candles, fake_higher_timeframe_candles)
+        fetch_1h_mock.assert_awaited_once_with(
+            "ENAUSDT",
+            DEFAULT_STRATEGY_CONFIG.market_data.lookback_for(DEFAULT_STRATEGY_CONFIG.market_data.candle_interval),
+        )
+        fetch_4h_mock.assert_awaited_once_with(
+            "ENAUSDT",
+            DEFAULT_STRATEGY_CONFIG.market_data.lookback_for(DEFAULT_STRATEGY_CONFIG.market_data.higher_timeframe_interval),
+        )
 
     def test_grid_builder_no_longer_forces_global_point_one_tick_on_cheap_symbols(self):
         builder = GridBuilder(DEFAULT_STRATEGY_CONFIG)
@@ -53,12 +69,13 @@ class Phase12CheapSymbolPlanningTests(unittest.IsolatedAsyncioTestCase):
             range_width=0.02,
             price_vs_ema50=0.0,
             directional_move=0.0,
+            directional_sign=0.0,
             abnormal_candle=False,
             atr_spike=False,
         )
 
         grid = builder.build_range_grid(0.08173, indicators, tick_size=0.00001)
-        buy_prices = [level.price for level in grid.levels if level.side.value == "BUY"]
+        buy_prices = [level.price for level in grid.levels if level.side == OrderSide.BUY]
 
         self.assertTrue(buy_prices)
         self.assertTrue(all(price < 0.1 for price in buy_prices))
@@ -66,8 +83,22 @@ class Phase12CheapSymbolPlanningTests(unittest.IsolatedAsyncioTestCase):
 
     def test_venue_viability_merges_duplicate_levels_after_tick_normalization(self):
         target_orders = [
-            TargetOrder(client_order_id="buy-0", symbol="ENAUSDT", side=OrderSide.BUY, price=0.08148481, size=10.0),
-            TargetOrder(client_order_id="buy-1", symbol="ENAUSDT", side=OrderSide.BUY, price=0.08148482, size=12.0),
+            TargetOrder(
+                client_order_id="buy-0",
+                symbol="ENAUSDT",
+                side=OrderSide.BUY,
+                price=0.08148481,
+                size=10.0,
+                tag="range_buy",
+            ),
+            TargetOrder(
+                client_order_id="buy-1",
+                symbol="ENAUSDT",
+                side=OrderSide.BUY,
+                price=0.08148482,
+                size=12.0,
+                tag="trend_pullback_buy",
+            ),
             TargetOrder(client_order_id="sell-0", symbol="ENAUSDT", side=OrderSide.SELL, price=0.08411111, size=5.0, reduce_only=True),
         ]
 
@@ -81,6 +112,7 @@ class Phase12CheapSymbolPlanningTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(buy_orders), 1)
         self.assertEqual(buy_orders[0].price, 0.08148)
         self.assertEqual(buy_orders[0].size, 22.0)
+        self.assertEqual(buy_orders[0].tag, "range_buy+trend_pullback_buy")
 
     def test_sell_levels_are_reduced_when_inventory_cannot_support_exchange_minima(self):
         planner = SpotGridPlanner(DEFAULT_STRATEGY_CONFIG)
@@ -128,6 +160,7 @@ class Phase12CheapSymbolPlanningTests(unittest.IsolatedAsyncioTestCase):
             range_width=0.0,
             price_vs_ema50=0.0,
             directional_move=0.0,
+            directional_sign=0.0,
             abnormal_candle=False,
             atr_spike=False,
         )
@@ -155,6 +188,7 @@ class Phase12CheapSymbolPlanningTests(unittest.IsolatedAsyncioTestCase):
             range_width=0.0,
             price_vs_ema50=0.0,
             directional_move=0.0,
+            directional_sign=0.0,
             abnormal_candle=False,
             atr_spike=False,
         )
@@ -198,6 +232,7 @@ class Phase12CheapSymbolPlanningTests(unittest.IsolatedAsyncioTestCase):
             range_width=0.0,
             price_vs_ema50=0.0,
             directional_move=0.0,
+            directional_sign=0.0,
             abnormal_candle=False,
             atr_spike=False,
         )
@@ -242,6 +277,7 @@ class Phase12CheapSymbolPlanningTests(unittest.IsolatedAsyncioTestCase):
             range_width=0.0,
             price_vs_ema50=0.0,
             directional_move=0.0,
+            directional_sign=0.0,
             abnormal_candle=False,
             atr_spike=False,
         )
@@ -281,6 +317,7 @@ class Phase12CheapSymbolPlanningTests(unittest.IsolatedAsyncioTestCase):
             range_width=0.0,
             price_vs_ema50=0.0,
             directional_move=0.0,
+            directional_sign=0.0,
             abnormal_candle=False,
             atr_spike=False,
         )
@@ -321,6 +358,7 @@ class Phase12CheapSymbolPlanningTests(unittest.IsolatedAsyncioTestCase):
             range_width=0.0,
             price_vs_ema50=0.0,
             directional_move=0.0,
+            directional_sign=0.0,
             abnormal_candle=False,
             atr_spike=False,
         )
@@ -361,6 +399,7 @@ class Phase12CheapSymbolPlanningTests(unittest.IsolatedAsyncioTestCase):
             range_width=0.0,
             price_vs_ema50=0.0,
             directional_move=0.0,
+            directional_sign=0.0,
             abnormal_candle=False,
             atr_spike=False,
         )
@@ -408,6 +447,7 @@ class Phase12CheapSymbolPlanningTests(unittest.IsolatedAsyncioTestCase):
             range_width=0.0,
             price_vs_ema50=0.0,
             directional_move=0.0,
+            directional_sign=0.0,
             abnormal_candle=False,
             atr_spike=False,
         )
@@ -471,6 +511,7 @@ class Phase12CheapSymbolPlanningTests(unittest.IsolatedAsyncioTestCase):
             range_width=0.0,
             price_vs_ema50=0.0,
             directional_move=0.0,
+            directional_sign=0.0,
             abnormal_candle=False,
             atr_spike=False,
         )
@@ -527,6 +568,7 @@ class Phase12CheapSymbolPlanningTests(unittest.IsolatedAsyncioTestCase):
             range_width=40.0,
             price_vs_ema50=0.06,
             directional_move=4.2,
+            directional_sign=1.0,
             abnormal_candle=False,
             atr_spike=False,
         )
@@ -560,6 +602,7 @@ class Phase12CheapSymbolPlanningTests(unittest.IsolatedAsyncioTestCase):
             range_width=12.0,
             price_vs_ema50=0.0,
             directional_move=1.5,
+            directional_sign=-1.0,
             abnormal_candle=False,
             atr_spike=False,
         )
@@ -619,6 +662,7 @@ class Phase12CheapSymbolPlanningTests(unittest.IsolatedAsyncioTestCase):
             range_width=0.0,
             price_vs_ema50=0.0,
             directional_move=0.0,
+            directional_sign=0.0,
             abnormal_candle=False,
             atr_spike=False,
         )
@@ -683,6 +727,7 @@ class Phase12CheapSymbolPlanningTests(unittest.IsolatedAsyncioTestCase):
             range_width=9.0,
             price_vs_ema50=0.0,
             directional_move=0.8,
+            directional_sign=-1.0,
             abnormal_candle=False,
             atr_spike=False,
         )
@@ -743,6 +788,7 @@ class Phase12CheapSymbolPlanningTests(unittest.IsolatedAsyncioTestCase):
             range_width=9.0,
             price_vs_ema50=0.0,
             directional_move=0.8,
+            directional_sign=-1.0,
             abnormal_candle=False,
             atr_spike=False,
         )
@@ -805,6 +851,7 @@ class Phase12CheapSymbolPlanningTests(unittest.IsolatedAsyncioTestCase):
             range_width=9.0,
             price_vs_ema50=0.0,
             directional_move=1.2,
+            directional_sign=-1.0,
             abnormal_candle=False,
             atr_spike=False,
         )

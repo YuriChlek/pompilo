@@ -12,3 +12,4 @@ sqlalchemy
 pandas
 numpy
 pandas-ta
+pytest

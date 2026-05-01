@@ -42,6 +42,7 @@ def _analysis(symbol: str, regime: RegimeType, outstanding_buy_notional: float =
             range_width=4.0,
             price_vs_ema50=0.0,
             directional_move=0.3,
+            directional_sign=0.0,
             abnormal_candle=False,
             atr_spike=False,
         ),

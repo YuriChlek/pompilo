@@ -4,13 +4,15 @@ import argparse
 import asyncio
 import logging
 
-from application.bootstrap import build_live_trading_cycle, build_live_trading_scheduler
-from infrastructure.binance_api import DEFAULT_TIMEFRAME, run_binance_candle_sync
+from application.bootstrap import build_health_check_server, build_live_trading_cycle, build_live_trading_scheduler
+from application.dry_run import format_decision_dry_run
+from infrastructure.binance_api import DEFAULT_TIMEFRAME, HIGHER_TIMEFRAME, run_binance_candle_sync
 from infrastructure.db import ensure_candle_tables
-from utils.config import RUN_TARGET_MINUTE, RUN_TARGET_SECOND, TRADING_SYMBOLS
+from utils.config import HEALTHCHECK_PORT, RUN_TARGET_MINUTE, RUN_TARGET_SECOND, TRADING_SYMBOLS
 from utils.logging import setup_logging
 
 logger = logging.getLogger(__name__)
+SUPPORTED_SYNC_TIMEFRAMES = (DEFAULT_TIMEFRAME, HIGHER_TIMEFRAME)
 
 
 def _positive_period(raw_value: str) -> int:
@@ -30,10 +32,16 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Spot grid bot entrypoint.")
     subparsers = parser.add_subparsers(dest="command")
     subparsers.add_parser("once", help="Run one trading cycle for all configured symbols.")
-    subparsers.add_parser("live", help="Run the scheduler against DB-backed candles.")
-    sync_parser = subparsers.add_parser("sync", help="Sync candles from Binance for all configured symbols.")
+    subparsers.add_parser("dry-run", help="Preview planner diffs without syncing any orders.")
+    subparsers.add_parser("live", help="Run the scheduler with scheduled 1h + 4h candle refresh.")
+    sync_parser = subparsers.add_parser("sync", help="Manually sync one candle timeframe from Binance into its dedicated DB tables.")
     sync_parser.add_argument("--period", type=_positive_period, default=365, help="Sync period in days. Default: 365.")
-    sync_parser.add_argument("--timeframe", default=DEFAULT_TIMEFRAME, help="Binance kline interval. Default: 1h.")
+    sync_parser.add_argument(
+        "--timeframe",
+        default=DEFAULT_TIMEFRAME,
+        choices=SUPPORTED_SYNC_TIMEFRAMES,
+        help="Manual sync timeframe. Allowed: 1h, 4h. Default: 1h.",
+    )
     return parser
 
 
@@ -73,11 +81,34 @@ async def _run_live() -> None:
         RUN_TARGET_SECOND,
     )
     scheduler = build_live_trading_scheduler()
-    await scheduler.run_forever(
-        TRADING_SYMBOLS,
-        target_minute=RUN_TARGET_MINUTE,
-        target_second=RUN_TARGET_SECOND,
-    )
+    health_server = build_health_check_server(scheduler.health_tracker) if HEALTHCHECK_PORT > 0 else None
+    tasks = [
+        asyncio.create_task(
+            scheduler.run_forever(
+                TRADING_SYMBOLS,
+                target_minute=RUN_TARGET_MINUTE,
+                target_second=RUN_TARGET_SECOND,
+            )
+        )
+    ]
+    if health_server is not None:
+        tasks.append(asyncio.create_task(health_server.serve_forever()))
+    await asyncio.gather(*tasks)
+
+
+async def _run_dry_run() -> None:
+    """Preview one planning cycle and print a structured live-vs-target diff."""
+    logger.info("bot_starting mode=dry_run symbols=%s", ",".join(TRADING_SYMBOLS))
+    trading_cycle = build_live_trading_cycle()
+    await trading_cycle.initialize(TRADING_SYMBOLS)
+    decisions = await trading_cycle.preview_many(TRADING_SYMBOLS)
+    for symbol in TRADING_SYMBOLS:
+        decision = decisions.get(symbol.upper())
+        if decision is None:
+            print(f"[{symbol.upper()}] Planning failed")
+            continue
+        print(format_decision_dry_run(decision))
+    logger.info("bot_finished mode=dry_run symbols=%s", ",".join(TRADING_SYMBOLS))
 
 
 async def start() -> None:
@@ -88,6 +119,9 @@ async def start() -> None:
         return
     if args.command == "live":
         await _run_live()
+        return
+    if args.command == "dry-run":
+        await _run_dry_run()
         return
     await _run_once()
 

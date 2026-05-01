@@ -6,6 +6,13 @@ from typing import Iterable
 logger = logging.getLogger(__name__)
 
 
+def _is_infrastructure_error(exc: Exception) -> bool:
+    """Return whether the failure looks like an infrastructure/runtime error."""
+    if isinstance(exc, (OSError, MemoryError)):
+        return True
+    return exc.__class__.__name__ == "PostgresError"
+
+
 class TradingCycleAnalysisBatchService:
     """Collect market contexts, run preliminary analysis, and build allocation plan."""
 
@@ -27,10 +34,20 @@ class TradingCycleAnalysisBatchService:
                 continue
             logger.info("trading_cycle_started symbol=%s", symbol)
             try:
-                context = await self.market_data_provider.get_market_context(symbol)
+                persisted_cost_basis = self.planner.get_persisted_cost_basis(symbol)
+                context = await self.market_data_provider.get_market_context(
+                    symbol,
+                    persisted_cost_basis=persisted_cost_basis,
+                )
+                self.planner.update_cost_basis(symbol, context.inventory.cost_basis_price)
                 analysis = self.planner.analyze(context)
-            except Exception:
-                logger.exception("trading_cycle_failed symbol=%s phase=analysis", symbol)
+            except Exception as exc:
+                log_fn = logger.critical if _is_infrastructure_error(exc) else logger.exception
+                log_fn(
+                    "trading_cycle_failed symbol=%s phase=analysis error_type=%s",
+                    symbol,
+                    type(exc).__name__,
+                )
                 results[symbol] = None
                 continue
             contexts.append(context)

@@ -63,6 +63,7 @@ def evaluate_range_entry_profile(
         price <= indicators.ema20
         and indicators.ema20 <= indicators.ema50
         and indicators.ema50_slope < 0
+        and indicators.directional_sign < 0
         and indicators.directional_move
         >= config.regime.range_directional_threshold * config.grid.range_breakdown_directional_threshold_multiplier
     )

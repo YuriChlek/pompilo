@@ -27,4 +27,4 @@ class SymbolRuntimeState:
     symbol: str
     strategy_state: StrategyState
     risk_state: RiskRuntimeState = field(default_factory=RiskRuntimeState)
-
+    cost_basis_price: Optional[float] = None

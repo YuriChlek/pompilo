@@ -2,110 +2,212 @@
 
 ## Overview
 
-`spot_grid_bot` is an adaptive spot grid bot for Bybit demo trading.
+`spot_grid_bot` is an adaptive spot grid bot for Bybit spot/demo trading with its own market-data ingestion, portfolio-aware planning, runtime state persistence, diagnostics, and operator tooling.
 
-It currently:
+Current entrypoint: [main.py](./main.py)
 
-- creates and maintains its own candle schema/tables in PostgreSQL
-- synchronizes candles directly from Binance Spot
-- reads candles from PostgreSQL
-- reads balances, open orders, ticker data, and executions from Bybit spot demo
-- detects market regime using indicators and market structure
-- evaluates risk and projected exposure
-- sizes buy-side entries in `USDT` using percentage-based caps
-- distributes new-entry budget through a portfolio-level allocator
-- supports trigger-based underwater averaging from free `USDT` balance
-- builds regime-aware grid or de-risk orders
-- enforces no-loss sell behavior
-- persists per-symbol runtime state in PostgreSQL
-- includes a backtesting and evaluation layer with diagnostics
+The bot now includes:
 
-Entrypoint: [main.py](./main.py)
+- PostgreSQL-backed candle storage and runtime state persistence
+- Binance Spot candle synchronization
+- Bybit spot balances, live orders, and execution sync
+- indicator + market-structure regime detection
+- multi-timeframe regime confirmation
+- risk-aware order planning and staged de-risking
+- portfolio-level budget allocation across symbols
+- persisted cost basis with `avgPrice` primary source and no-loss sell enforcement
+- tick-aware order diffing and venue-aware grid normalization
+- Telegram critical-event notifications
+- live price WebSocket monitoring for off-cycle reaction
+- health/state HTTP endpoints
+- `dry-run` preview mode with structured diffs
+- backtesting with diagnostics and HTML report export
 
 ## Project Structure
 
-- [main.py](./main.py): script entrypoint
-- [application](./application): bootstrap, orchestration, scheduler, ports
-- [domain](./domain): strategy, regime, risk, grid, inventory, cost basis, market structure
-- [infrastructure](./infrastructure): Binance candle sync, Bybit exchange adapter, PostgreSQL candles, runtime state store
-- [backtesting](./backtesting): backtest engine and reporting helpers
+- [main.py](./main.py): CLI entrypoint and process mode dispatch
+- [application](./application): bootstrap, scheduler, health, dry-run, orchestration services
+- [domain](./domain): strategy, regime, risk, allocation, grid, cost basis, state machine
+- [infrastructure](./infrastructure): Binance sync, Bybit adapters, PostgreSQL repositories, notifier, live price monitor
+- [backtesting](./backtesting): backtest engine and reporting
 - [tests](./tests): unit and scenario behavior tests
-- [utils](./utils): config, env loading, logging
+- [utils](./utils): environment loading, runtime config, logging
+
+## Quick Start
+
+### 1. Create the local environment
+
+```bash
+python3 -m venv .venv
+./.venv/bin/python -m pip install -r requirements.txt
+```
+
+### 2. Configure the environment
+
+Create or update `.env` with at least:
+
+```env
+DB_HOST=localhost
+DB_PORT=5432
+DATABASE=pompilo_db
+DB_USER=admin
+DB_PASS=admin_pass
+
+BYBIT_API_KEY=...
+BYBIT_API_SECRET=...
+BYBIT_API_ENDPOINT=https://api-demo.bybit.com
+
+SPOT_TRADING_SYMBOLS=ETHUSDT,SOLUSDT
+EXECUTION_MODE=bybit_spot_demo
+```
+
+Optional operator features:
+
+```env
+TELEGRAM_BOT_TOKEN=...
+TELEGRAM_CHAT_ID=...
+
+HEALTHCHECK_HOST=0.0.0.0
+HEALTHCHECK_PORT=8080
+
+ENABLE_LIVE_PRICE_MONITOR=true
+LIVE_PRICE_DEVIATION_ATR_MULTIPLIER=2.0
+LIVE_PRICE_MONITOR_COOLDOWN_SECONDS=60
+```
+
+### 3. Sync candles
+
+```bash
+./.venv/bin/python main.py sync --period 365 --timeframe 1h
+```
+
+### 4. Run one planning/execution cycle
+
+```bash
+./.venv/bin/python main.py once
+```
+
+### 5. Preview changes without touching live orders
+
+```bash
+./.venv/bin/python main.py dry-run
+```
+
+### 6. Run the recurring live scheduler
+
+```bash
+./.venv/bin/python main.py live
+```
+
+### 7. Run the full test suite
+
+```bash
+./.venv/bin/python -m unittest discover -s tests -p 'test_*.py'
+```
+
+## CLI Commands
+
+### `sync`
+
+Downloads Binance Spot candles and stores them in PostgreSQL.
+
+```bash
+./.venv/bin/python main.py sync --period 365 --timeframe 1h
+./.venv/bin/python main.py sync --period 30 --timeframe 4h
+```
+
+### `once`
+
+Runs one full analysis/planning/execution cycle for all configured symbols.
+
+```bash
+./.venv/bin/python main.py once
+```
+
+### `dry-run`
+
+Runs one full analysis/planning cycle and prints a structured diff against current live orders without syncing any order to the venue.
+
+```bash
+./.venv/bin/python main.py dry-run
+```
+
+Example output shape:
+
+```text
+[ETHUSDT] Regime: RANGE
+[ETHUSDT] New BUY @ 1800.0 x 0.055
+[ETHUSDT] Cancel BUY @ 1820.0 x 0.055
+[ETHUSDT] Keep SELL @ 1950.0 x 0.03
+```
+
+### `live`
+
+Runs the recurring scheduler. In live mode the process:
+
+- waits for the configured schedule
+- synchronizes candles before each scheduled cycle
+- runs the trading cycle for all configured symbols
+- exposes health endpoints
+- optionally runs the WebSocket live-price monitor in the background
+
+```bash
+./.venv/bin/python main.py live
+```
 
 ## Runtime Flow
 
-For each trading symbol, one cycle works like this:
+For each symbol, the trading process now works like this:
 
 1. Ensure candle schema and per-symbol candle tables exist.
-2. In `live` mode, synchronize fresh candles from Binance Spot.
-3. Load candles from PostgreSQL.
-4. Load live balances and open orders from Bybit.
-5. Restore persisted runtime state for the symbol.
-6. Compute indicator snapshot.
-7. Detect market regime.
-8. Evaluate risk and projected exposure.
-9. Run preliminary symbol analysis for all symbols.
-10. Build one portfolio snapshot for the whole cycle.
-11. Allocate portfolio-level entry budgets across eligible symbols.
-12. Advance the state machine.
-13. Build target orders.
-14. Compare target orders to live orders.
-15. If rebuild is required, sync orders to the exchange.
-16. Persist updated runtime state.
+2. Restore persisted per-symbol runtime state from PostgreSQL.
+3. Synchronize candles from Binance before scheduled cycles.
+4. Load recent 1h candles from PostgreSQL.
+5. Build an aggregated higher-timeframe candle stream from the same base history.
+6. Load live balances, mark price, instrument filters, and open orders from Bybit.
+7. Resolve `cost_basis_price` from Bybit `avgPrice`, then fall back to persisted runtime state if needed.
+8. Compute indicator snapshot.
+9. Detect regime from indicators and market structure.
+10. Apply higher-timeframe downtrend confirmation before final entry decisions.
+11. Evaluate risk, projected exposure, and de-risk mode.
+12. Run preliminary analysis for all symbols.
+13. Build a portfolio snapshot and distribute symbol budgets.
+14. Advance the symbol state machine.
+15. Build target orders.
+16. Apply no-loss, venue, and execution guardrails.
+17. Diff target orders against current live orders.
+18. Execute only when rebuild is required.
+19. Persist updated runtime state back to PostgreSQL.
+20. Update health/state snapshots for operator endpoints.
 
-Core orchestration: [application/trading_cycle_service.py](./application/trading_cycle_service.py)  
-Planner: [domain/spot_grid_planner.py](./domain/spot_grid_planner.py)
-Portfolio allocator: [domain/portfolio_allocator.py](./domain/portfolio_allocator.py)
+Core orchestration:
 
-## Data Sources
+- [application/trading_cycle_service.py](./application/trading_cycle_service.py)
+- [application/scheduler.py](./application/scheduler.py)
+- [application/bootstrap.py](./application/bootstrap.py)
 
-### Candles
+## Detailed Feature Set
 
-`spot_grid_bot` now owns the full candle-ingestion path.
+### 1. Candle Ingestion and Storage
 
-Candles are fetched from Binance Spot and stored in PostgreSQL tables in the form:
+The bot owns the full candle-ingestion path.
 
-- `_candles_trading_data.<symbol>_p_candles`
+- Candles are fetched from Binance Spot.
+- Candles are stored in PostgreSQL under `_candles_trading_data.<symbol>_p_candles`.
+- Candle schema/tables are created automatically when needed.
+- The scheduler refreshes market data before each scheduled cycle.
+- The planner works from PostgreSQL-backed history instead of direct exchange klines.
 
-The candle schema matches `futures-trading-bot` exactly:
-
-- `open_time`
-- `close_time`
-- `symbol`
-- `open`
-- `close`
-- `high`
-- `low`
-- `cvd`
-- `volume`
-- `candle_id`
-
-The bot:
-
-- ensures the candle schema exists on startup
-- ensures per-symbol candle tables exist on startup
-- can run a standalone historical/refresh sync through CLI
-- refreshes candles before each scheduled live cycle
-- analyzes the latest `2400` hourly candles per symbol by default
-
-Code:
+Relevant code:
 
 - [infrastructure/db.py](./infrastructure/db.py)
 - [infrastructure/binance_api.py](./infrastructure/binance_api.py)
 - [infrastructure/binance_market_data_synchronizer.py](./infrastructure/binance_market_data_synchronizer.py)
 - [infrastructure/market_data_provider.py](./infrastructure/market_data_provider.py)
 
-### Live Exchange State
+### 2. Market Regime Detection
 
-Balances, ticker, open orders, and execution history come from Bybit V5 demo spot API.
-
-Code:
-
-- [infrastructure/execution_gateway.py](./infrastructure/execution_gateway.py)
-
-## Market Regimes
-
-The bot works with these regimes:
+The strategy works with:
 
 - `RANGE`
 - `UPTREND`
@@ -113,79 +215,59 @@ The bot works with these regimes:
 - `HIGH_VOLATILITY`
 - `RISK_OFF`
 
-The regime detector combines:
+Regime detection combines:
 
 - `ema20`, `ema50`, `ema200`
-- `ema50 slope`
+- `ema50` slope
 - `atr14`
 - realized volatility
 - range width
-- directional move
+- directional move and directional sign
 - abnormal candle and ATR spike flags
-- market structure from swing highs and swing lows
+- swing-high / swing-low market structure
 
-Market structure layer:
+The detector now also uses higher-timeframe confirmation:
 
-- detects local swings
-- falls back to segmented extrema when the trend is too smooth for classic pivots
-- classifies structure as:
-  - `BULLISH`
-  - `BEARISH`
-  - `RANGE`
-  - `MIXED`
-  - `NEUTRAL`
+- the market-data provider builds a coarser candle stream from the base 1h history
+- if the higher timeframe is in `DOWNTREND`, fresh entries are paused even when the lower timeframe still looks like `RANGE`
 
-Trend regimes are now confirmed by both indicator context and structure:
-
-- `UPTREND`: bullish EMA context plus bullish structure
-- `DOWNTREND`: bearish EMA context plus bearish structure
-- `RANGE`: flat/contained context or mixed/neutral structure
-- broken or contradictory trend structure degrades toward `RANGE` instead of false trend continuation
-
-Code:
+Relevant code:
 
 - [domain/indicators.py](./domain/indicators.py)
 - [domain/market_structure.py](./domain/market_structure.py)
 - [domain/regime_detector.py](./domain/regime_detector.py)
+- [domain/symbol_analyzer.py](./domain/symbol_analyzer.py)
 
-## State Machine
+### 3. State Machine and Runtime Memory
 
-The bot uses a state machine to avoid switching regime on every noisy bar.
+The bot keeps persistent per-symbol runtime state:
 
-It includes:
+- current strategy state
+- hysteresis/pending regime transition state
+- volatility cooldown
+- kill-switch history
+- persisted `cost_basis_price`
 
-- hysteresis confirmation bars
-- cooldown after state transition
-- `volatility_cooldown_remaining`
+The state machine is immutable on transitions, which makes preview analysis safe and avoids accidental state mutation during non-committing passes.
 
-Code:
+Relevant code:
 
 - [domain/state_machine.py](./domain/state_machine.py)
+- [domain/runtime_models.py](./domain/runtime_models.py)
+- [infrastructure/state_store.py](./infrastructure/state_store.py)
 
-In practice:
-
-- one noisy candle should not instantly flip the regime
-- after `HIGH_VOLATILITY`, entries can remain blocked for several bars
-
-## Risk Logic
+### 4. Risk Logic
 
 The risk layer evaluates:
 
 - breakout kill switch
 - abnormal volatility
 - emergency volatility
-- symbol inventory cap as `% of equity`
-- symbol new-entry cap as `% of free quote`
-- absolute symbol notional cap
-- low quote reserve
 - daily drawdown pause
-- projected exposure from outstanding buy orders
-- state-based restrictions in `DOWNTREND` and `RISK_OFF`
-
-Code:
-
-- [domain/risk_manager.py](./domain/risk_manager.py)
-- [domain/exposure.py](./domain/exposure.py)
+- quote reserve pressure
+- symbol-level and portfolio-level inventory limits
+- projected outstanding buy exposure
+- state-based restrictions in `DOWNTREND`, `HIGH_VOLATILITY`, and `RISK_OFF`
 
 Risk output includes:
 
@@ -194,413 +276,269 @@ Risk output includes:
 - `cancel_entries`
 - `allow_exit_only`
 - `de_risk_mode = NONE | SOFT | HARD | PANIC`
-- projected exposure diagnostics
 
-Current sizing model:
+Relevant code:
 
-- new buy-side budgets are calculated in `USDT`, not in raw coin units
-- the planner uses the minimum of:
-  - remaining symbol inventory room as `% of total equity`
-  - symbol new-entry cap as `% of free quote`
-  - global new-entry cap as `% of free quote`
-  - absolute symbol notional cap
-- if the resulting budget is below `min_symbol_entry_notional`, the bot skips new buy entries for that symbol
-
-Code:
-
-- [domain/allocation.py](./domain/allocation.py)
-- [domain/inventory_manager.py](./domain/inventory_manager.py)
 - [domain/risk_manager.py](./domain/risk_manager.py)
+- [domain/exposure.py](./domain/exposure.py)
 
-## Portfolio-Level Allocation
+### 5. Portfolio-Level Allocation
 
-The bot now runs a portfolio-aware allocation pass before final order planning.
+The planner is portfolio-aware before final per-symbol order generation.
 
-Current portfolio flow:
+It now:
 
-- collect preliminary analysis for all symbols
-- build one shared portfolio snapshot
-- compute one global new-entry budget from free quote and current outstanding exposure
-- distribute that budget only across eligible symbols
-- pass the portfolio budget cap down into the symbol-local allocation layer
+- runs preliminary symbol analysis across all configured symbols
+- builds one shared portfolio snapshot
+- computes one global new-entry budget from free quote and current outstanding exposure
+- distributes that budget only across eligible symbols
+- penalizes underwater inventory and exposure-heavy symbols before local grid sizing
 
-Eligible symbols are currently limited to:
+Relevant code:
 
-- `RANGE`
-- `UPTREND`
+- [domain/portfolio_allocator.py](./domain/portfolio_allocator.py)
+- [domain/allocation.py](./domain/allocation.py)
+- [application/analysis_batch_service.py](./application/analysis_batch_service.py)
 
-Symbols are excluded from fresh entry budget when:
+### 6. Cost Basis and No-Loss Sell Enforcement
 
-- `pause_entries=True`
-- `force_risk_off=True`
-- regime is `DOWNTREND`
-- regime is `HIGH_VOLATILITY`
-- regime is `RISK_OFF`
+The bot now treats Bybit `avgPrice` as the primary source of spot cost basis.
 
-Budget distribution currently accounts for:
+Behavior:
 
-- regime weight
-- regime confidence
-- inventory pressure
-- outstanding buy pressure
-- projected quote-usage pressure
-- underwater inventory penalty
-- max concurrent entry symbols
+- primary source: Bybit wallet `avgPrice`
+- fallback source: persisted `cost_basis_price` from PostgreSQL/runtime state
+- if both are unavailable and inventory is open, `SELL` planning is blocked
+- when inventory reaches zero, persisted `cost_basis_price` is cleared
 
-This means:
+No-loss logic:
 
-- portfolio capital no longer depends only on symbol loop order
-- only a bounded subset of symbols can receive fresh entry budget in one cycle
-- underwater inventory is still penalized at the portfolio-allocation layer before any recovery logic is considered
+- sell targets are rebased above the minimum exit floor
+- sell orders below the no-loss floor are blocked
+- planning logs when sell levels are removed because cost basis is missing or the no-loss floor rejects them
 
-## Venue-Aware Grid Handling
+Relevant code:
 
-The grid is still ATR-based, but it is no longer planned as if every symbol shared the same price tick.
+- [infrastructure/bybit_account_client.py](./infrastructure/bybit_account_client.py)
+- [domain/cost_basis.py](./domain/cost_basis.py)
+- [domain/target_order_builder.py](./domain/target_order_builder.py)
+- [infrastructure/execution_guardrails.py](./infrastructure/execution_guardrails.py)
 
-Current handling:
+### 7. Grid Planning and Venue Awareness
 
-- raw grid geometry is built from ATR
-- planner receives symbol-specific venue constraints from Bybit:
-  - `tick_size`
-  - `qty_step`
-  - `min_order_qty`
-  - `min_order_amt`
-- planner applies a venue-viability pass before execution:
-  - prices are normalized to symbol tick size
-  - duplicate normalized levels are merged
-  - sell ladders are reduced when current inventory cannot support the venue minimums
-- execution then applies the live-price safety offset for buys
+Grid planning is now venue-aware.
 
-For cheap symbols such as `ENA`, `SUI`, `XRP`, and `DOGE`, this matters because:
+The bot:
 
-- global `0.1` price rounding would collapse levels
-- exchange minima can make multi-level sell ladders unrealistic
-- moving the top buy level away from the market must preserve ladder structure instead of collapsing all buys into one price
+- builds ATR-based range and trend grids
+- respects symbol-specific tick size and size step
+- merges duplicate normalized levels after tick rounding
+- preserves merged source tags for diagnostics
+- avoids false target/live mismatches on cheap symbols because one-tick drift is treated safely
 
-Current buy-offset behavior:
-
-- if the top buy level is too close to the live price, the whole buy ladder is shifted down
-- the ladder shape is preserved instead of repricing each buy order to one identical level
-
-Code:
+Relevant code:
 
 - [domain/grid_builder.py](./domain/grid_builder.py)
 - [domain/grid_viability.py](./domain/grid_viability.py)
-- [domain/inventory_manager.py](./domain/inventory_manager.py)
-- [infrastructure/market_data_provider.py](./infrastructure/market_data_provider.py)
-- [infrastructure/execution_gateway.py](./infrastructure/execution_gateway.py)
-
-Code:
-
-- [domain/portfolio_allocator.py](./domain/portfolio_allocator.py)
-- [application/trading_cycle_service.py](./application/trading_cycle_service.py)
-
-## Trading Logic
-
-### RANGE
-
-The bot builds a symmetric grid around the current price:
-
-- buys below price
-- sells above price
-- width and step are ATR-based
-- if range quality is weak, the bot can soften new buy entries instead of fully disabling trading
-- if inventory is underwater and drawdown is above the recovery trigger, the bot can switch to a limited recovery buy budget
-
-### UPTREND
-
-The bot uses a separate pullback-and-scale-out policy:
-
-- buy levels are placed below market as ATR-based pullbacks
-- buy budget is weighted toward deeper pullback levels
-- if price is too stretched above `ema20`, new trend buys are blocked
-- if inventory is underwater and the recovery trigger is met, the bot can use a larger underwater-recovery budget than in `RANGE`
-- sell levels are wider than in `RANGE`
-- sell size increases at higher take-profit levels
-- take-profit levels adapt to trend strength instead of always staying static
-
-### DOWNTREND
-
-New buys are blocked. The bot can enter staged de-risk behavior instead of opening new entries.
-
-If the symbol already has open buy-entry orders from an earlier phase, the planner now forces a rebuild so those remaining entry buys are removed on the next sync.
-
-### HIGH_VOLATILITY
-
-New entries are suppressed and the bot uses explicit de-risk logic.
-
-Open buy-entry orders are treated as stale for the current protective phase and are removed on rebuild.
-
-### RISK_OFF
-
-Protective mode:
-
-- entries blocked
-- de-risk path only
-- remaining entry buys are cancelled on rebuild
-
-Code:
-
-- [domain/spot_grid_planner.py](./domain/spot_grid_planner.py)
-- [domain/grid_builder.py](./domain/grid_builder.py)
-- [domain/inventory_manager.py](./domain/inventory_manager.py)
-- [domain/allocation.py](./domain/allocation.py)
-- [domain/de_risk.py](./domain/de_risk.py)
-
-This means:
-
-- `BTC`, `SOL`, and `XRP` are sized through the same `USDT` risk model
-- the bot is no longer dependent on one global `max_inventory_units` value for all assets
-- cheaper and more expensive coins now scale through quote-currency budget instead of raw units
-- symbol-local sizing now sits under a portfolio-level budget cap instead of operating fully independently
-
-## No-Loss Sell Rule
-
-The bot is intentionally constrained to avoid selling spot inventory at a loss.
-
-Current behavior:
-
-- it should not place sell orders below `cost_basis_price + 1%`
-- if `cost_basis_price` is unavailable, it falls back to a conservative reference
-- de-risk sells are also blocked if price is below the allowed exit floor
-
-Code:
-
-- [domain/spot_grid_planner.py](./domain/spot_grid_planner.py)
-- [domain/de_risk.py](./domain/de_risk.py)
-- [infrastructure/execution_gateway.py](./infrastructure/execution_gateway.py)
-
-This means:
-
-- if inventory is underwater, the bot does not force a loss-taking exit
-- it either holds inventory or continues operating through the appropriate phase
-- if the market has already moved into a protective regime, fresh buy entries stay blocked until a valid recovery phase returns
-
-## Underwater Averaging
-
-The bot now supports a separate underwater-averaging path.
-
-Current behavior:
-
-- underwater averaging is disabled unless drawdown from `cost_basis_price` is above `UNDERWATER_AVERAGING_TRIGGER_PCT`
-- averaging is only allowed in:
-  - `RANGE`
-  - `UPTREND`
-- averaging is blocked in:
-  - `DOWNTREND`
-  - `HIGH_VOLATILITY`
-  - `RISK_OFF`
-- if drawdown exceeds `UNDERWATER_DEEP_STOP_PCT`, new underwater averaging is disabled again
-
-Recovery budget is now calculated from free quote balance:
-
-- base = current free `USDT` balance
-- recovery budget = `free_quote * UNDERWATER_RECOVERY_BUDGET_PCT`
-- then adjusted by regime:
-  - `RANGE` uses `UNDERWATER_RANGE_BUDGET_MULTIPLIER`
-  - `UPTREND` uses `UNDERWATER_UPTREND_BUDGET_MULTIPLIER`
-
-Recovery sizing is still bounded by:
-
-- remaining symbol inventory room
-- actual free quote available
-- venue minimum order constraints
-
-This means:
-
-- recovery averaging is no longer tied to a percentage of total equity
-- on small accounts, recovery budget scales from free `USDT`, which is easier to reason about
-- `RANGE` recovery is intentionally smaller than `UPTREND` recovery
-- the bot does not average down indefinitely in bad regimes
-
-## Cost Basis And Take-Profit Planning
-
-`cost_basis_price` is derived from real Bybit spot executions:
-
-- the bot reads recent fills
-- calculates average cost for the remaining inventory
-- caches the result briefly
-
-Code:
-
-- [infrastructure/execution_gateway.py](./infrastructure/execution_gateway.py)
-
-Phase 4 added cost-basis-aware sell planning:
-
-- sell take-profit orders are not only filtered after planning
-- they are now actively rebased from the effective inventory reference price
-- minimum take-profit price is built from:
-  - `cost_basis_price`
-  - `min_sell_markup_bps`
-  - ATR-based profit floor
-
-Code:
-
-- [domain/cost_basis.py](./domain/cost_basis.py)
-- [domain/spot_grid_planner.py](./domain/spot_grid_planner.py)
-
-This means:
-
-- sell ladders are economically aligned with the actual spot inventory
-- the bot no longer depends only on post-filtering to avoid bad exits
-- underwater inventory is also penalized at the portfolio-allocation layer when deciding whether to resume accumulation
-- if underwater averaging lowers `cost_basis_price`, future no-loss exits become easier to reach
-
-## Rebuild Logic
-
-The bot rebuilds not only on price movement, but also on material differences between:
-
-- `target_orders`
-- `live_orders`
-
-Rebuild may also occur when:
-
-- there are no live orders
-- a state transition just happened
-- `last_rebuild_price` is missing
-- price deviation exceeds threshold
-- target orders are empty while live orders still exist
-- the symbol is in a protective regime and still has live buy-entry orders that must be cancelled
-
-Code:
-
 - [domain/order_diff.py](./domain/order_diff.py)
-- [domain/spot_grid_planner.py](./domain/spot_grid_planner.py)
 
-## Execution Logic
+### 8. Underwater Recovery Logic
 
-The Bybit spot demo executor:
+When inventory is underwater, the strategy can shift into controlled recovery behavior.
 
-- loads open orders
-- compares them to target orders
-- cancels unnecessary orders
-- places missing orders
-- respects exchange filters
-- avoids duplicate `clientOrderId`
+The bot can:
 
-Guardrails include:
+- reduce or cap new buy levels
+- limit recovery budget to a fraction of free quote
+- use different recovery budgets for `RANGE` and `UPTREND`
+- tighten sell aggressiveness around recovery exits
 
-- `max_new_orders_per_cycle`
-- `max_cancel_replace_per_cycle`
-- `max_total_open_orders`
-- `min_level_distance_bps`
-- marketable order filter
-- no-loss sell filter
+Relevant code:
 
-Code:
+- [domain/uptrend_policy.py](./domain/uptrend_policy.py)
+- [domain/target_order_builder.py](./domain/target_order_builder.py)
 
+### 9. Execution Guardrails
+
+Before syncing target orders to the venue, the bot applies:
+
+- no-loss sell filtering
+- marketable-order filtering
+- near-duplicate level deduplication
+- per-cycle order throttles
+- venue minimum notional / minimum quantity normalization
+
+Guardrails are intentionally applied in domain-first order:
+
+1. no-loss restrictions
+2. marketability checks
+3. dedupe / cleanup
+4. execution throttles
+
+Relevant code:
+
+- [infrastructure/execution_guardrails.py](./infrastructure/execution_guardrails.py)
 - [infrastructure/execution_gateway.py](./infrastructure/execution_gateway.py)
 
-Practical consequence:
+### 10. Notifications
 
-- the strategy may plan more orders than the executor will place in one cycle
-- execution is intentionally throttled for safety
-- when the planner removes entry buys in a protective regime, the executor sync will cancel those stale buy orders on the venue
+The notifier layer currently supports:
 
-## Candle Ingestion And Independence
+- logging-only notifications by default
+- Telegram notifications for critical rebuild/risk events
 
-`spot_grid_bot` no longer has to rely on `futures-trading-bot` to populate candle history.
+Telegram alerts are sent only for high-severity cases such as:
 
-It now has its own:
+- `force_risk_off`
+- `de_risk_mode = HARD | PANIC`
+- kill-switch-triggered behavior
+- critical risk reasons such as `daily_drawdown_pause` or `emergency_volatility`
 
-- candle schema/table creation
-- Binance Spot candle sync adapter
-- scheduler hook for periodic candle refresh
-- standalone `sync` CLI mode
+Relevant code:
 
-This keeps the trading strategy unchanged while making the project operationally independent.
+- [infrastructure/notifications.py](./infrastructure/notifications.py)
 
-## Persistence
+### 11. Live Price Monitoring
 
-The bot persists runtime state per symbol in PostgreSQL:
+In `live` mode, the scheduler can run a Bybit public WebSocket monitor between regular cycles.
 
-- `regime`
-- `bars_in_state`
-- `cooldown_remaining`
-- `volatility_cooldown_remaining`
-- `pending_regime`
-- `pending_count`
-- `last_rebuild_price`
-- `kill_switch_count`
-- `recent_equity`
+Behavior:
 
-Code:
+- subscribes to ticker updates
+- compares live price vs cached cycle reference
+- uses ATR-based deviation thresholds
+- triggers an off-cycle symbol-only trading pass on large price shocks
+- throttles repeated alerts with a cooldown
 
-- [infrastructure/state_store.py](./infrastructure/state_store.py)
-- [application/trading_cycle_service.py](./application/trading_cycle_service.py)
+Relevant code:
 
-This means:
+- [infrastructure/live_price_monitor.py](./infrastructure/live_price_monitor.py)
+- [application/scheduler.py](./application/scheduler.py)
 
-- after restart, the bot does not lose runtime memory
-- risk state and state machine continue from persisted values
-- one symbol does not share runtime state with another
+### 12. Health and State Endpoints
 
-## Backtesting And Evaluation
+When `HEALTHCHECK_PORT > 0`, the live process exposes:
 
-The project now includes an evaluation layer, not just a minimal backtest loop.
+- `GET /health`
+- `GET /state`
 
-Backtest engine:
+`/health` returns process-level liveness information:
 
-- simulates order fills
-- updates inventory balances
-- maintains simulated `cost_basis_price`
-- tracks realized PnL on sells
-- tracks unrealized PnL on remaining inventory
-- counts rebuilds and de-risk events
-- tracks blocked no-loss sell situations
-- tracks risk reason frequency
-- measures inventory utilization against the current symbol-level notional cap model
+```json
+{
+  "status": "ok",
+  "last_cycle": "2026-05-01T15:00:01+00:00",
+  "symbols": ["ETHUSDT", "SOLUSDT"]
+}
+```
 
-Code:
+`/state` returns the latest in-memory runtime summary per symbol, including current regime and kill-switch count.
+
+Relevant code:
+
+- [application/health.py](./application/health.py)
+
+### 13. Dry-Run Preview Mode
+
+`dry-run` executes the full planning path but never syncs orders.
+
+It is useful for:
+
+- safe debugging against the real venue state
+- reviewing what would be created, kept, or cancelled
+- inspecting regime/risk-driven diffs before enabling live execution
+
+Relevant code:
+
+- [application/dry_run.py](./application/dry_run.py)
+- [main.py](./main.py)
+
+### 14. Backtesting and Reporting
+
+The backtest layer now includes:
+
+- historical order simulation
+- slippage-aware fill accounting
+- optional maker-fee accounting
+- no-loss sell diagnostics
+- rebuild count and de-risk diagnostics
+- risk-reason frequency tracking
+- final inventory and unrealized/realized PnL reporting
+- HTML report export
+
+Programmatic usage:
+
+```python
+from backtesting import BacktestEngine, export_html_report
+from domain.strategy_config import DEFAULT_STRATEGY_CONFIG
+
+engine = BacktestEngine(DEFAULT_STRATEGY_CONFIG)
+result = engine.run("ETHUSDT", candles)
+export_html_report(result, "backtest_report.html")
+```
+
+Relevant code:
 
 - [backtesting/engine.py](./backtesting/engine.py)
-
-Backtest result metrics now include:
-
-- `pnl`
-- `realized_pnl`
-- `unrealized_pnl`
-- `max_drawdown`
-- `trade_count`
-- `rebuild_count`
-- `average_inventory_utilization`
-- `de_risk_event_count`
-- `blocked_no_loss_sell_count`
-- `risk_reason_counts`
-- `regime_statistics`
-- `kill_switch_count`
-
-Reporting helpers:
-
 - [backtesting/reporting.py](./backtesting/reporting.py)
 
-Available helpers:
+## Key Runtime Configuration
 
-- `build_backtest_summary(...)`
-- `format_backtest_summary(...)`
+Important environment variables:
 
-This gives the project a research/evaluation loop instead of only a live execution loop.
+- `SPOT_TRADING_SYMBOLS`: comma-separated symbol list
+- `EXECUTION_MODE`: execution adapter mode
+- `BYBIT_API_KEY`
+- `BYBIT_API_SECRET`
+- `BYBIT_API_ENDPOINT`
+- `DB_HOST`
+- `DB_PORT`
+- `DATABASE`
+- `DB_USER`
+- `DB_PASS`
+- `CANDLE_LOOKBACK`
+- `MAX_NEW_ORDERS_PER_CYCLE`
+- `MIN_SYMBOL_ENTRY_NOTIONAL`
+- `MAX_SYMBOL_INVENTORY_PCT_OF_EQUITY`
+- `MAX_SYMBOL_NEW_ENTRY_PCT_OF_FREE_QUOTE`
+- `UNDERWATER_AVERAGING_ENABLED`
+- `UNDERWATER_AVERAGING_TRIGGER_PCT`
+- `UNDERWATER_RECOVERY_BUDGET_PCT`
+- `UNDERWATER_RANGE_BUDGET_MULTIPLIER`
+- `UNDERWATER_UPTREND_BUDGET_MULTIPLIER`
+- `UNDERWATER_MAX_RECOVERY_LEVELS`
+- `UNDERWATER_DEEP_STOP_PCT`
+- `RUN_TARGET_MINUTE`
+- `RUN_TARGET_SECOND`
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_CHAT_ID`
+- `HEALTHCHECK_HOST`
+- `HEALTHCHECK_PORT`
+- `ENABLE_LIVE_PRICE_MONITOR`
+- `LIVE_PRICE_DEVIATION_ATR_MULTIPLIER`
+- `LIVE_PRICE_MONITOR_COOLDOWN_SECONDS`
+
+Source of truth:
+
+- [utils/config.py](./utils/config.py)
 
 ## Testing
 
-The project includes behavior-focused tests for:
+The test suite covers:
 
-- rebuild idempotency
+- regime detection and state transitions
+- runtime state persistence
+- cost basis handling and no-loss sell logic
 - execution guardrails
-- no-loss de-risk behavior
-- protective-regime cancellation of remaining buy-entry orders
-- outstanding order exposure accounting
-- percentage-based symbol allocation across low-priced and higher-priced assets
-- portfolio-level budget distribution and concurrency limits
-- underwater allocation penalty
-- runtime state persistence and isolation
-- cost-basis sell planning
-- market-structure regime detection
+- portfolio allocation
+- underwater recovery logic
+- cheap-symbol tick handling
+- scheduler resilience
+- Telegram notifier behavior
+- health endpoint behavior
+- live price monitor deviation handling
+- dry-run formatting
 - backtest diagnostics and reporting
-
-Tests:
-
-- [tests](./tests)
 
 Run:
 
@@ -608,42 +546,7 @@ Run:
 ./.venv/bin/python -m unittest discover -s tests -p 'test_*.py'
 ```
 
-## Current Status
+Current suite status:
 
-At the moment, the bot:
+- `94` tests passing locally in `.venv`
 
-- runs as a live demo spot bot on Bybit
-- owns its own Binance Spot candle synchronization path
-- creates and maintains candle tables in `_candles_trading_data`
-- reads candles from PostgreSQL
-- enforces no-loss exit behavior
-- uses explicit `HIGH_VOLATILITY` and staged de-risk handling
-- accounts for outstanding buy-order exposure
-- sizes new entries through percentage-based `USDT` budgets
-- distributes fresh entry capital through a portfolio-level allocator
-- cancels stale buy-entry orders when the symbol is already in a protective regime
-- persists per-symbol runtime state
-- builds cost-basis-aware take-profit sells
-- uses a dedicated `UPTREND` policy:
-  - ATR pullback buys
-  - weighted deeper buy sizing
-  - overextension entry block
-  - staged sell-out with bigger size at higher prices
-  - adaptive take-profit widening/narrowing with trend strength
-- uses trigger-based underwater averaging:
-  - recovery starts only after configured drawdown from `cost_basis_price`
-  - recovery budget is calculated from free `USDT`
-  - `RANGE` recovery is smaller than `UPTREND` recovery
-  - `DOWNTREND` / `RISK_OFF` / `HIGH_VOLATILITY` do not allow averaging
-- detects regime using both indicator context and market structure
-- includes a diagnostics-oriented backtesting and reporting layer
-
-## Run Commands
-
-From the `spot_grid_bot` directory:
-
-```bash
-./.venv/bin/python main.py sync --period 365 --timeframe 1h
-./.venv/bin/python main.py once
-./.venv/bin/python main.py live
-```

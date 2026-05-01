@@ -83,7 +83,13 @@ def compute_snapshot(candles: list[Candle], config: StrategyConfig) -> Indicator
     latest_close = closes[-1]
     slope_base = ema50[-min(6, len(ema50))]
     slope = (ema50[-1] - slope_base) / slope_base if slope_base else 0.0
-    directional_move = abs(latest_close - closes[-lookback]) / max(atr_values[-1], 1e-9) if lookback > 1 else 0.0
+    raw_directional_move = latest_close - closes[-lookback] if lookback > 1 else 0.0
+    directional_move = abs(raw_directional_move) / max(atr_values[-1], 1e-9) if lookback > 1 else 0.0
+    directional_sign = 0.0
+    if raw_directional_move > 0:
+        directional_sign = 1.0
+    elif raw_directional_move < 0:
+        directional_sign = -1.0
     last_candle = candles[-1]
     latest_atr = atr_values[-1]
     avg_atr = sum(atr_values[-lookback:]) / lookback
@@ -99,6 +105,7 @@ def compute_snapshot(candles: list[Candle], config: StrategyConfig) -> Indicator
         range_width=width,
         price_vs_ema50=(latest_close - ema50[-1]) / ema50[-1] if ema50[-1] else 0.0,
         directional_move=directional_move,
+        directional_sign=directional_sign,
         abnormal_candle=abnormal_candle,
         atr_spike=atr_spike,
     )

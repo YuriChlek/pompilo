@@ -40,6 +40,7 @@ class IndicatorSnapshot:
     range_width: float
     price_vs_ema50: float
     directional_move: float
+    directional_sign: float
     abnormal_candle: bool
     atr_spike: bool
 
@@ -72,3 +73,4 @@ class MarketContext:
     inventory: "InventorySnapshot"
     live_orders: list["LiveOrder"]
     venue_constraints: VenueConstraints | None = None
+    higher_timeframe_candles: list[Candle] | None = None

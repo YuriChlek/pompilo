@@ -20,7 +20,7 @@ from infrastructure.bybit_spot_types import (
     quantize_down,
     split_symbol,
 )
-from infrastructure.cost_basis_resolver import CostBasisResolver, calculate_cost_basis_from_executions, to_decimal
+from infrastructure.cost_basis_resolver import calculate_cost_basis_from_executions, to_decimal
 from infrastructure.execution_guardrails import apply_execution_guardrails, order_key
 from utils.config import BYBIT_API_ENDPOINT, BYBIT_API_KEY, BYBIT_API_SECRET, BYBIT_RECV_WINDOW
 
@@ -39,7 +39,7 @@ class PaperSpotExchange:
     open_orders: dict[str, list[LiveOrder]] = field(default_factory=dict)
     order_sequence: int = 0
 
-    def get_balances(self, symbol: str) -> InventorySnapshot:
+    def get_balances(self, symbol: str, *, persisted_cost_basis: float | None = None) -> InventorySnapshot:
         """Return the current paper inventory snapshot."""
         return self.inventory
 
@@ -130,7 +130,7 @@ class BybitSpotExchange:
     """Infrastructure adapter for live Bybit spot balances, orders, and executions."""
 
     def __init__(self, strategy_config: StrategyConfig) -> None:
-        """Initialize the Bybit HTTP client and short-lived cost-basis cache."""
+        """Initialize the Bybit HTTP client and exchange adapter dependencies."""
         self.strategy_config = strategy_config
         self.client = HTTP(
             api_key=BYBIT_API_KEY,
@@ -139,13 +139,11 @@ class BybitSpotExchange:
             demo="api-demo" in BYBIT_API_ENDPOINT,
             testnet=False,
         )
-        self._cost_basis_resolver = CostBasisResolver(self._fetch_executions)
         self._unsupported_symbols: set[str] = set()
         self._market_client = BybitSpotMarketClient(self.client)
         self._account_client = BybitSpotAccountClient(
             self.client,
             fetch_current_price=self.fetch_current_price,
-            resolve_cost_basis_price=self.resolve_cost_basis_price,
         )
 
     def get_instrument_filters(self, symbol: str) -> SpotInstrumentFilters:
@@ -153,10 +151,10 @@ class BybitSpotExchange:
         self._ensure_symbol_supported(symbol)
         return self._market_client.get_instrument_filters(symbol)
 
-    def get_balances(self, symbol: str) -> InventorySnapshot:
-        """Return current spot balances, live mark price, and derived cost basis for one symbol."""
+    def get_balances(self, symbol: str, *, persisted_cost_basis: float | None = None) -> InventorySnapshot:
+        """Return current spot balances, live mark price, and cost basis for one symbol."""
         self._ensure_symbol_supported(symbol)
-        return self._account_client.get_balances(symbol)
+        return self._account_client.get_balances(symbol, persisted_cost_basis=persisted_cost_basis)
 
     def get_open_orders(self, symbol: str) -> list[LiveOrder]:
         """Return active Bybit spot orders for one symbol."""

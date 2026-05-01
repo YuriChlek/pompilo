@@ -38,3 +38,12 @@ class MainCliSyncTests(unittest.IsolatedAsyncioTestCase):
             await main.start()
 
         run_sync.assert_awaited_once_with(14, "4h")
+
+    def test_build_parser_restricts_sync_timeframe_to_supported_values(self):
+        parser = main._build_parser()
+
+        args = parser.parse_args(["sync", "--timeframe", "4h"])
+        self.assertEqual(args.timeframe, "4h")
+
+        with self.assertRaises(SystemExit):
+            parser.parse_args(["sync", "--timeframe", "15m"])

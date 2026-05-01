@@ -18,7 +18,7 @@ class _MemoryExecutor:
     async def sync_orders(self, symbol: str, target_orders) -> bool:
         return True
 
-    def get_balances(self, symbol: str):
+    def get_balances(self, symbol: str, *, persisted_cost_basis: float | None = None):
         raise NotImplementedError
 
     def get_open_orders(self, symbol: str):
@@ -26,7 +26,7 @@ class _MemoryExecutor:
 
 
 class _NoOpMarketDataProvider:
-    async def get_market_context(self, symbol: str):
+    async def get_market_context(self, symbol: str, *, persisted_cost_basis: float | None = None):
         raise NotImplementedError
 
 

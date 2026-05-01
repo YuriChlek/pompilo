@@ -1,4 +1,5 @@
 import unittest
+from dataclasses import replace
 
 from backtesting.engine import BacktestEngine, FillEvent
 from backtesting.reporting import build_backtest_summary
@@ -40,6 +41,42 @@ class Phase6BacktestTests(unittest.TestCase):
         self.assertGreater(realized_sell, 0.0)
         self.assertEqual(inventory.base_balance, 1.0)
         self.assertIsNotNone(inventory.cost_basis_price)
+
+    def test_backtest_fill_accounting_applies_slippage_and_fee(self):
+        engine = BacktestEngine(DEFAULT_STRATEGY_CONFIG)
+        inventory = InventorySnapshot(base_balance=0.0, quote_balance=1000.0, reserved_quote=0.0, mark_price=100.0)
+
+        engine._apply_fills(
+            inventory,
+            [FillEvent(OrderSide.BUY, 100.0, 1.0)],
+        )
+
+        expected_effective_buy_price = 100.0 * (
+            1 + DEFAULT_STRATEGY_CONFIG.execution.simulated_slippage_bps / 10_000
+        )
+        expected_effective_buy_price *= 1 + DEFAULT_STRATEGY_CONFIG.execution.maker_fee_bps / 10_000
+        self.assertAlmostEqual(inventory.cost_basis_price or 0.0, expected_effective_buy_price, places=6)
+        self.assertAlmostEqual(inventory.quote_balance, 1000.0 - expected_effective_buy_price, places=6)
+
+    def test_backtest_can_disable_fee_while_keeping_slippage(self):
+        config = replace(
+            DEFAULT_STRATEGY_CONFIG,
+            execution=replace(
+                DEFAULT_STRATEGY_CONFIG.execution,
+                apply_maker_fee_in_backtest=False,
+                simulated_slippage_bps=2.0,
+            ),
+        )
+        engine = BacktestEngine(config)
+        inventory = InventorySnapshot(base_balance=0.0, quote_balance=1000.0, reserved_quote=0.0, mark_price=100.0)
+
+        engine._apply_fills(
+            inventory,
+            [FillEvent(OrderSide.BUY, 100.0, 1.0)],
+        )
+
+        expected_effective_buy_price = 100.0 * (1 + config.execution.simulated_slippage_bps / 10_000)
+        self.assertAlmostEqual(inventory.cost_basis_price or 0.0, expected_effective_buy_price, places=6)
 
     def test_backtest_result_contains_diagnostics_and_summary(self):
         engine = BacktestEngine(DEFAULT_STRATEGY_CONFIG)
