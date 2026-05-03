@@ -3,6 +3,7 @@ import json
 import os
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 from application.dry_run import format_decision_dry_run
@@ -63,6 +64,36 @@ class Phase12RuntimeFeaturesTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(analysis.risk.pause_entries)
         self.assertIn("higher_timeframe_downtrend", analysis.risk.reasons)
+
+    async def test_health_tracker_payload_exposes_persistence_summary(self):
+        tracker = RuntimeHealthTracker()
+        tracker.set_tracked_symbols(["ETHUSDT", "SOLUSDT"])
+        tracker.record_cycle_started()
+        tracker.record_symbol_state(
+            "ETHUSDT",
+            {
+                "base_balance": 0.5,
+                "cost_basis_price": None,
+                "state_stale": True,
+            },
+        )
+        tracker.record_symbol_state(
+            "SOLUSDT",
+            {
+                "base_balance": 0.0,
+                "cost_basis_price": None,
+                "state_stale": False,
+            },
+        )
+        tracker.record_cycle_completed()
+
+        payload = tracker.health_payload()
+
+        self.assertEqual(payload["persistence"]["tracked_symbol_count"], 2)
+        self.assertEqual(payload["persistence"]["symbol_state_count"], 2)
+        self.assertEqual(payload["persistence"]["symbols_with_cost_basis"], 0)
+        self.assertEqual(payload["persistence"]["symbols_missing_cost_basis"], ["ETHUSDT"])
+        self.assertEqual(payload["persistence"]["stale_symbols"], ["ETHUSDT"])
 
     async def test_health_server_serves_health_and_state_payloads(self):
         tracker = RuntimeHealthTracker()
@@ -169,3 +200,25 @@ class Phase12RuntimeFeaturesTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("<html", content)
         self.assertIn("Backtest Report", content)
         self.assertIn("daily_drawdown_pause", content)
+
+    async def test_health_tracker_state_payload_keeps_persistence_fields_json_ready(self):
+        tracker = RuntimeHealthTracker()
+        tracker.record_symbol_state(
+            "ETHUSDT",
+            {
+                "last_cycle_started_at": datetime.now(timezone.utc).isoformat(),
+                "last_cycle_completed_at": (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat(),
+                "last_successful_execution_at": datetime.now(timezone.utc).isoformat(),
+                "last_execution_status": "executed",
+                "state_stale": False,
+                "recovery_ready": True,
+                "cost_basis_price": 2403.75,
+            },
+        )
+
+        payload = tracker.state_payload()
+
+        self.assertEqual(payload["symbols"]["ETHUSDT"]["last_execution_status"], "executed")
+        self.assertFalse(payload["symbols"]["ETHUSDT"]["state_stale"])
+        self.assertTrue(payload["symbols"]["ETHUSDT"]["recovery_ready"])
+        self.assertEqual(payload["symbols"]["ETHUSDT"]["cost_basis_price"], 2403.75)

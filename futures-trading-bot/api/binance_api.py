@@ -76,7 +76,7 @@ class Candle:
         )
 
 
-TABLE_SUFFIX = '_p_candles'
+TABLE_SUFFIX = '_1h'
 API_REQUEST_PAUSE_SECONDS = 0.5
 SYMBOL_PAUSE_SECONDS = 1.0
 MAX_FETCH_RETRIES = 3

@@ -17,12 +17,14 @@ class TradingCycleExecutionService:
     async def execute(self, symbol: str, decision) -> None:
         """Execute one finalized decision for one symbol."""
         if not decision.rebuild_required:
+            self.planner.mark_cycle_completed(symbol, status="skipped_no_rebuild")
             logger.info(
                 "grid_rebuild_skipped symbol=%s reasons=%s target_diff=%s",
                 symbol,
                 ",".join(decision.reasons),
                 decision.target_order_diff_count,
             )
+            await self.save_runtime_state(symbol)
             logger.info("trading_cycle_finished symbol=%s rebuild_required=false", symbol)
             return
 
@@ -36,7 +38,15 @@ class TradingCycleExecutionService:
         )
         executed = await self.executor.sync_orders(symbol, decision.target_orders)
         if executed:
+            self.planner.mark_cycle_completed(symbol, status="executed", successful_execution=True)
             await self.notifier.notify_rebuild(decision)
+            await self.save_runtime_state(symbol)
+        else:
+            self.planner.mark_cycle_completed(symbol, status="execution_not_confirmed")
+            logger.warning(
+                "runtime_state_not_persisted symbol=%s reason=execution_not_confirmed",
+                symbol,
+            )
         logger.info(
             "trading_cycle_finished symbol=%s rebuild_required=true executed=%s target_orders=%s",
             symbol,

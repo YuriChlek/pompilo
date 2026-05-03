@@ -90,7 +90,7 @@ class TrendBot:
         """Load raw symbol candles from the primary storage table."""
         if self.data_fetcher is None:
             self.initialize_data_fetcher(DB_USER, DB_PASS, DB_HOST, DB_PORT, DB_NAME)
-        table_name = f"_candles_trading_data.{symbol.lower()}_p_candles"
+        table_name = f"_candles_trading_data.{symbol.lower()}_1h"
         data = self.data_fetcher.fetch_candle_data(table_name, limit=limit)
         if len(data) < 100:
             raise ValueError(

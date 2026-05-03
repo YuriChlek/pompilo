@@ -162,7 +162,7 @@ Persistence and reporting:
 
 1. Ensure candle schema and symbol tables.
 2. Pull candles from Binance Spot.
-3. Upsert them into `_candles_trading_data.<symbol>_p_candles`.
+3. Upsert them into `_candles_trading_data.<symbol>_1h`.
 
 ## Design Principles
 

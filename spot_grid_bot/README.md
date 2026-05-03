@@ -196,7 +196,7 @@ Core orchestration:
 The bot owns the full candle-ingestion path.
 
 - Candles are fetched from Binance Spot.
-- Candles are stored in PostgreSQL under `_candles_trading_data.<symbol>_p_candles`.
+- Candles are stored in PostgreSQL under `_candles_trading_data.<symbol>_1h`.
 - Candle schema/tables are created automatically when needed.
 - The scheduler refreshes market data before each scheduled cycle.
 - The planner works from PostgreSQL-backed history instead of direct exchange klines.

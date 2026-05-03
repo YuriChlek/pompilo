@@ -1,25 +1,9 @@
 import os
 from decimal import Decimal
 
-BASE_DIR = os.path.dirname(os.path.dirname(__file__))
-ENV_PATH = os.path.join(BASE_DIR, ".env")
+from utils.env import load_project_env
 
-
-def load_env_file(path: str) -> None:
-    if not os.path.exists(path):
-        return
-
-    with open(path, "r", encoding="utf-8") as env_file:
-        for raw_line in env_file:
-            line = raw_line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-
-            key, value = line.split("=", 1)
-            os.environ.setdefault(key.strip(), value.strip())
-
-
-load_env_file(ENV_PATH)
+load_project_env()
 
 # lenovo remote db "172.28.233.170"
 

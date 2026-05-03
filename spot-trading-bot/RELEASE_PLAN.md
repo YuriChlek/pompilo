@@ -235,7 +235,7 @@ DataFrame, один сигнал і один денний scheduler-цикл.
 
 ```sql
 -- Для кожного символу додати таблицю:
-CREATE TABLE IF NOT EXISTS _candles_trading_data.<symbol>_p_candles_h4 (
+CREATE TABLE IF NOT EXISTS _candles_trading_data.<symbol>_4h (
     open_time  TIMESTAMP NOT NULL,
     close_time TIMESTAMP NOT NULL,
     symbol     TEXT      NOT NULL,
@@ -252,7 +252,7 @@ CREATE TABLE IF NOT EXISTS _candles_trading_data.<symbol>_p_candles_h4 (
 **Зміни в `utils/db_actions.py`:**
 
 ```python
-H4_TABLE_SUFFIX = "_p_candles_h4"  # нова константа (додати в config.py)
+H4_TABLE_SUFFIX = "_4h"  # нова константа (додати в config.py)
 
 def h4_table_name(symbol: str) -> str:
     return f"{symbol.lower()}{H4_TABLE_SUFFIX}"
@@ -411,7 +411,7 @@ class BinanceMarketDataSynchronizer:
 
 ```python
 BINANCE_H4_INTERVAL = "4h"
-H4_TABLE_SUFFIX = "_p_candles_h4"
+H4_TABLE_SUFFIX = "_4h"
 H4_ANALYSIS_WINDOW = int(os.getenv("H4_ANALYSIS_WINDOW", str(max(240, GREENWICH_LENGTH * 8))))
 H4_SCHEDULER_ENABLED = os.getenv("H4_SCHEDULER_ENABLED", "true").lower() == "true"
 D1_REGIME_FILTER_ENABLED = os.getenv("D1_REGIME_FILTER_ENABLED", "true").lower() == "true"

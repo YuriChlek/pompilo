@@ -32,10 +32,28 @@ class RuntimeHealthTracker:
         self.symbol_states[symbol.upper()] = dict(state)
 
     def health_payload(self) -> dict[str, object]:
+        symbol_states = self.symbol_states.values()
+        missing_cost_basis = sorted(
+            symbol
+            for symbol, state in self.symbol_states.items()
+            if state.get("base_balance", 0.0) > 0 and not state.get("cost_basis_price")
+        )
+        stale_symbols = sorted(
+            symbol
+            for symbol, state in self.symbol_states.items()
+            if bool(state.get("state_stale"))
+        )
         return {
             "status": "ok",
             "last_cycle": self.last_cycle_completed or self.last_cycle_started,
             "symbols": list(self.tracked_symbols),
+            "persistence": {
+                "tracked_symbol_count": len(self.tracked_symbols),
+                "symbol_state_count": len(self.symbol_states),
+                "symbols_with_cost_basis": sum(1 for state in symbol_states if state.get("cost_basis_price")),
+                "symbols_missing_cost_basis": missing_cost_basis,
+                "stale_symbols": stale_symbols,
+            },
         }
 
     def state_payload(self) -> dict[str, object]:
@@ -88,7 +106,7 @@ class HealthCheckServer:
             else:
                 payload = {"status": "not_found", "path": path}
                 status_line = "HTTP/1.1 404 Not Found"
-            body = json.dumps(payload).encode("utf-8")
+            body = json.dumps(payload, default=str).encode("utf-8")
             writer.write(
                 (
                     f"{status_line}\r\n"

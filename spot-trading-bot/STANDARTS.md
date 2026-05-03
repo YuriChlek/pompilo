@@ -276,7 +276,7 @@ Configuration is assembled in three stages. Each stage narrows the previous:
 - Use two schemas per bot:
   - `_candles_trading_data` — time-series candle tables, one table per symbol.
   - `_live_trading_state` — position snapshots, order snapshots, reconciliation runs.
-- Table names for candles: `{schema}.{symbol_lower}_p_candles`.
+- Table names for candles: `{schema}.{symbol_lower}_1h`.
 - Use `asyncpg.Pool` for connection pooling.
 - Use parameterized queries for all user-facing or external-data values.
 - Schema and table names are template-filled (not parameterized), and must only come from trusted config, not user input.

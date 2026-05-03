@@ -39,6 +39,8 @@ class TradingCycleAnalysisBatchService:
                     symbol,
                     persisted_cost_basis=persisted_cost_basis,
                 )
+                self.planner.mark_cycle_started(symbol)
+                self.planner.update_inventory_snapshot(symbol, context.inventory)
                 self.planner.update_cost_basis(symbol, context.inventory.cost_basis_price)
                 analysis = self.planner.analyze(context)
             except Exception as exc:

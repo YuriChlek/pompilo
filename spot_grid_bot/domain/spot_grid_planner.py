@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass, replace
+from datetime import datetime, timezone
 import logging
 
 from domain.grid_builder import GridBuilder
@@ -174,6 +175,28 @@ class SpotGridPlanner:
         runtime = self._ensure_runtime(symbol)
         runtime.cost_basis_price = cost_basis_price if cost_basis_price and cost_basis_price > 0 else None
 
+    def update_inventory_snapshot(self, symbol: str, inventory) -> None:
+        """Store the latest live inventory snapshot for restart diagnostics and recovery."""
+        runtime = self._ensure_runtime(symbol)
+        runtime.last_known_base_balance = inventory.base_balance
+        runtime.last_known_quote_balance = inventory.quote_balance
+        runtime.last_known_reserved_quote = inventory.reserved_quote
+        runtime.last_known_mark_price = inventory.mark_price
+
+    def mark_cycle_started(self, symbol: str) -> None:
+        """Record the start time of the latest per-symbol trading cycle."""
+        runtime = self._ensure_runtime(symbol)
+        runtime.last_cycle_started_at = datetime.now(timezone.utc)
+
+    def mark_cycle_completed(self, symbol: str, *, status: str, successful_execution: bool = False) -> None:
+        """Record the latest per-symbol cycle completion status."""
+        runtime = self._ensure_runtime(symbol)
+        now = datetime.now(timezone.utc)
+        runtime.last_cycle_completed_at = now
+        runtime.last_execution_status = status
+        if successful_execution:
+            runtime.last_successful_execution_at = now
+
     def export_symbol_runtime(self, symbol: str) -> SymbolRuntimeState:
         """Export a detached runtime snapshot suitable for persistence."""
         runtime = self._ensure_runtime(symbol)
@@ -185,6 +208,15 @@ class SpotGridPlanner:
                 recent_equity=list(runtime.risk_state.recent_equity),
             ),
             cost_basis_price=runtime.cost_basis_price,
+            state_version=runtime.state_version,
+            last_cycle_started_at=runtime.last_cycle_started_at,
+            last_cycle_completed_at=runtime.last_cycle_completed_at,
+            last_successful_execution_at=runtime.last_successful_execution_at,
+            last_execution_status=runtime.last_execution_status,
+            last_known_base_balance=runtime.last_known_base_balance,
+            last_known_quote_balance=runtime.last_known_quote_balance,
+            last_known_reserved_quote=runtime.last_known_reserved_quote,
+            last_known_mark_price=runtime.last_known_mark_price,
         )
 
     def get_total_kill_switch_count(self) -> int:

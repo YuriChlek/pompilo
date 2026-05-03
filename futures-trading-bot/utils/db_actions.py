@@ -129,7 +129,7 @@ END$$;
 async def create_tables(
     *,
     symbols: Optional[Iterable[str]] = None,
-    suffixes: Sequence[str] = ("_p_candles",),
+    suffixes: Sequence[str] = ("_1h",),
     schema: str = CANDLES_DATA_SCHEMA,
 ) -> None:
     """Create the schema and candle tables for each selected trading symbol when missing."""

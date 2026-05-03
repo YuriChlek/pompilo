@@ -96,6 +96,39 @@ class Phase3OperationsTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(inventory.cost_basis_price, 1725.0)
 
+    def test_bybit_account_client_rebuilds_cost_basis_from_execution_history_when_avg_price_missing(self):
+        execution_response = {
+            "result": {
+                "list": [
+                    {"execId": "buy-1", "side": "Buy", "execQty": "1", "execPrice": "100", "execFee": "0.1", "feeCurrency": "USDT", "execTime": "1"},
+                    {"execId": "buy-2", "side": "Buy", "execQty": "1", "execPrice": "120", "execFee": "0.1", "feeCurrency": "USDT", "execTime": "2"},
+                    {"execId": "sell-1", "side": "Sell", "execQty": "1", "execPrice": "150", "execFee": "0", "feeCurrency": "USDT", "execTime": "3"},
+                ],
+                "nextPageCursor": "",
+            }
+        }
+        http_client = SimpleNamespace(
+            endpoint="https://api.bybit.com",
+            get_wallet_balance=lambda **_kwargs: {
+                "result": {
+                    "list": [
+                        {
+                            "coin": [
+                                {"coin": "SOL", "walletBalance": "1", "avgPrice": None},
+                                {"coin": "USDT", "walletBalance": "900.0", "locked": "0.0"},
+                            ]
+                        }
+                    ]
+                }
+            },
+            _submit_request=lambda **_kwargs: execution_response,
+        )
+        client = BybitSpotAccountClient(http_client, lambda _symbol: 1900.0)
+
+        inventory = client.get_balances("SOLUSDT", persisted_cost_basis=1725.0)
+
+        self.assertAlmostEqual(inventory.cost_basis_price or 0.0, 110.1, places=6)
+
     async def test_telegram_notifier_sends_only_for_critical_decisions(self):
         notifier = TelegramSignalNotifier(TelegramNotifierConfig(bot_token="token", chat_id="chat"))
         notifier._fallback.notify_rebuild = AsyncMock()

@@ -1,11 +1,13 @@
 import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
+from datetime import datetime, timezone
 
+from application.execution_service import TradingCycleExecutionService
 from application.analysis_batch_service import TradingCycleAnalysisBatchService
 from application.trading_cycle_service import SpotTradingCycleService
 from domain.state_machine import StrategyStateMachine
-from domain.models import Candle, InventorySnapshot, MarketContext, RegimeSnapshot, RegimeType, StrategyState, SymbolRuntimeState
+from domain.models import Candle, DeRiskMode, IndicatorSnapshot, InventorySnapshot, MarketContext, RegimeSnapshot, RegimeType, RiskDecision, StrategyDecision, StrategyState, SymbolRuntimeState
 from domain.portfolio_allocator import PortfolioAllocator
 from domain.spot_grid_planner import SpotGridPlanner
 from domain.strategy_config import DEFAULT_STRATEGY_CONFIG
@@ -46,7 +48,14 @@ class _MemoryExecutor:
         return True
 
     def get_balances(self, symbol: str, *, persisted_cost_basis: float | None = None):
-        return InventorySnapshot(base_balance=0.0, quote_balance=1_000.0, reserved_quote=0.0, mark_price=100.0)
+        base_balance = 1.0 if persisted_cost_basis is not None else 0.0
+        return InventorySnapshot(
+            base_balance=base_balance,
+            quote_balance=1_000.0,
+            reserved_quote=0.0,
+            mark_price=100.0,
+            cost_basis_price=persisted_cost_basis,
+        )
 
     def get_open_orders(self, symbol: str):
         return []
@@ -82,6 +91,40 @@ class _FailingMarketDataProvider:
 
 
 class Phase3RuntimeStateTests(unittest.IsolatedAsyncioTestCase):
+    def _build_decision(self, *, rebuild_required: bool) -> StrategyDecision:
+        return StrategyDecision(
+            symbol="SOLUSDT",
+            regime=RegimeType.RANGE,
+            target_orders=[],
+            live_orders=[],
+            indicators=IndicatorSnapshot(
+                ema20=100.0,
+                ema50=100.0,
+                ema200=100.0,
+                atr14=2.0,
+                realized_volatility=0.01,
+                ema50_slope=0.0,
+                range_width=0.02,
+                price_vs_ema50=0.0,
+                directional_move=0.0,
+                directional_sign=0.0,
+                abnormal_candle=False,
+                atr_spike=False,
+            ),
+            risk=RiskDecision(
+                can_trade=True,
+                pause_entries=False,
+                force_risk_off=False,
+                cancel_entries=False,
+                allow_exit_only=False,
+                de_risk_mode=DeRiskMode.NONE,
+                reasons=[],
+            ),
+            rebuild_required=rebuild_required,
+            target_order_diff_count=0,
+            reasons=["test"],
+        )
+
     async def test_state_machine_returns_new_state_without_mutating_input(self):
         initial_state = StrategyState(
             regime=RegimeType.RANGE,
@@ -166,6 +209,91 @@ class Phase3RuntimeStateTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(state_store.initialized)
         self.assertIn("SOLUSDT", state_store.data)
         self.assertEqual(state_store.data["SOLUSDT"].cost_basis_price, 91.25)
+        self.assertIsNotNone(state_store.data["SOLUSDT"].last_cycle_started_at)
+        self.assertIsNotNone(state_store.data["SOLUSDT"].last_cycle_completed_at)
+        self.assertEqual(state_store.data["SOLUSDT"].last_execution_status, "executed")
+        self.assertIsNotNone(state_store.data["SOLUSDT"].last_successful_execution_at)
+        self.assertEqual(state_store.data["SOLUSDT"].last_known_base_balance, 0.0)
+        self.assertEqual(state_store.data["SOLUSDT"].last_known_quote_balance, 1000.0)
+        self.assertEqual(state_store.data["SOLUSDT"].last_known_mark_price, 100.0)
+
+    async def test_execution_service_persists_runtime_state_when_rebuild_is_skipped(self):
+        planner = SpotGridPlanner(DEFAULT_STRATEGY_CONFIG)
+        planner.restore_symbol_runtime(
+            SymbolRuntimeState(symbol="SOLUSDT", strategy_state=StrategyState(regime=RegimeType.RANGE), cost_basis_price=91.25)
+        )
+        state_store = _MemoryStateStore()
+        executor = SimpleNamespace(sync_orders=AsyncMock(return_value=True))
+        notifier = SimpleNamespace(notify_rebuild=AsyncMock())
+        service = TradingCycleExecutionService(executor, notifier, planner, state_store)
+
+        await service.execute("SOLUSDT", self._build_decision(rebuild_required=False))
+
+        self.assertIn("SOLUSDT", state_store.data)
+        self.assertEqual(state_store.data["SOLUSDT"].last_execution_status, "skipped_no_rebuild")
+        executor.sync_orders.assert_not_awaited()
+        notifier.notify_rebuild.assert_not_awaited()
+
+    async def test_execution_service_persists_runtime_state_after_confirmed_execution(self):
+        planner = SpotGridPlanner(DEFAULT_STRATEGY_CONFIG)
+        planner.restore_symbol_runtime(
+            SymbolRuntimeState(symbol="SOLUSDT", strategy_state=StrategyState(regime=RegimeType.RANGE), cost_basis_price=91.25)
+        )
+        state_store = _MemoryStateStore()
+        executor = SimpleNamespace(sync_orders=AsyncMock(return_value=True))
+        notifier = SimpleNamespace(notify_rebuild=AsyncMock())
+        service = TradingCycleExecutionService(executor, notifier, planner, state_store)
+
+        await service.execute("SOLUSDT", self._build_decision(rebuild_required=True))
+
+        self.assertIn("SOLUSDT", state_store.data)
+        self.assertEqual(state_store.data["SOLUSDT"].last_execution_status, "executed")
+        self.assertIsNotNone(state_store.data["SOLUSDT"].last_successful_execution_at)
+        executor.sync_orders.assert_awaited_once()
+        notifier.notify_rebuild.assert_awaited_once()
+
+    async def test_execution_service_does_not_persist_runtime_state_when_execution_not_confirmed(self):
+        planner = SpotGridPlanner(DEFAULT_STRATEGY_CONFIG)
+        planner.restore_symbol_runtime(
+            SymbolRuntimeState(symbol="SOLUSDT", strategy_state=StrategyState(regime=RegimeType.RANGE), cost_basis_price=91.25)
+        )
+        state_store = _MemoryStateStore()
+        executor = SimpleNamespace(sync_orders=AsyncMock(return_value=False))
+        notifier = SimpleNamespace(notify_rebuild=AsyncMock())
+        service = TradingCycleExecutionService(executor, notifier, planner, state_store)
+
+        await service.execute("SOLUSDT", self._build_decision(rebuild_required=True))
+
+        self.assertNotIn("SOLUSDT", state_store.data)
+        executor.sync_orders.assert_awaited_once()
+        notifier.notify_rebuild.assert_not_awaited()
+
+    async def test_runtime_state_new_diagnostic_fields_survive_memory_store_round_trip(self):
+        state_store = _MemoryStateStore()
+        state = SymbolRuntimeState(
+            symbol="SOLUSDT",
+            strategy_state=StrategyState(regime=RegimeType.RANGE),
+            state_version=2,
+            last_cycle_started_at=datetime.now(timezone.utc),
+            last_cycle_completed_at=datetime.now(timezone.utc),
+            last_successful_execution_at=datetime.now(timezone.utc),
+            last_execution_status="executed",
+            last_known_base_balance=1.25,
+            last_known_quote_balance=900.0,
+            last_known_reserved_quote=25.0,
+            last_known_mark_price=101.5,
+        )
+
+        await state_store.save_symbol_state(state)
+        restored = await state_store.load_symbol_state("SOLUSDT")
+
+        self.assertIsNotNone(restored)
+        self.assertEqual(restored.state_version, 2)
+        self.assertEqual(restored.last_execution_status, "executed")
+        self.assertEqual(restored.last_known_base_balance, 1.25)
+        self.assertEqual(restored.last_known_quote_balance, 900.0)
+        self.assertEqual(restored.last_known_reserved_quote, 25.0)
+        self.assertEqual(restored.last_known_mark_price, 101.5)
 
     async def test_analysis_logs_infrastructure_failures_as_critical(self):
         planner = SpotGridPlanner(DEFAULT_STRATEGY_CONFIG)
