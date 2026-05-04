@@ -1,11 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
-import logging
-import time
 from typing import Any
-
-logger = logging.getLogger(__name__)
 
 
 def to_decimal(value: Any) -> Decimal | None:
@@ -64,33 +60,3 @@ def calculate_cost_basis_from_executions(executions: list[dict[str, Any]], base_
     if running_cost <= 0:
         return None
     return float(running_cost / running_qty)
-
-
-class CostBasisResolver:
-    """Resolve and briefly cache spot cost basis from venue executions."""
-
-    def __init__(self, fetch_executions) -> None:
-        """Store a venue execution fetch callback and initialize the cache."""
-        self._fetch_executions = fetch_executions
-        self._cost_basis_cache: dict[str, tuple[float | None, float]] = {}
-
-    def resolve(self, symbol: str, base_balance: float, ttl_seconds: int = 30) -> float | None:
-        """Derive spot cost basis from recent executions and cache it briefly."""
-        if base_balance <= 0:
-            self._cost_basis_cache.pop(symbol.upper(), None)
-            return None
-        cache_key = symbol.upper()
-        now = time.time()
-        cached = self._cost_basis_cache.get(cache_key)
-        if cached and now - cached[1] < ttl_seconds:
-            return cached[0]
-
-        try:
-            executions = self._fetch_executions(cache_key)
-            cost_basis = calculate_cost_basis_from_executions(executions, base_balance)
-        except Exception as exc:
-            logger.warning("bybit_spot_cost_basis_fetch_failed symbol=%s error=%s", cache_key, exc)
-            cost_basis = None
-
-        self._cost_basis_cache[cache_key] = (cost_basis, now)
-        return cost_basis

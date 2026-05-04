@@ -136,18 +136,22 @@ class AsyncBybitTransport:
             "Content-Type": "application/json",
         }
 
-    def _request_parts(self, method: str, payload: dict[str, Any]) -> tuple[dict[str, str], dict[str, Any] | None, str | None]:
+    def _request_parts(self, method: str, payload: dict[str, Any]) -> tuple[dict[str, str], Any, str | None]:
         if not self.api_key or not self.api_secret:
             if method.upper() == "GET":
                 return {}, payload, None
             raise BybitTransportError("BYBIT_API_KEY or BYBIT_API_SECRET is not configured")
 
         timestamp_ms = str(int(time.time() * 1000))
+        
         if method.upper() == "GET":
-            query = "&".join(f"{key}={payload[key]}" for key in sorted(payload))
+            # For GET requests, parameters must be sorted and joined for a stable signature
+            sorted_items = sorted(payload.items())
+            query = "&".join(f"{k}={v}" for k, v in sorted_items)
             signature_payload = f"{timestamp_ms}{self.api_key}{self.recv_window}{query}"
             signature = hmac.new(self.api_secret.encode(), signature_payload.encode(), hashlib.sha256).hexdigest()
-            return self._signed_headers(signature, timestamp_ms), payload, None
+            # Return query string instead of dict to ensure order is preserved by requests
+            return self._signed_headers(signature, timestamp_ms), query, None
 
         body = json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
         signature_payload = f"{timestamp_ms}{self.api_key}{self.recv_window}{body}"
@@ -189,14 +193,24 @@ class AsyncBybitTransport:
         method: str,
         url: str,
         headers: dict[str, str],
-        params: dict[str, Any] | None,
+        params: Any,
         body: str | None,
     ) -> dict[str, Any]:
         if method.upper() == "GET":
-            response = requests.get(url, params=params, headers=headers, timeout=self.timeout_seconds)
+            if isinstance(params, str) and params:
+                url = f"{url}?{params}"
+                response = requests.get(url, headers=headers, timeout=self.timeout_seconds)
+            else:
+                response = requests.get(url, params=params, headers=headers, timeout=self.timeout_seconds)
         else:
             response = requests.post(url, data=body, headers=headers, timeout=self.timeout_seconds)
-        response.raise_for_status()
+        
+        try:
+            response.raise_for_status()
+        except requests.HTTPError as e:
+            logger.error("Bybit HTTP error: %s, Response: %s", e, response.text)
+            raise
+            
         return response.json()
 
 

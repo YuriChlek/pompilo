@@ -9,7 +9,7 @@ BEGIN
     END IF;
 END$$;
 
-CREATE TABLE IF NOT EXISTS _candles_trading_data.ethusdt_p_candles_d1 (
+CREATE TABLE IF NOT EXISTS _candles_trading_data.ethusdt_1d (
     open_time TIMESTAMP NOT NULL,
     close_time TIMESTAMP NOT NULL,
     symbol TEXT NOT NULL,
@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS _candles_trading_data.ethusdt_p_candles_d1 (
     candle_id TEXT NOT NULL UNIQUE
 );
 
-CREATE TABLE IF NOT EXISTS _candles_trading_data.suiusdt_p_candles_d1 (
+CREATE TABLE IF NOT EXISTS _candles_trading_data.suiusdt_1d (
     open_time TIMESTAMP NOT NULL,
     close_time TIMESTAMP NOT NULL,
     symbol TEXT NOT NULL,
@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS _candles_trading_data.suiusdt_p_candles_d1 (
     candle_id TEXT NOT NULL UNIQUE
 );
 
-CREATE TABLE IF NOT EXISTS _candles_trading_data.taousdt_p_candles_d1 (
+CREATE TABLE IF NOT EXISTS _candles_trading_data.taousdt_1d (
     open_time TIMESTAMP NOT NULL,
     close_time TIMESTAMP NOT NULL,
     symbol TEXT NOT NULL,
@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS _candles_trading_data.taousdt_p_candles_d1 (
     candle_id TEXT NOT NULL UNIQUE
 );
 
-CREATE TABLE IF NOT EXISTS _candles_trading_data.solusdt_p_candles_d1 (
+CREATE TABLE IF NOT EXISTS _candles_trading_data.solusdt_1d (
     open_time TIMESTAMP NOT NULL,
     close_time TIMESTAMP NOT NULL,
     symbol TEXT NOT NULL,
@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS _candles_trading_data.solusdt_p_candles_d1 (
     candle_id TEXT NOT NULL UNIQUE
 );
 
-CREATE TABLE IF NOT EXISTS _candles_trading_data.btcusdt_p_candles_d1 (
+CREATE TABLE IF NOT EXISTS _candles_trading_data.btcusdt_1d (
     open_time TIMESTAMP NOT NULL,
     close_time TIMESTAMP NOT NULL,
     symbol TEXT NOT NULL,
@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS _candles_trading_data.btcusdt_p_candles_d1 (
     candle_id TEXT NOT NULL UNIQUE
 );
 
-CREATE TABLE IF NOT EXISTS _candles_trading_data.xrpusdt_p_candles_d1 (
+CREATE TABLE IF NOT EXISTS _candles_trading_data.xrpusdt_1d (
     open_time TIMESTAMP NOT NULL,
     close_time TIMESTAMP NOT NULL,
     symbol TEXT NOT NULL,
@@ -87,7 +87,7 @@ CREATE TABLE IF NOT EXISTS _candles_trading_data.xrpusdt_p_candles_d1 (
     candle_id TEXT NOT NULL UNIQUE
 );
 
-CREATE TABLE IF NOT EXISTS _candles_trading_data.ltcusdt_p_candles_d1 (
+CREATE TABLE IF NOT EXISTS _candles_trading_data.ltcusdt_1d (
     open_time TIMESTAMP NOT NULL,
     close_time TIMESTAMP NOT NULL,
     symbol TEXT NOT NULL,

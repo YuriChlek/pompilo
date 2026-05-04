@@ -137,7 +137,7 @@
 
 Очікувана таблиця для кожного символа:
 
-- `_candles_trading_data.<symbol_lowercase>_p_candles`
+- `_candles_trading_data.<symbol_lowercase>_1h`
 
 ### Canonical Multi-Symbol Frame
 

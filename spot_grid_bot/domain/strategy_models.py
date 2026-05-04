@@ -19,4 +19,5 @@ class StrategyDecision:
     risk: RiskDecision
     rebuild_required: bool
     target_order_diff_count: int = 0
+    kill_switch_count: int = 0
     reasons: list[str] = field(default_factory=list)

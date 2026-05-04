@@ -4,10 +4,10 @@ import os
 from dataclasses import dataclass
 from functools import lru_cache
 
-from dotenv import load_dotenv
+from utils.env import load_project_env
 
 
-load_dotenv()
+load_project_env()
 
 
 DEFAULT_TRADING_SYMBOLS: tuple[str, ...] = (

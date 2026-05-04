@@ -79,7 +79,7 @@ def normalize_symbol(symbol: str) -> str:
 
 
 def resolve_candles_table(symbol: str) -> str:
-    return f"_candles_trading_data.{normalize_symbol(symbol)}_p_candles"
+    return f"_candles_trading_data.{normalize_symbol(symbol)}_1h"
 
 
 def build_db_connection_url() -> str:
@@ -99,7 +99,7 @@ def _validate_limit(limit: int | None) -> None:
 
 
 def _selected_columns_for_symbol(inspector, normalized_symbol: str) -> tuple[str, list[str]]:
-    table_name = f"{normalized_symbol}_p_candles"
+    table_name = f"{normalized_symbol}_1h"
     table = resolve_candles_table(normalized_symbol)
     table_columns = [
         column["name"]

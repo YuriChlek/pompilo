@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
+from typing import TYPE_CHECKING
+
+from domain.inventory_models import InventorySnapshot
+
+if TYPE_CHECKING:
+    from domain.order_models import LiveOrder
 
 
 class RegimeType(str, Enum):
@@ -40,6 +45,7 @@ class IndicatorSnapshot:
     range_width: float
     price_vs_ema50: float
     directional_move: float
+    directional_sign: float
     abnormal_candle: bool
     atr_spike: bool
 
@@ -69,6 +75,7 @@ class MarketContext:
 
     symbol: str
     candles: list[Candle]
-    inventory: "InventorySnapshot"
-    live_orders: list["LiveOrder"]
+    inventory: InventorySnapshot
+    live_orders: list[LiveOrder]
     venue_constraints: VenueConstraints | None = None
+    higher_timeframe_candles: list[Candle] | None = None

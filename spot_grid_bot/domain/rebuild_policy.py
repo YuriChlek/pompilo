@@ -12,11 +12,13 @@ def is_protective_regime(regime: RegimeType) -> bool:
 def should_rebuild(
     state: StrategyState,
     price: float,
+    atr14: float,
     live_orders: list[LiveOrder],
     target_orders: list[TargetOrder],
     risk: RiskDecision,
     diff_count: int,
     rebuild_price_deviation_pct: float,
+    diff_count_threshold: int,
 ) -> tuple[bool, list[str]]:
     """Decide whether the current target set requires a live rebuild."""
     reasons: list[str] = []
@@ -38,11 +40,16 @@ def should_rebuild(
     if state.last_rebuild_price is None or state.last_rebuild_price <= 0:
         reasons.append("missing_last_rebuild_price")
         return True, reasons
-    if diff_count > 0:
+
+    effective_diff_threshold = max(diff_count_threshold, 1)
+    if diff_count > effective_diff_threshold:
         reasons.append(f"target_diff={diff_count}")
         return True, reasons
+
     deviation = abs(price - state.last_rebuild_price) / state.last_rebuild_price
-    if deviation >= rebuild_price_deviation_pct:
+    atr_threshold = (atr14 / price) * 0.20 if price > 0 and atr14 > 0 else 0.0
+    effective_threshold = max(rebuild_price_deviation_pct, atr_threshold)
+    if deviation >= effective_threshold:
         reasons.append("price_deviation")
         return True, reasons
     return False, reasons

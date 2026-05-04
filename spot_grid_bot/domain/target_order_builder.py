@@ -123,6 +123,7 @@ def build_target_orders(
         venue_constraints=venue_constraints,
     )
     target_orders: list[TargetOrder] = []
+    blocked_no_loss_sell_count = 0
     block_uptrend_entries = regime == RegimeType.UPTREND and is_uptrend_entry_extension_blocked(
         price,
         indicators.ema20,
@@ -170,6 +171,7 @@ def build_target_orders(
                 tick_size=tick_size,
             )
         if level.side == OrderSide.SELL and not _is_sell_order_allowed(inventory, target_price, config):
+            blocked_no_loss_sell_count += 1
             continue
         target_orders.append(
             TargetOrder(
@@ -181,6 +183,15 @@ def build_target_orders(
                 reduce_only=level.side == OrderSide.SELL,
                 tag=level.tag,
             )
+        )
+    if blocked_no_loss_sell_count > 0:
+        logger.warning(
+            "planner_no_loss_sell_blocked symbol=%s blocked_levels=%s min_exit_price=%s mark_price=%s cost_basis=%s",
+            symbol.upper(),
+            blocked_no_loss_sell_count,
+            minimum_exit_price(inventory, config),
+            inventory.mark_price,
+            inventory.cost_basis_price,
         )
     viable_target_orders = apply_venue_viability(target_orders, venue_constraints)
     if venue_constraints is not None and len(viable_target_orders) != len(target_orders):

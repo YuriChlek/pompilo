@@ -39,7 +39,7 @@ class BacktestDataLoader:
         date_to: Optional[datetime] = None,
     ) -> pd.DataFrame:
         """Load historical candles for a symbol within the requested date range."""
-        table_name = f"_candles_trading_data.{symbol.lower()}_p_candles"
+        table_name = f"_candles_trading_data.{symbol.lower()}_1h"
         conditions = ["close_time < (NOW() AT TIME ZONE 'UTC')"]
         params = {}
 

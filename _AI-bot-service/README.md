@@ -39,7 +39,7 @@ python3 -m venv .venv
 Для кожного символа очікується таблиця:
 
 ```text
-_candles_trading_data.<symbol_lowercase>_p_candles
+_candles_trading_data.<symbol_lowercase>_1h
 ```
 
 Train universe береться з `utils/config.py -> TRADING_SYMBOLS`.

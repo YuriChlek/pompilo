@@ -465,7 +465,7 @@ def get_of_data(symbol) -> MarketAnalysis:
     data_fetcher = DataFetcher(DB_USER, DB_PASS, DB_HOST, DB_PORT, DB_NAME)
 
     # Отримання даних
-    table_name = f"_candles_trading_data.{str(symbol).lower()}_p_candles_test_data"
+    table_name = f"_candles_trading_data.{str(symbol).lower()}_1h_test_data"
     data = data_fetcher.fetch_candle_data(table_name, limit=400)
 
     # Генерація сигналу

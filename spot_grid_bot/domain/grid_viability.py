@@ -29,9 +29,22 @@ def apply_venue_viability(
         if existing is None:
             merged[key] = replace(order, price=normalized_price)
             continue
-        merged[key] = replace(existing, size=round(existing.size + order.size, 8))
+        merged[key] = replace(
+            existing,
+            size=round(existing.size + order.size, 8),
+            tag=_merge_order_tags(existing.tag, order.tag),
+        )
 
     return sorted(
         merged.values(),
         key=lambda order: (order.side.value, order.price, order.client_order_id),
     )
+
+
+def _merge_order_tags(existing_tag: str, new_tag: str) -> str:
+    """Preserve both source tags when normalized levels collapse into one order."""
+    if not existing_tag:
+        return new_tag
+    if not new_tag or new_tag == existing_tag:
+        return existing_tag
+    return f"{existing_tag}+{new_tag}"

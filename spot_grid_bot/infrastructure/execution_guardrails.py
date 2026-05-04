@@ -18,9 +18,9 @@ def apply_execution_guardrails(
 ) -> list[TargetOrder]:
     """Filter target orders through venue-safe execution guardrails for one symbol."""
     filtered_orders = [order for order in target_orders if order.symbol.upper() == symbol.upper() and order.size > 0]
+    filtered_orders = filter_no_loss_sells(filtered_orders, inventory, strategy_config)
     filtered_orders = filter_marketable_orders(filtered_orders, inventory, strategy_config)
     filtered_orders = dedupe_close_levels(filtered_orders, strategy_config.execution.min_level_distance_bps)
-    filtered_orders = filter_no_loss_sells(filtered_orders, inventory, strategy_config)
 
     current_keys = {order_key(order.side, order.price, order.size) for order in current_orders}
     allowed_new_orders = strategy_config.execution.max_new_orders_per_cycle
@@ -91,14 +91,38 @@ def filter_no_loss_sells(
     """Remove sell targets that violate the current no-loss exit floor."""
     if inventory.base_balance <= 0:
         return [order for order in target_orders if order.side != OrderSide.SELL]
+
     min_allowed_price = minimum_exit_price(inventory, strategy_config)
     if min_allowed_price is None:
+        blocked_sell_count = sum(1 for order in target_orders if order.side == OrderSide.SELL)
+        if blocked_sell_count > 0:
+            logger.warning(
+                "no_loss_sell_blocked_no_cost_basis symbol=%s base_balance=%.6f mark_price=%s blocked_levels=%s",
+                next((order.symbol for order in target_orders if order.side == OrderSide.SELL), "UNKNOWN"),
+                inventory.base_balance,
+                inventory.mark_price,
+                blocked_sell_count,
+            )
         return [order for order in target_orders if order.side != OrderSide.SELL]
-    return [
+
+    filtered_orders = [
         order
         for order in target_orders
         if order.side != OrderSide.SELL or order.price >= min_allowed_price
     ]
+    blocked_sell_count = sum(1 for order in target_orders if order.side == OrderSide.SELL) - sum(
+        1 for order in filtered_orders if order.side == OrderSide.SELL
+    )
+    if blocked_sell_count > 0:
+        logger.info(
+            "no_loss_sell_blocked symbol=%s blocked_levels=%s min_exit_price=%s mark_price=%s cost_basis=%s",
+            next((order.symbol for order in target_orders if order.side == OrderSide.SELL), "UNKNOWN"),
+            blocked_sell_count,
+            min_allowed_price,
+            inventory.mark_price,
+            inventory.cost_basis_price,
+        )
+    return filtered_orders
 
 
 def filter_marketable_orders(

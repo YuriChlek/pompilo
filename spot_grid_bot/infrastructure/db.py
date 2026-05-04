@@ -19,7 +19,14 @@ _CONNECTION_SETTINGS = dict(
 )
 
 CANDLES_DATA_SCHEMA = "_candles_trading_data"
-DEFAULT_CANDLE_TABLE_SUFFIX = "_p_candles"
+DEFAULT_CANDLE_TIMEFRAME = "1h"
+HIGHER_TIMEFRAME = "4h"
+DEFAULT_CANDLE_TABLE_SUFFIX_1H = "_1h"
+DEFAULT_CANDLE_TABLE_SUFFIX_4H = "_4h"
+CANDLE_TABLE_SUFFIX_BY_TIMEFRAME = {
+    DEFAULT_CANDLE_TIMEFRAME: DEFAULT_CANDLE_TABLE_SUFFIX_1H,
+    HIGHER_TIMEFRAME: DEFAULT_CANDLE_TABLE_SUFFIX_4H,
+}
 
 CREATE_CANDLES_DATA_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS {schema}.{table_name} (
@@ -77,7 +84,7 @@ async def ensure_candle_schema(
 async def ensure_candle_tables(
     symbols: Iterable[str],
     *,
-    suffixes: Sequence[str] = (DEFAULT_CANDLE_TABLE_SUFFIX,),
+    suffixes: Sequence[str] = (DEFAULT_CANDLE_TABLE_SUFFIX_1H, DEFAULT_CANDLE_TABLE_SUFFIX_4H),
     schema: str = CANDLES_DATA_SCHEMA,
     conn: asyncpg.Connection | None = None,
 ) -> None:
@@ -91,7 +98,7 @@ async def ensure_candle_tables(
             if not normalized_symbol:
                 continue
             for suffix in suffixes:
-                table_name = f"{normalized_symbol.lower()}{suffix}"
+                table_name = resolve_candle_table_name(normalized_symbol, table_suffix=suffix)
                 await conn.execute(CREATE_CANDLES_DATA_TABLE_SQL.format(schema=schema, table_name=table_name))
                 logger.info("candle_table_ensured schema=%s table=%s", schema, table_name)
     finally:
@@ -109,7 +116,7 @@ class DatabaseCandleRepository:
 
     async def fetch_recent_candles(self, symbol: str, limit: int) -> list[Candle]:
         """Fetch the most recent candles for one symbol and return them oldest to newest."""
-        table_name = f"{symbol.lower()}{self.table_suffix}"
+        table_name = resolve_candle_table_name(symbol, table_suffix=self.table_suffix)
         conn = await create_connection()
         try:
             rows: Sequence[asyncpg.Record] = await conn.fetch(
@@ -144,3 +151,23 @@ class DatabaseCandleRepository:
         if not candles:
             raise ValueError(f"No candles found in {self.schema}.{table_name}")
         return candles
+
+
+def resolve_candle_table_suffix(timeframe: str) -> str:
+    """Return the dedicated candle-table suffix for one supported timeframe."""
+    normalized_timeframe = str(timeframe).strip().lower()
+    try:
+        return CANDLE_TABLE_SUFFIX_BY_TIMEFRAME[normalized_timeframe]
+    except KeyError as exc:
+        raise ValueError(f"Unsupported candle timeframe: {timeframe!r}") from exc
+
+
+def resolve_candle_table_name(symbol: str, *, timeframe: str | None = None, table_suffix: str | None = None) -> str:
+    """Return the canonical candle-table name for one symbol and supported timeframe."""
+    if (timeframe is None) == (table_suffix is None):
+        raise ValueError("Provide exactly one of timeframe or table_suffix")
+    normalized_symbol = str(symbol).strip().lower()
+    if not normalized_symbol:
+        raise ValueError("Symbol must not be empty")
+    suffix = table_suffix or resolve_candle_table_suffix(str(timeframe))
+    return f"{normalized_symbol}{suffix}"

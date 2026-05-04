@@ -6,8 +6,8 @@ from utils.db_actions import create_tables
 from utils.logging import setup_logging
 
 DEFAULT_SUFFIXES: Sequence[str] = (
-    '_p_candles',
-    '_p_candles_h4',
+    '_1h',
+    '_4h',
 )
 
 

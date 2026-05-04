@@ -1,7 +1,9 @@
 import unittest
 from unittest.mock import Mock
 
-from domain.models import Candle, InventorySnapshot, LiveOrder, MarketContext, OrderSide, RegimeSnapshot, RegimeType
+from domain.order_diff import target_orders_diff_count
+from domain.models import Candle, DeRiskMode, InventorySnapshot, LiveOrder, MarketContext, OrderSide, RegimeSnapshot, RegimeType, RiskDecision, StrategyState, TargetOrder
+from domain.rebuild_policy import should_rebuild
 from domain.spot_grid_planner import SpotGridPlanner
 from domain.strategy_config import DEFAULT_STRATEGY_CONFIG
 
@@ -21,6 +23,111 @@ def _build_candles() -> list[Candle]:
 
 
 class Phase1RebuildTests(unittest.TestCase):
+    def test_should_rebuild_ignores_single_diff_when_below_threshold(self):
+        risk = RiskDecision(
+            can_trade=True,
+            pause_entries=False,
+            force_risk_off=False,
+            cancel_entries=False,
+            allow_exit_only=False,
+            de_risk_mode=DeRiskMode.NONE,
+        )
+        rebuild_required, reasons = should_rebuild(
+            StrategyState(regime=RegimeType.RANGE, bars_in_state=3, last_rebuild_price=100.0),
+            price=100.1,
+            atr14=0.5,
+            live_orders=[LiveOrder("1", "SOLUSDT", OrderSide.BUY, 99.0, 1.0, 0.0, "New", "live-1")],
+            target_orders=[TargetOrder("target-1", "SOLUSDT", OrderSide.BUY, 99.0, 1.0)],
+            risk=risk,
+            diff_count=1,
+            rebuild_price_deviation_pct=DEFAULT_STRATEGY_CONFIG.execution.rebuild_price_deviation_pct,
+            diff_count_threshold=DEFAULT_STRATEGY_CONFIG.execution.rebuild_diff_threshold,
+        )
+
+        self.assertFalse(rebuild_required)
+        self.assertEqual(reasons, [])
+
+    def test_should_rebuild_uses_atr_adaptive_threshold_before_price_deviation(self):
+        risk = RiskDecision(
+            can_trade=True,
+            pause_entries=False,
+            force_risk_off=False,
+            cancel_entries=False,
+            allow_exit_only=False,
+            de_risk_mode=DeRiskMode.NONE,
+        )
+        rebuild_required, reasons = should_rebuild(
+            StrategyState(regime=RegimeType.RANGE, bars_in_state=3, last_rebuild_price=100.0),
+            price=100.5,
+            atr14=10.0,
+            live_orders=[LiveOrder("1", "SOLUSDT", OrderSide.BUY, 99.0, 1.0, 0.0, "New", "live-1")],
+            target_orders=[TargetOrder("target-1", "SOLUSDT", OrderSide.BUY, 99.0, 1.0)],
+            risk=risk,
+            diff_count=0,
+            rebuild_price_deviation_pct=DEFAULT_STRATEGY_CONFIG.execution.rebuild_price_deviation_pct,
+            diff_count_threshold=DEFAULT_STRATEGY_CONFIG.execution.rebuild_diff_threshold,
+        )
+
+        self.assertFalse(rebuild_required)
+        self.assertEqual(reasons, [])
+
+    def test_should_rebuild_when_diff_exceeds_threshold(self):
+        risk = RiskDecision(
+            can_trade=True,
+            pause_entries=False,
+            force_risk_off=False,
+            cancel_entries=False,
+            allow_exit_only=False,
+            de_risk_mode=DeRiskMode.NONE,
+        )
+        rebuild_required, reasons = should_rebuild(
+            StrategyState(regime=RegimeType.RANGE, bars_in_state=3, last_rebuild_price=100.0),
+            price=100.1,
+            atr14=0.5,
+            live_orders=[LiveOrder("1", "SOLUSDT", OrderSide.BUY, 99.0, 1.0, 0.0, "New", "live-1")],
+            target_orders=[TargetOrder("target-1", "SOLUSDT", OrderSide.BUY, 99.0, 1.0)],
+            risk=risk,
+            diff_count=3,
+            rebuild_price_deviation_pct=DEFAULT_STRATEGY_CONFIG.execution.rebuild_price_deviation_pct,
+            diff_count_threshold=DEFAULT_STRATEGY_CONFIG.execution.rebuild_diff_threshold,
+        )
+
+        self.assertTrue(rebuild_required)
+        self.assertIn("target_diff=3", reasons)
+
+    def test_order_diff_treats_one_tick_price_change_as_match_for_cheap_symbol(self):
+        live_orders = [
+            LiveOrder(
+                order_id="1",
+                symbol="DOGEUSDT",
+                side=OrderSide.BUY,
+                price=0.1800,
+                size=100.0,
+                filled_size=0.0,
+                status="New",
+                client_order_id="doge-live-buy",
+            )
+        ]
+        target_orders = [
+            TargetOrder(
+                client_order_id="doge-target-buy",
+                symbol="DOGEUSDT",
+                side=OrderSide.BUY,
+                price=0.1801,
+                size=100.0,
+            )
+        ]
+
+        diff_count = target_orders_diff_count(
+            live_orders,
+            target_orders,
+            price_diff_bps=DEFAULT_STRATEGY_CONFIG.execution.target_price_diff_bps,
+            size_diff_ratio=DEFAULT_STRATEGY_CONFIG.execution.target_size_diff_ratio,
+            tick_size=0.0001,
+        )
+
+        self.assertEqual(diff_count, 0)
+
     def test_second_pass_skips_rebuild_when_live_orders_match_target(self):
         candles = _build_candles()
         planner = SpotGridPlanner(DEFAULT_STRATEGY_CONFIG)

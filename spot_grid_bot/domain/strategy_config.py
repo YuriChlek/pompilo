@@ -6,9 +6,27 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class MarketDataConfig:
     candle_interval: str = "1h"
+    higher_timeframe_interval: str = "4h"
     candles_lookback: int = 2400
     candle_schema: str = "_candles_trading_data"
-    candle_table_suffix: str = "_p_candles"
+    candle_table_suffix_1h: str = "_1h"
+    candle_table_suffix_4h: str = "_4h"
+
+    def table_suffix_for(self, timeframe: str) -> str:
+        normalized_timeframe = str(timeframe).strip().lower()
+        if normalized_timeframe == self.candle_interval:
+            return self.candle_table_suffix_1h
+        if normalized_timeframe == self.higher_timeframe_interval:
+            return self.candle_table_suffix_4h
+        raise ValueError(f"Unsupported candle timeframe: {timeframe!r}")
+
+    def lookback_for(self, timeframe: str) -> int:
+        normalized_timeframe = str(timeframe).strip().lower()
+        if normalized_timeframe == self.candle_interval:
+            return self.candles_lookback
+        if normalized_timeframe == self.higher_timeframe_interval:
+            return max(self.candles_lookback // 4, 1)
+        raise ValueError(f"Unsupported candle timeframe: {timeframe!r}")
 
 
 @dataclass(frozen=True)
@@ -107,9 +125,12 @@ class ExecutionConfig:
     min_order_size: float = 0.0001
     min_order_notional_usdt: float = 2.0
     maker_fee_bps: float = 10.0
+    simulated_slippage_bps: float = 2.0
+    apply_maker_fee_in_backtest: bool = True
     rebuild_price_deviation_pct: float = 0.003
     target_price_diff_bps: float = 5.0
     target_size_diff_ratio: float = 0.05
+    rebuild_diff_threshold: int = 2
     max_new_orders_per_cycle: int = 3
     max_cancel_replace_per_cycle: int = 6
     max_total_open_orders: int = 8

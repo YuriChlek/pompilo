@@ -4,6 +4,7 @@ from dataclasses import dataclass, replace
 
 from domain.grid_builder import round_to_step
 from domain.market_models import IndicatorSnapshot, RegimeType
+from domain.order_models import OrderSide
 
 
 @dataclass(slots=True, frozen=True)
@@ -123,7 +124,7 @@ def limit_buy_levels(grid, max_buy_levels: int):
     kept_buy_levels = 0
     limited_levels = []
     for level in grid.levels:
-        if level.side.value == "BUY":
+        if level.side == OrderSide.BUY:
             kept_buy_levels += 1
             if kept_buy_levels > max_buy_levels:
                 continue

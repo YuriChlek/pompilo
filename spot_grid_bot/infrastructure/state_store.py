@@ -2,18 +2,30 @@ from __future__ import annotations
 
 import json
 
+import asyncpg
+
 from domain.models import RegimeType, RiskRuntimeState, StrategyState, SymbolRuntimeState
-from infrastructure.db import create_connection
+from infrastructure.db import get_db_pool
 from utils.config import STATE_SCHEMA, STATE_TABLE
 
 
 class PostgresStateStore:
     """PostgreSQL-backed persistence adapter for per-symbol runtime state."""
 
+    def __init__(self) -> None:
+        """Initialize the lazy database connection pool holder."""
+        self._pool: asyncpg.Pool | None = None
+
+    async def _get_pool(self) -> asyncpg.Pool:
+        """Return the shared asyncpg pool, creating it on first use."""
+        if self._pool is None:
+            self._pool = await get_db_pool()
+        return self._pool
+
     async def initialize(self) -> None:
         """Create the runtime state schema and table when they do not exist."""
-        conn = await create_connection()
-        try:
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
             await conn.execute(f"CREATE SCHEMA IF NOT EXISTS {STATE_SCHEMA}")
             await conn.execute(
                 f"""
@@ -27,18 +39,54 @@ class PostgresStateStore:
                     pending_count INTEGER NOT NULL DEFAULT 0,
                     last_rebuild_price DOUBLE PRECISION NULL,
                     kill_switch_count INTEGER NOT NULL DEFAULT 0,
+                    cost_basis_price DOUBLE PRECISION NULL,
                     recent_equity JSONB NOT NULL DEFAULT '[]'::jsonb,
+                    state_version INTEGER NOT NULL DEFAULT 1,
+                    last_cycle_started_at TIMESTAMPTZ NULL,
+                    last_cycle_completed_at TIMESTAMPTZ NULL,
+                    last_successful_execution_at TIMESTAMPTZ NULL,
+                    last_execution_status TEXT NULL,
+                    last_known_base_balance DOUBLE PRECISION NULL,
+                    last_known_quote_balance DOUBLE PRECISION NULL,
+                    last_known_reserved_quote DOUBLE PRECISION NULL,
+                    last_known_mark_price DOUBLE PRECISION NULL,
                     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
                 )
                 """
             )
-        finally:
-            await conn.close()
+            await conn.execute(
+                f"""
+                ALTER TABLE {STATE_SCHEMA}.{STATE_TABLE}
+                ADD COLUMN IF NOT EXISTS cost_basis_price DOUBLE PRECISION NULL
+                """
+            )
+            await conn.execute(
+                f"""
+                ALTER TABLE {STATE_SCHEMA}.{STATE_TABLE}
+                ADD COLUMN IF NOT EXISTS state_version INTEGER NOT NULL DEFAULT 1
+                """
+            )
+            for column_name, column_type in (
+                ("last_cycle_started_at", "TIMESTAMPTZ"),
+                ("last_cycle_completed_at", "TIMESTAMPTZ"),
+                ("last_successful_execution_at", "TIMESTAMPTZ"),
+                ("last_execution_status", "TEXT"),
+                ("last_known_base_balance", "DOUBLE PRECISION"),
+                ("last_known_quote_balance", "DOUBLE PRECISION"),
+                ("last_known_reserved_quote", "DOUBLE PRECISION"),
+                ("last_known_mark_price", "DOUBLE PRECISION"),
+            ):
+                await conn.execute(
+                    f"""
+                    ALTER TABLE {STATE_SCHEMA}.{STATE_TABLE}
+                    ADD COLUMN IF NOT EXISTS {column_name} {column_type} NULL
+                    """
+                )
 
     async def load_symbol_state(self, symbol: str) -> SymbolRuntimeState | None:
         """Load persisted runtime state for one symbol when a row exists."""
-        conn = await create_connection()
-        try:
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
             row = await conn.fetchrow(
                 f"""
                 SELECT
@@ -51,14 +99,22 @@ class PostgresStateStore:
                     pending_count,
                     last_rebuild_price,
                     kill_switch_count,
-                    recent_equity
+                    cost_basis_price,
+                    recent_equity,
+                    state_version,
+                    last_cycle_started_at,
+                    last_cycle_completed_at,
+                    last_successful_execution_at,
+                    last_execution_status,
+                    last_known_base_balance,
+                    last_known_quote_balance,
+                    last_known_reserved_quote,
+                    last_known_mark_price
                 FROM {STATE_SCHEMA}.{STATE_TABLE}
                 WHERE symbol = $1
                 """,
                 symbol.upper(),
             )
-        finally:
-            await conn.close()
 
         if row is None:
             return None
@@ -83,12 +139,22 @@ class PostgresStateStore:
                 kill_switch_count=int(row["kill_switch_count"]),
                 recent_equity=[float(value) for value in recent_equity],
             ),
+            cost_basis_price=float(row["cost_basis_price"]) if row["cost_basis_price"] is not None else None,
+            state_version=int(row["state_version"]) if row["state_version"] is not None else 1,
+            last_cycle_started_at=row["last_cycle_started_at"],
+            last_cycle_completed_at=row["last_cycle_completed_at"],
+            last_successful_execution_at=row["last_successful_execution_at"],
+            last_execution_status=str(row["last_execution_status"]) if row["last_execution_status"] is not None else None,
+            last_known_base_balance=float(row["last_known_base_balance"]) if row["last_known_base_balance"] is not None else None,
+            last_known_quote_balance=float(row["last_known_quote_balance"]) if row["last_known_quote_balance"] is not None else None,
+            last_known_reserved_quote=float(row["last_known_reserved_quote"]) if row["last_known_reserved_quote"] is not None else None,
+            last_known_mark_price=float(row["last_known_mark_price"]) if row["last_known_mark_price"] is not None else None,
         )
 
     async def save_symbol_state(self, state: SymbolRuntimeState) -> None:
         """Insert or update the persisted runtime snapshot for one symbol."""
-        conn = await create_connection()
-        try:
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
             await conn.execute(
                 f"""
                 INSERT INTO {STATE_SCHEMA}.{STATE_TABLE} (
@@ -101,10 +167,20 @@ class PostgresStateStore:
                     pending_count,
                     last_rebuild_price,
                     kill_switch_count,
+                    cost_basis_price,
                     recent_equity,
+                    state_version,
+                    last_cycle_started_at,
+                    last_cycle_completed_at,
+                    last_successful_execution_at,
+                    last_execution_status,
+                    last_known_base_balance,
+                    last_known_quote_balance,
+                    last_known_reserved_quote,
+                    last_known_mark_price,
                     updated_at
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, NOW())
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13, $14, $15, $16, $17, $18, $19, $20, NOW())
                 ON CONFLICT (symbol) DO UPDATE
                 SET
                     regime = EXCLUDED.regime,
@@ -115,7 +191,17 @@ class PostgresStateStore:
                     pending_count = EXCLUDED.pending_count,
                     last_rebuild_price = EXCLUDED.last_rebuild_price,
                     kill_switch_count = EXCLUDED.kill_switch_count,
+                    cost_basis_price = EXCLUDED.cost_basis_price,
                     recent_equity = EXCLUDED.recent_equity,
+                    state_version = EXCLUDED.state_version,
+                    last_cycle_started_at = EXCLUDED.last_cycle_started_at,
+                    last_cycle_completed_at = EXCLUDED.last_cycle_completed_at,
+                    last_successful_execution_at = EXCLUDED.last_successful_execution_at,
+                    last_execution_status = EXCLUDED.last_execution_status,
+                    last_known_base_balance = EXCLUDED.last_known_base_balance,
+                    last_known_quote_balance = EXCLUDED.last_known_quote_balance,
+                    last_known_reserved_quote = EXCLUDED.last_known_reserved_quote,
+                    last_known_mark_price = EXCLUDED.last_known_mark_price,
                     updated_at = NOW()
                 """,
                 state.symbol.upper(),
@@ -127,7 +213,15 @@ class PostgresStateStore:
                 state.strategy_state.pending_count,
                 state.strategy_state.last_rebuild_price,
                 state.risk_state.kill_switch_count,
+                state.cost_basis_price,
                 json.dumps(state.risk_state.recent_equity),
+                state.state_version,
+                state.last_cycle_started_at,
+                state.last_cycle_completed_at,
+                state.last_successful_execution_at,
+                state.last_execution_status,
+                state.last_known_base_balance,
+                state.last_known_quote_balance,
+                state.last_known_reserved_quote,
+                state.last_known_mark_price,
             )
-        finally:
-            await conn.close()
