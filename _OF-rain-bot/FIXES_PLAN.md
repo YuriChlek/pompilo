@@ -19,8 +19,9 @@
 9. [СЕРЙОЗНО — Агрегована tape не використовується у фільтрах](#fix-9)
 10. [НЕЗНАЧНО — Мертвий код у `_is_long_setup`](#fix-10)
 11. [НЕЗНАЧНО — Dead-код risk-констант у config.py](#fix-11)
-12. [СЕРЙОЗНО — Відсутність врахування комісій у Take Profit](#fix-12)
-13. [СЕРЙОЗНО — Занадто вузький Stop Loss для ф'ючерсів](#fix-13)
+12. [СЕРЙОЗНО — `tick_size=0.0` у dry-run позиціях блокує break-even](#fix-12)
+13. [КРИТИЧНО — `wall is None` блокує будь-яке скасування pending-ордеру](#fix-13)
+14. [НЕЗНАЧНО — Подвійний `_transition_to_degraded` у `run_cycle`](#fix-14)
 
 ---
 
@@ -299,14 +300,25 @@ class RiskManager:
 
 ```python
 def _pending_entry_invalidation_reason(self, pending, current_signal, reference_book, now_ms, dry_run):
+    del dry_run
+    if pending.signal.wall is None:  # ← окремий баг: якщо wall=None — ніколи не скасовує (Fix 13)
+        return None
+
     wall_is_active = self.signal_engine.wall_is_active(...)
 
     # ← ПОМИЛКА: скасовує тільки якщо signal змінився І стіна зникла (обидві умови!)
     if current_signal.direction not in {SignalDirection.NONE, pending.signal.direction} and not wall_is_active:
         return "wall_disappeared"
 
+    if current_signal.reason in {"missing_analysis_book", "stale_analysis_book"}:
+        return None
+
+    if reference_book is None:
+        return None
+
     if not wall_is_active:
         return "wall_disappeared"
+
     return None
 ```
 
@@ -320,12 +332,20 @@ def _pending_entry_invalidation_reason(self, pending, current_signal, reference_
 def _pending_entry_invalidation_reason(self, pending, current_signal, reference_book, now_ms, dry_run) -> str | None:
     del dry_run
 
+    # Не скасовуємо при стейл/відсутній книзі — wall_is_active поверне False через stale-check,
+    # що призведе до хибного "wall_disappeared" при тимчасово відсутньому feed'і
+    if current_signal.reason in {"missing_analysis_book", "stale_analysis_book"}:
+        return None
+
     # 1. Протилежний сигнал — скасовуємо НЕЗАЛЕЖНО від стану стіни
     if (current_signal.direction != SignalDirection.NONE
             and current_signal.direction != pending.signal.direction):
         return "signal_reversed"
 
     if pending.signal.wall is None:
+        return None
+
+    if reference_book is None:
         return None
 
     wall_is_active = self.signal_engine.wall_is_active(
@@ -392,8 +412,10 @@ async def _handle_pending_entry(self, runtime_state, now_ms, reference_book):
 ### Діагноз
 
 ```python
-async def _strategy_loop(self):
+async def _strategy_loop(self) -> None:
     while True:
+        self._log_runtime_heartbeat()
+        self._log_runtime_state_change()
         await self.run_cycle()
         await asyncio.sleep(1)  # 1 секунда між ітераціями
 ```
@@ -412,10 +434,10 @@ async def _strategy_loop(self):
 ORDERFLOW_STRATEGY_LOOP_MS = int(os.getenv("ORDERFLOW_STRATEGY_LOOP_MS", "200"))
 ```
 
-**Крок 2.** Зменшити sleep:
+**Крок 2.** Замінити `asyncio.sleep(1)` на параметризований інтервал (logging-виклики вже є):
 
 ```python
-async def _strategy_loop(self):
+async def _strategy_loop(self) -> None:
     while True:
         self._log_runtime_heartbeat()
         self._log_runtime_state_change()
@@ -626,105 +648,156 @@ ORDERFLOW_MAX_CONSECUTIVE_LOSSES = int(os.getenv("ORDERFLOW_MAX_CONSECUTIVE_LOSS
 ---
 
 <a name="fix-12"></a>
-## Fix 12 — Відсутність врахування комісій у Take Profit
+## Fix 12 — `tick_size=0.0` у dry-run позиціях блокує break-even
 
 **Пріоритет:** СЕРЙОЗНИЙ  
-**Файли:** `orderflow/strategy/scalp_signal_engine.py`, `utils/config.py`
+**Файл:** `orderflow/runtime/orchestrator.py:248, 358`
 
 ### Діагноз
 
-Бот розраховує Take Profit виходячи суто з математичного співвідношення R (ризику). Наприклад, при ризику 3 тіки (~0.15%) і R_MULTIPLE=1.5, тейк-профіт становить ~0.22%. 
+У двох dry-run шляхах створення позиції `tick_size` захардкоджений у `0.0`:
 
-Сумарна комісія Bybit (Maker 0.02% + Taker 0.055% = 0.075%) разом зі спредом та можливим слідж-ефектом може "з'їдати" від 30% до 100% очікуваного прибутку на коротких угодах. Угода, яка математично закрилася в плюс, по факту може принести збиток на баланс.
+```python
+# orchestrator.py:243 — immediate fill
+runtime_state.position = PositionState(
+    ...
+    tick_size=0.0,  # ← завжди 0 в dry-run
+    ...
+)
+
+# orchestrator.py:353 — pending fill
+runtime_state.position = PositionState(
+    ...
+    tick_size=0.0,  # ← завжди 0 в dry-run
+    ...
+)
+```
+
+Метод `_break_even_stop_price` одразу повертає `None` якщо `tick_size <= 0`:
+
+```python
+@staticmethod
+def _break_even_stop_price(side, entry_price, current_price, tick_size):
+    if tick_size <= 0:
+        return None  # ← break-even ніколи не спрацює в dry-run
+```
+
+**Наслідок:** Break-even логіка неможливо протестувати в dry-run режимі. У live-режимі ця проблема відсутня (`_activate_position_from_fill` читає `reference_book.tick_size`).
 
 ### Рішення
 
-**Крок 1.** Додати конфіг-параметр для оцінки транзакційних витрат:
+Замінити `0.0` на реальний tick_size з reference_book в обох місцях:
 
 ```python
-# utils/config.py
-ORDERFLOW_MIN_NET_PROFIT_BPS = int(os.getenv("ORDERFLOW_MIN_NET_PROFIT_BPS", "10"))
+tick_size=float(reference_book.tick_size) if reference_book is not None else 0.0,
 ```
-
-**Крок 2.** У `ScalpSignalEngine` додати фінальну перевірку перед поверненням сигналу:
-
-```python
-# scalp_signal_engine.py
-profit_bps = abs(take_profit_price - entry_price) / entry_price * 10_000
-if profit_bps < ORDERFLOW_MIN_NET_PROFIT_BPS:
-    return ScalpSignal(..., reason="insufficient_net_profit")
-```
-
-Це гарантує, що бот входитиме лише в ті угоди, де потенційний профіт суттєво перевищує комісію.
 
 ---
 
 <a name="fix-13"></a>
-## Fix 13 — Занадто вузький Stop Loss для ф'ючерсів
+## Fix 13 — `wall is None` блокує будь-яке скасування pending-ордеру
 
-**Пріоритет:** СЕРЙОЗНИЙ  
-**Файли:** `orderflow/strategy/scalp_signal_engine.py`, `utils/config.py`
+**Пріоритет:** КРИТИЧНИЙ  
+**Файл:** `orderflow/runtime/orchestrator.py:734-736`
 
 ### Діагноз
 
-Поточна логіка використовує сумарний відступ у 3 тіки від входу до стопу (1 тік від стіни до входу + 1 тік за стіну invalidation + 1 тік stop offset). 
+На початку `_pending_entry_invalidation_reason` стоїть ранній return:
 
-Для BTC (ціна 60,000, тік 0.1) це становить **0.3$ (0.0005%)**. Такий стоп буде вибиватися ринковим шумом у 99% випадків ще до початку будь-якого спрямованого руху. Навіть для волатильних альткоїнів 3 тіки — це занадто мало для ф'ючерсного ринку з його "проколами" (wicks).
+```python
+if pending.signal.wall is None:
+    return None  # ← ордер ніколи не скасовується якщо wall=None
+```
+
+Якщо `pending.signal.wall is None`, функція завжди повертає `None` — тобто ордер ніколи не буде скасований через `_pending_entry_invalidation_reason`, навіть якщо з'явився протилежний сигнал. Скасування відбудеться лише через таймаут (Fix 5), що означає очікування до 30 секунд у повністю невалідній ситуації.
+
+**Взаємодія з Fix 4:** Рішення Fix 4 переносить перевірку протилежного сигналу ВИЩЕ цього раннього return. Після застосування Fix 4 протилежний сигнал буде скасовувати ордер навіть при `wall=None`. Wall-based invalidation при `wall=None` залишається коректно відключеною (нема стіни — нема що перевіряти).
 
 ### Рішення
 
-**Крок 1.** Збільшити базові відступи у конфігу:
+Вирішується повністю при впровадженні Fix 4 (stale guard + opposite signal check переміщені вище `wall is None`). Окремих додаткових змін не потрібно.
+
+---
+
+<a name="fix-14"></a>
+## Fix 14 — Подвійний `_transition_to_degraded` у `run_cycle`
+
+**Пріоритет:** НЕЗНАЧНИЙ  
+**Файл:** `orderflow/runtime/orchestrator.py:192-199`
+
+### Діагноз
+
+`run_cycle` складається з двох послідовних циклів по `symbol_states`. Перший цикл обробляє `ENTRY_PENDING` та `IN_POSITION`, а також викликає `_transition_to_degraded` для символів без reference_book:
 
 ```python
-# utils/config.py
-ORDERFLOW_INVALIDATION_OFFSET_TICKS = 2  # було 1
-ORDERFLOW_STOP_OFFSET_TICKS = 5          # було 1
+# Перший цикл (рядки 179-199)
+for symbol, runtime_state in self.symbol_states.items():
+    ...
+    if runtime_state.state == BotState.ENTRY_PENDING ...:
+        ...
+        continue
+    if runtime_state.state == BotState.IN_POSITION ...:
+        ...
+        continue
+    if reference_book is None:
+        await self._transition_to_degraded(...)  # ← перший виклик
+        continue
 ```
 
-**Крок 2.** Додати параметр мінімальної дистанції стопу у відсотках (basis points):
+Другий цикл робить те саме для тих самих символів (IDLE/CANDIDATE без reference_book):
 
 ```python
-# utils/config.py
-ORDERFLOW_MIN_STOP_DISTANCE_BPS = int(os.getenv("ORDERFLOW_MIN_STOP_DISTANCE_BPS", "10")) # 0.1%
+# Другий цикл (рядки 201-229)
+for symbol, runtime_state in self.symbol_states.items():
+    ...
+    if reference_book is None:
+        await self._transition_to_degraded(...)  # ← другий виклик за той самий цикл
+        continue
 ```
 
-**Крок 3.** У `ScalpSignalEngine` розраховувати стоп як максимум між тіками та відсотковим лімітом:
+**Наслідок:** Для IDLE/CANDIDATE символів без reference_book за кожну ітерацію:
+- `get_best_reference_book()` викликається двічі
+- `_transition_to_degraded` викликається двічі (DB-insert блокується `_should_skip_redundant_transition`, але решта логіки виконується)
+
+### Рішення
+
+Видалити DEGRADED-перевірку з першого циклу (рядки 192-199) — другий цикл вже обробляє цей випадок. Перший цикл повинен займатись виключно `ENTRY_PENDING` та `IN_POSITION` станами:
 
 ```python
-# scalp_signal_engine.py
-# Розрахунок за тіками
-stop_dist_ticks = (ORDERFLOW_ENTRY_OFFSET_TICKS + ORDERFLOW_INVALIDATION_OFFSET_TICKS + ORDERFLOW_STOP_OFFSET_TICKS) * tick_size
-
-# Перевірка на мінімальний відсоток
-min_stop_dist_pct = entry_price * (ORDERFLOW_MIN_STOP_DISTANCE_BPS / 10_000)
-final_stop_dist = max(stop_dist_ticks, min_stop_dist_pct)
-
-if direction == "long":
-    stop_price = entry_price - final_stop_dist
-else:
-    stop_price = entry_price + final_stop_dist
+# Перший цикл — тільки обробка активних станів
+for symbol, runtime_state in self.symbol_states.items():
+    if runtime_state.cooldown_until_ms > now_ms:
+        continue
+    reference_book = self.feed_manager.get_best_reference_book(symbol, now_ms=now_ms)
+    if runtime_state.state == BotState.ENTRY_PENDING and runtime_state.pending_order is not None:
+        await self._handle_pending_entry(runtime_state, now_ms, reference_book)
+        continue
+    if runtime_state.state == BotState.IN_POSITION and runtime_state.position is not None:
+        await self._handle_open_position(runtime_state, now_ms, reference_book)
+        continue
+    # DEGRADED/idle/candidate — обробляються другим циклом
 ```
-
-Це дозволить стопу бути достатньо гнучким для захисту від шуму, але при цьому залишатися прив'язаним до "стіни".
 
 ---
 
 ## Порядок реалізації
 
-| Черга | Fix | Складність | Вплив |
-|-------|-----|-----------|-------|
-| 1 | Fix 5 — таймаут pending-ордеру | Низька | Критичний |
-| 2 | Fix 4 — протилежний сигнал скасовує ордер | Низька | Критичний |
-| 3 | Fix 8 — TP для LONG (max → min) | Низька | Серйозний |
-| 4 | Fix 13 — розширення Stop Loss | Низька | Серйозний |
-| 5 | Fix 12 — фільтр мінімальної рентабельності | Низька | Серйозний |
-| 6 | Fix 10 — видалити мертвий код | Низька | Незначний |
-| 7 | Fix 3 — реальна equity + risk-ліміти | Середня | Критичний |
-| 8 | Fix 7 — spread filter | Низька | Серйозний |
-| 9 | Fix 9 — aggregate tape у фільтрах | Середня | Серйозний |
-| 10 | Fix 6 — цикл 200ms замість 1s | Середня | Серйозний |
-| 11 | Fix 2 — управління позицією у live | Висока | Критичний |
-| 12 | Fix 1 — basis-коригування spot→futures | Висока | Критичний |
+Процес розбитий на 4 логічні фази для поступового переходу від виправлення базових багів до складних архітектурних змін.
+
+| Черга | Фаза | Fix | Складність | Вплив |
+|-------|------|-----|------------|-------|
+| **1** | **I. Логічна стабільність** | **Fix 5** — Таймаут pending-ордеру | Низька | КРИТИЧНИЙ |
+| **2** | | **Fix 4 (+13)** — Скасування при реверсі/wall=None | Низька | КРИТИЧНИЙ |
+| **3** | | **Fix 8** — Корекція TP для LONG (max → min) | Низька | СЕРЙОЗНИЙ |
+| **4** | | **Fix 12** — tick_size для Dry-run (BE test) | Низька | СЕРЙОЗНИЙ |
+| **5** | **II. Ризик-менеджмент** | **Fix 3 (+11)** — Реальна Equity та ліміти | Середня | КРИТИЧНИЙ |
+| **6** | | **Fix 7** — Spread filter | Низька | СЕРЙОЗНИЙ |
+| **7** | **III. Якість та Швидкість** | **Fix 6** — Цикл 200ms (замість 1s) | Середня | СЕРЙОЗНИЙ |
+| **8** | | **Fix 9** — Глобальна стрічка (Aggregated tape) | Середня | СЕРЙОЗНИЙ |
+| **9** | | **Fix 10** — Оптимізація пошуку стін | Низька | НЕЗНАЧНИЙ |
+| **10** | **IV. Live Execution** | **Fix 2** — Управління позицією у Live (BE/Exit) | Висока | КРИТИЧНИЙ |
+| **11** | | **Fix 1** — Basis adjustment (Spot vs Futures) | Висока | КРИТИЧНИЙ |
+| **12** | | **Fix 14** — Очистка подвійних переходів | Низька | НЕЗНАЧНИЙ |
 
 ---
 
