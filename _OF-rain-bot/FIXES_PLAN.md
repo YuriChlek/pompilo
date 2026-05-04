@@ -19,6 +19,8 @@
 9. [СЕРЙОЗНО — Агрегована tape не використовується у фільтрах](#fix-9)
 10. [НЕЗНАЧНО — Мертвий код у `_is_long_setup`](#fix-10)
 11. [НЕЗНАЧНО — Dead-код risk-констант у config.py](#fix-11)
+12. [СЕРЙОЗНО — Відсутність врахування комісій у Take Profit](#fix-12)
+13. [СЕРЙОЗНО — Занадто вузький Stop Loss для ф'ючерсів](#fix-13)
 
 ---
 
@@ -623,6 +625,90 @@ ORDERFLOW_MAX_CONSECUTIVE_LOSSES = int(os.getenv("ORDERFLOW_MAX_CONSECUTIVE_LOSS
 
 ---
 
+<a name="fix-12"></a>
+## Fix 12 — Відсутність врахування комісій у Take Profit
+
+**Пріоритет:** СЕРЙОЗНИЙ  
+**Файли:** `orderflow/strategy/scalp_signal_engine.py`, `utils/config.py`
+
+### Діагноз
+
+Бот розраховує Take Profit виходячи суто з математичного співвідношення R (ризику). Наприклад, при ризику 3 тіки (~0.15%) і R_MULTIPLE=1.5, тейк-профіт становить ~0.22%. 
+
+Сумарна комісія Bybit (Maker 0.02% + Taker 0.055% = 0.075%) разом зі спредом та можливим слідж-ефектом може "з'їдати" від 30% до 100% очікуваного прибутку на коротких угодах. Угода, яка математично закрилася в плюс, по факту може принести збиток на баланс.
+
+### Рішення
+
+**Крок 1.** Додати конфіг-параметр для оцінки транзакційних витрат:
+
+```python
+# utils/config.py
+ORDERFLOW_MIN_NET_PROFIT_BPS = int(os.getenv("ORDERFLOW_MIN_NET_PROFIT_BPS", "10"))
+```
+
+**Крок 2.** У `ScalpSignalEngine` додати фінальну перевірку перед поверненням сигналу:
+
+```python
+# scalp_signal_engine.py
+profit_bps = abs(take_profit_price - entry_price) / entry_price * 10_000
+if profit_bps < ORDERFLOW_MIN_NET_PROFIT_BPS:
+    return ScalpSignal(..., reason="insufficient_net_profit")
+```
+
+Це гарантує, що бот входитиме лише в ті угоди, де потенційний профіт суттєво перевищує комісію.
+
+---
+
+<a name="fix-13"></a>
+## Fix 13 — Занадто вузький Stop Loss для ф'ючерсів
+
+**Пріоритет:** СЕРЙОЗНИЙ  
+**Файли:** `orderflow/strategy/scalp_signal_engine.py`, `utils/config.py`
+
+### Діагноз
+
+Поточна логіка використовує сумарний відступ у 3 тіки від входу до стопу (1 тік від стіни до входу + 1 тік за стіну invalidation + 1 тік stop offset). 
+
+Для BTC (ціна 60,000, тік 0.1) це становить **0.3$ (0.0005%)**. Такий стоп буде вибиватися ринковим шумом у 99% випадків ще до початку будь-якого спрямованого руху. Навіть для волатильних альткоїнів 3 тіки — це занадто мало для ф'ючерсного ринку з його "проколами" (wicks).
+
+### Рішення
+
+**Крок 1.** Збільшити базові відступи у конфігу:
+
+```python
+# utils/config.py
+ORDERFLOW_INVALIDATION_OFFSET_TICKS = 2  # було 1
+ORDERFLOW_STOP_OFFSET_TICKS = 5          # було 1
+```
+
+**Крок 2.** Додати параметр мінімальної дистанції стопу у відсотках (basis points):
+
+```python
+# utils/config.py
+ORDERFLOW_MIN_STOP_DISTANCE_BPS = int(os.getenv("ORDERFLOW_MIN_STOP_DISTANCE_BPS", "10")) # 0.1%
+```
+
+**Крок 3.** У `ScalpSignalEngine` розраховувати стоп як максимум між тіками та відсотковим лімітом:
+
+```python
+# scalp_signal_engine.py
+# Розрахунок за тіками
+stop_dist_ticks = (ORDERFLOW_ENTRY_OFFSET_TICKS + ORDERFLOW_INVALIDATION_OFFSET_TICKS + ORDERFLOW_STOP_OFFSET_TICKS) * tick_size
+
+# Перевірка на мінімальний відсоток
+min_stop_dist_pct = entry_price * (ORDERFLOW_MIN_STOP_DISTANCE_BPS / 10_000)
+final_stop_dist = max(stop_dist_ticks, min_stop_dist_pct)
+
+if direction == "long":
+    stop_price = entry_price - final_stop_dist
+else:
+    stop_price = entry_price + final_stop_dist
+```
+
+Це дозволить стопу бути достатньо гнучким для захисту від шуму, але при цьому залишатися прив'язаним до "стіни".
+
+---
+
 ## Порядок реалізації
 
 | Черга | Fix | Складність | Вплив |
@@ -630,13 +716,15 @@ ORDERFLOW_MAX_CONSECUTIVE_LOSSES = int(os.getenv("ORDERFLOW_MAX_CONSECUTIVE_LOSS
 | 1 | Fix 5 — таймаут pending-ордеру | Низька | Критичний |
 | 2 | Fix 4 — протилежний сигнал скасовує ордер | Низька | Критичний |
 | 3 | Fix 8 — TP для LONG (max → min) | Низька | Серйозний |
-| 4 | Fix 10 — видалити мертвий код | Низька | Незначний |
-| 5 | Fix 3 — реальна equity + risk-ліміти | Середня | Критичний |
-| 6 | Fix 7 — spread filter | Низька | Серйозний |
-| 7 | Fix 9 — aggregate tape у фільтрах | Середня | Серйозний |
-| 8 | Fix 6 — цикл 200ms замість 1s | Середня | Серйозний |
-| 9 | Fix 2 — управління позицією у live | Висока | Критичний |
-| 10 | Fix 1 — basis-коригування spot→futures | Висока | Критичний |
+| 4 | Fix 13 — розширення Stop Loss | Низька | Серйозний |
+| 5 | Fix 12 — фільтр мінімальної рентабельності | Низька | Серйозний |
+| 6 | Fix 10 — видалити мертвий код | Низька | Незначний |
+| 7 | Fix 3 — реальна equity + risk-ліміти | Середня | Критичний |
+| 8 | Fix 7 — spread filter | Низька | Серйозний |
+| 9 | Fix 9 — aggregate tape у фільтрах | Середня | Серйозний |
+| 10 | Fix 6 — цикл 200ms замість 1s | Середня | Серйозний |
+| 11 | Fix 2 — управління позицією у live | Висока | Критичний |
+| 12 | Fix 1 — basis-коригування spot→futures | Висока | Критичний |
 
 ---
 
