@@ -16,5 +16,5 @@ COPY ./_OF-rain-bot .
 # Встановлюємо залежності
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
-# Запускаємо order-flow бота
-CMD ["python", "main_orderflow.py"]
+# Запускаємо canonical trading runtime
+CMD ["python", "main.py"]

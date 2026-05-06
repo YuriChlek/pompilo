@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import unittest
 
-from orderflow.runtime.orchestrator import OrderFlowScalpBot
-from orderflow.runtime.state_machine import BotState, SymbolRuntimeState
+from trading.application.runtime import OrderFlowScalpBot
+from trading.application.state_machine import BotState, SymbolRuntimeState
 
 
 class _StubRepository:

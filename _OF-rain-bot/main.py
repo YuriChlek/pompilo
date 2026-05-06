@@ -3,7 +3,7 @@ import asyncio
 import logging
 import sys
 
-from orderflow import OrderFlowScalpBot
+from trading.application.runner import run_trading_application
 from utils.db import close_db_pool
 
 
@@ -54,11 +54,9 @@ def _build_parser() -> argparse.ArgumentParser:
 
 async def start() -> None:
     args = _build_parser().parse_args()
-    bot = OrderFlowScalpBot(dry_run=args.dry_run)
     try:
-        await bot.start()
+        await run_trading_application(dry_run=args.dry_run)
     finally:
-        await bot.close()
         await close_db_pool()
 
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from orderflow.execution.bybit_client import AsyncBybitTradingClient, AsyncBybitTransport, BybitAPIError
+from trading.infrastructure.bybit import AsyncBybitTradingClient, AsyncBybitTransport, BybitAPIError
 
 
 class _FakeTransport:

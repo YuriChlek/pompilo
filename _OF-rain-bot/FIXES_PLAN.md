@@ -15,12 +15,12 @@
 5. [КРИТИЧНО — Відсутній таймаут для pending-ордеру](#fix-5)
 6. [СЕРЙОЗНО — Цикл стратегії 1 раз/сек](#fix-6)
 7. [СЕРЙОЗНО — Відсутній spread filter перед входом](#fix-7)
-8. [СЕРЙОЗНО — Take-profit для LONG розраховується неправильно](#fix-8)
+8. [СЕРЙОЗНО — Take-profit розраховується неправильно відносно протилежної стіни](#fix-8)
 9. [СЕРЙОЗНО — Агрегована tape не використовується у фільтрах](#fix-9)
-10. [НЕЗНАЧНО — Мертвий код у `_is_long_setup`](#fix-10)
+10. [НЕЗНАЧНО — Редундантна перевірка дистанції у `_is_long_setup` / `_is_short_setup`](#fix-10)
 11. [НЕЗНАЧНО — Dead-код risk-констант у config.py](#fix-11)
 12. [СЕРЙОЗНО — `tick_size=0.0` у dry-run позиціях блокує break-even](#fix-12)
-13. [КРИТИЧНО — `wall is None` блокує будь-яке скасування pending-ордеру](#fix-13)
+13. [КРИТИЧНО — `wall is None` блокує bot-side invalidation pending-ордеру](#fix-13)
 14. [НЕЗНАЧНО — Подвійний `_transition_to_degraded` у `run_cycle`](#fix-14)
 
 ---
@@ -97,7 +97,7 @@ ORDERFLOW_MAX_BASIS_BPS = float(os.getenv("ORDERFLOW_MAX_BASIS_BPS", "50"))
 
 ### Діагноз
 
-У live-режимі `_handle_open_position` завжди повертається після першого блоку — вся логіка управління позицією (break-even, trailing stop, вихід за сигналом) ніколи не виконується:
+У live-режимі `_handle_open_position` завжди повертається після першого блоку, тому після активації позиції не виконується подальша логіка управління позицією (break-even, signal-exit, додатковий runtime-management):
 
 ```python
 async def _handle_open_position(self, runtime_state, now_ms, reference_book):
@@ -110,7 +110,7 @@ async def _handle_open_position(self, runtime_state, now_ms, reference_book):
     # dry-run логіка (break-even, signal exit, тощо) — ніколи не виконується live
 ```
 
-**Наслідок:** Break-even не переміщується для звичайних fills. Немає виходу якщо зникає стіна або з'являється протилежний сигнал. Позиція закривається тільки коли Bybit сам виконає SL/TP.
+**Наслідок:** Break-even не переміщується для звичайних fills. Немає runtime-виходу якщо зникає стіна або з'являється протилежний сигнал. Позиція закривається тільки коли Bybit сам виконає SL/TP або коли біржа перестає повертати відкриту позицію. При цьому partial-fill сценарії вже частково обробляються окремо через `_activate_position_from_fill`, тому проблема локалізована саме в live-management після відкриття позиції.
 
 ### Рішення
 
@@ -173,8 +173,9 @@ def _stop_improves(side: str, current_stop: float, new_stop: float) -> bool:
 **Крок 4.** Додати вихід за протилежним сигналом у live-режимі (якщо стіна зникла і сигнал став протилежним):
 
 ```python
-# у _position_exit_reason додати:
-if current_signal.direction != SignalDirection.NONE and current_signal.direction != original_direction:
+# у _position_exit_reason або перед її викликом додати порівняння з напрямком позиції:
+position_direction = SignalDirection.LONG if position.side.lower() == "buy" else SignalDirection.SHORT
+if current_signal.direction != SignalDirection.NONE and current_signal.direction != position_direction:
     return "signal_reversal"
 ```
 
@@ -184,7 +185,7 @@ if current_signal.direction != SignalDirection.NONE and current_signal.direction
 ## Fix 3 — TEST_EQUITY захардкоджений, risk-параметри ігноруються
 
 **Пріоритет:** КРИТИЧНИЙ  
-**Файли:** `orderflow/runtime/orchestrator.py:22,177`, `orderflow/execution/risk_manager.py:9-10,34-35`, `utils/config.py:118-122`
+**Файли:** `orderflow/runtime/orchestrator.py:22,177`, `orderflow/execution/risk_manager.py:9-10,31-44`, `utils/config.py:102-105`
 
 ### Діагноз
 
@@ -404,10 +405,10 @@ async def _handle_pending_entry(self, runtime_state, now_ms, reference_book):
 ---
 
 <a name="fix-6"></a>
-## Fix 6 — Цикл стратегії 1 раз/сек
+## Fix 6 — Pending/position management має перейти з повільного polling на WebSocket
 
 **Пріоритет:** СЕРЙОЗНИЙ  
-**Файл:** `orderflow/runtime/orchestrator.py:78-83`, `utils/config.py`
+**Файл:** `orderflow/runtime/orchestrator.py:78-83`, `orderflow/execution/bybit_client.py`, `orderflow/execution/executor.py`
 
 ### Діагноз
 
@@ -420,32 +421,47 @@ async def _strategy_loop(self) -> None:
         await asyncio.sleep(1)  # 1 секунда між ітераціями
 ```
 
-Стіни живуть 800ms–2000ms. При 1-секундному циклі бот може:
+Стіни живуть 800ms–2000ms. При 1-секундному polling-циклі бот може:
 - Побачити стіну вже після її зникнення
 - Пропустити момент оптимального входу
 - Обробити pending/position занадто рідко
 
+Паралельно критичні live-події (`order fill`, `partial fill`, `cancel`, `position update`) зараз підтверджуються через polling (`poll_entry`, `detect_live_position`). Якщо просто зменшити `sleep` до 200ms, бот стане агресивніше опитувати REST API Bybit і швидко упреться в rate-limit або нестабільність транспорту.
+
 ### Рішення
 
-**Крок 1.** Параметризувати інтервал циклу:
+**Крок 1.** Залишити strategy loop як coarse-grained orchestration loop для сигналів, heartbeat і fallback-перевірок, але не використовувати його як головний механізм підтвердження fills/position-state.
+
+**Крок 2.** Додати WebSocket-підписку на торгові події Bybit:
+- статуси ордерів
+- partial/full fills
+- оновлення позицій
+- за потреби stop-loss / take-profit updates
 
 ```python
-# utils/config.py
-ORDERFLOW_STRATEGY_LOOP_MS = int(os.getenv("ORDERFLOW_STRATEGY_LOOP_MS", "200"))
+class AsyncBybitTradingClient:
+    async def subscribe_private_stream(
+        self,
+        on_order_update,
+        on_execution_update,
+        on_position_update,
+    ) -> None:
+        ...
 ```
 
-**Крок 2.** Замінити `asyncio.sleep(1)` на параметризований інтервал (logging-виклики вже є):
+**Крок 3.** Передавати ці події в runtime/state machine, щоб:
+- pending-ордер переходив у `filled` / `partially_filled` по push-події, а не по polling
+- live position management знав актуальний state одразу після fill
+- cancel/reject/close оброблялись event-driven без затримки в 1 секунду
 
-```python
-async def _strategy_loop(self) -> None:
-    while True:
-        self._log_runtime_heartbeat()
-        self._log_runtime_state_change()
-        await self.run_cycle()
-        await asyncio.sleep(ORDERFLOW_STRATEGY_LOOP_MS / 1000)
-```
+**Крок 4.** Залишити REST polling тільки як fallback:
+- при реконекті private stream
+- для звірки стану після `unknown`
+- для cold-start синхронізації open orders / open positions
 
-**Важливо:** При більш частому циклі збільшиться кількість REST-запитів до Bybit (poll_entry, detect_live_position). Потрібно обмежити їх частоту окремим debounce на рівні символу або перейти на WebSocket-потік для статусів ордерів.
+**Крок 5.** Після переходу на WebSocket за потреби окремо зменшувати `strategy loop`-інтервал, але це вже вторинна оптимізація, а не основне рішення.
+
+**Важливо:** Основна мета Fix 6 — не "sleep 200ms", а прибрати залежність live-management від частого REST polling.
 
 ---
 
@@ -486,7 +502,7 @@ def _is_long_setup(reference_book, bid_wall, ask_wall, buy_notional, sell_notion
 ---
 
 <a name="fix-8"></a>
-## Fix 8 — Take-profit для LONG розраховується неправильно
+## Fix 8 — Take-profit розраховується неправильно відносно протилежної стіни
 
 **Пріоритет:** СЕРЙОЗНИЙ  
 **Файл:** `orderflow/strategy/scalp_signal_engine.py:316-334`
@@ -501,14 +517,25 @@ def _take_profit_price(entry_price, risk, target_wall_price, direction, tick_siz
         if target_wall_price is None:
             return fallback
         wall_target = target_wall_price - tick_size * ORDERFLOW_ENTRY_OFFSET_TICKS
-        return max(fallback, wall_target)  # ← ПОМИЛКА: бере БІЛЬШЕ
+        return max(fallback, wall_target)  # ← ПОМИЛКА ДЛЯ LONG: бере ДАЛЬШУ ціль
+
+    fallback = entry_price - risk * ORDERFLOW_TAKE_PROFIT_R_MULTIPLE
+    if target_wall_price is None:
+        return fallback
+    wall_target = target_wall_price + tick_size * ORDERFLOW_ENTRY_OFFSET_TICKS
+    return min(fallback, wall_target)  # ← ПОМИЛКА ДЛЯ SHORT: теж бере ДАЛЬШУ ціль
 ```
 
-Логіка: якщо протилежна (ask) стіна стоїть близько — TP має бути трохи нижче неї, щоб ціна не відбилась і не перетворила профіт на стоп. Але `max(fallback, wall_target)` обирає ціль ДАЛІ, тобто TP ставиться ЗА стіну. Ціна майже гарантовано відіб'ється від стіни раніше.
+Логіка має бути симетричною: якщо протилежна стіна стоїть близько, TP треба ставити ПЕРЕД нею, а не за нею.
 
-**Приклад:** entry=100, risk=0.3, fallback=100.45 (1.5R). Ask-стіна на 100.20. wall_target=100.19. `max(100.45, 100.19) = 100.45` — TP виставлено за стіну, ціна відіб'ється на 100.20 і розвернеться.
+- Для `LONG` поточний `max(fallback, wall_target)` обирає дальшу ціль, тобто TP ставиться за ask-стіну.
+- Для `SHORT` поточний `min(fallback, wall_target)` так само обирає дальшу ціль, тобто TP ставиться за bid-стіну.
 
-Правильна логіка: TP = **min(fallback, wall_target)** для LONG (зупинитись перед стіною).
+**Приклад для LONG:** entry=100, risk=0.3, fallback=100.45 (1.5R). Ask-стіна на 100.20. wall_target=100.19. `max(100.45, 100.19) = 100.45` — TP виставлено за стіну, ціна відіб'ється на 100.20 і розвернеться.
+
+Правильна логіка:
+- Для `LONG`: TP = `min(fallback, wall_target)` якщо `wall_target > entry_price`
+- Для `SHORT`: TP = `max(fallback, wall_target)` якщо `wall_target < entry_price`
 
 ### Рішення
 
@@ -590,7 +617,7 @@ if best_bid_wall and self._is_long_setup(
 ---
 
 <a name="fix-10"></a>
-## Fix 10 — Мертвий код у `_is_long_setup` / `_is_short_setup`
+## Fix 10 — Редундантна перевірка дистанції у `_is_long_setup` / `_is_short_setup`
 
 **Пріоритет:** НЕЗНАЧНИЙ  
 **Файл:** `orderflow/strategy/scalp_signal_engine.py:227, 237, 257, 267`
@@ -598,14 +625,16 @@ if best_bid_wall and self._is_long_setup(
 ### Діагноз
 
 ```python
-if bid_wall.distance_ticks > ORDERFLOW_MAX_WALL_DISTANCE_TICKS:  # > 8 — МЕРТВИЙ
+if bid_wall.distance_ticks > ORDERFLOW_MAX_WALL_DISTANCE_TICKS:  # > 8 — зараз редундантно
     return False
 ...
 if bid_wall.distance_ticks > ORDERFLOW_TEST_TOUCH_TICKS:  # > 2 — РЕАЛЬНА перевірка
     return False
 ```
 
-`ORDERFLOW_TEST_TOUCH_TICKS = 2 < ORDERFLOW_MAX_WALL_DISTANCE_TICKS = 8`. Перша перевірка ніколи не відсіює нічого, що не відсіює друга. Паралельно `LiquidityDetector` витрачає час на стіни 3-8 тіків, яких `ScalpSignalEngine` все одно відкине.
+При поточних значеннях `ORDERFLOW_TEST_TOUCH_TICKS = 2 < ORDERFLOW_MAX_WALL_DISTANCE_TICKS = 8` перша перевірка не відсіює нічого, що не відсіює друга. Це не абсолютний dead code, а конфігураційно-залежна редундантність: якщо значення порогів зміняться, перевірка знову може стати значущою.
+
+Паралельно `LiquidityDetector` витрачає час на стіни 3-8 тіків, яких `ScalpSignalEngine` все одно відкине при поточному конфігу.
 
 ### Рішення
 
@@ -628,7 +657,7 @@ for level in levels:
 ## Fix 11 — Dead-код risk-констант у config.py
 
 **Пріоритет:** НЕЗНАЧНИЙ (вирішується після Fix 3)  
-**Файл:** `utils/config.py:118-122`
+**Файл:** `utils/config.py:102-105`
 
 ### Діагноз
 
@@ -695,7 +724,7 @@ tick_size=float(reference_book.tick_size) if reference_book is not None else 0.0
 ---
 
 <a name="fix-13"></a>
-## Fix 13 — `wall is None` блокує будь-яке скасування pending-ордеру
+## Fix 13 — `wall is None` блокує bot-side invalidation pending-ордеру
 
 **Пріоритет:** КРИТИЧНИЙ  
 **Файл:** `orderflow/runtime/orchestrator.py:734-736`
@@ -709,7 +738,9 @@ if pending.signal.wall is None:
     return None  # ← ордер ніколи не скасовується якщо wall=None
 ```
 
-Якщо `pending.signal.wall is None`, функція завжди повертає `None` — тобто ордер ніколи не буде скасований через `_pending_entry_invalidation_reason`, навіть якщо з'явився протилежний сигнал. Скасування відбудеться лише через таймаут (Fix 5), що означає очікування до 30 секунд у повністю невалідній ситуації.
+Якщо `pending.signal.wall is None`, функція завжди повертає `None` — тобто ордер ніколи не буде скасований саме через `_pending_entry_invalidation_reason`, навіть якщо з'явився протилежний сигнал. Це блокує bot-side invalidation за умовами сигналу/стіни.
+
+Водночас це не означає, що ордер взагалі неможливо скасувати: зовнішній статус біржі (`cancelled`, `rejected`) все ще може бути оброблений нижче в `_handle_pending_entry`. Проблема локальна, але критична для власної логіки інвалідизації бота.
 
 **Взаємодія з Fix 4:** Рішення Fix 4 переносить перевірку протилежного сигналу ВИЩЕ цього раннього return. Після застосування Fix 4 протилежний сигнал буде скасовувати ордер навіть при `wall=None`. Wall-based invalidation при `wall=None` залишається коректно відключеною (нема стіни — нема що перевіряти).
 
@@ -782,28 +813,57 @@ for symbol, runtime_state in self.symbol_states.items():
 
 ## Порядок реалізації
 
-Процес розбитий на 4 логічні фази для поступового переходу від виправлення базових багів до складних архітектурних змін.
+Процес розбитий на 5 логічних фаз. Порядок визначений не формальною пріоритетністю в документі, а залежностями в коді: спочатку локальні логічні баги з мінімальним радіусом впливу, потім стабілізація dry-run/risk, далі cleanup runtime, після цього transport/runtime refactor, і лише потім важкі live execution зміни та quality-upgrades.
 
 | Черга | Фаза | Fix | Складність | Вплив |
 |-------|------|-----|------------|-------|
-| **1** | **I. Логічна стабільність** | **Fix 5** — Таймаут pending-ордеру | Низька | КРИТИЧНИЙ |
-| **2** | | **Fix 4 (+13)** — Скасування при реверсі/wall=None | Низька | КРИТИЧНИЙ |
-| **3** | | **Fix 8** — Корекція TP для LONG (max → min) | Низька | СЕРЙОЗНИЙ |
-| **4** | | **Fix 12** — tick_size для Dry-run (BE test) | Низька | СЕРЙОЗНИЙ |
-| **5** | **II. Ризик-менеджмент** | **Fix 3 (+11)** — Реальна Equity та ліміти | Середня | КРИТИЧНИЙ |
-| **6** | | **Fix 7** — Spread filter | Низька | СЕРЙОЗНИЙ |
-| **7** | **III. Якість та Швидкість** | **Fix 6** — Цикл 200ms (замість 1s) | Середня | СЕРЙОЗНИЙ |
-| **8** | | **Fix 9** — Глобальна стрічка (Aggregated tape) | Середня | СЕРЙОЗНИЙ |
-| **9** | | **Fix 10** — Оптимізація пошуку стін | Низька | НЕЗНАЧНИЙ |
-| **10** | **IV. Live Execution** | **Fix 2** — Управління позицією у Live (BE/Exit) | Висока | КРИТИЧНИЙ |
-| **11** | | **Fix 1** — Basis adjustment (Spot vs Futures) | Висока | КРИТИЧНИЙ |
-| **12** | | **Fix 14** — Очистка подвійних переходів | Низька | НЕЗНАЧНИЙ |
+| **1** | **I. Локальні логічні фікси** | **Fix 8** — Корекція TP відносно протилежної стіни | Низька | СЕРЙОЗНИЙ |
+| **2** | | **Fix 5** — Таймаут pending-ордеру | Низька | КРИТИЧНИЙ |
+| **3** | | **Fix 4 (+13)** — Скасування при реверсі/wall=None | Низька | КРИТИЧНИЙ |
+| **4** | **II. Репрезентативність dry-run та risk guards** | **Fix 12** — tick_size для Dry-run (BE test) | Низька | СЕРЙОЗНИЙ |
+| **5** | | **Fix 7** — Spread filter | Низька | СЕРЙОЗНИЙ |
+| **6** | | **Fix 3 (+11)** — Реальна Equity та ліміти | Середня | КРИТИЧНИЙ |
+| **7** | **III. Cleanup та runtime-стабільність** | **Fix 10** — Оптимізація пошуку стін | Низька | НЕЗНАЧНИЙ |
+| **8** | | **Fix 14** — Очистка подвійних переходів | Низька | НЕЗНАЧНИЙ |
+| **9** | **IV. Transport та runtime refactor** | **Fix 6** — Перехід pending/position management на WebSocket | Середня | СЕРЙОЗНИЙ |
+| **10** | **V. Live execution та quality upgrades** | **Fix 1** — Basis adjustment (Spot vs Futures) | Висока | КРИТИЧНИЙ |
+| **11** | | **Fix 2** — Управління позицією у Live (BE/Exit) | Висока | КРИТИЧНИЙ |
+| **12** | | **Fix 9** — Глобальна стрічка (Aggregated tape) | Середня | СЕРЙОЗНИЙ |
 
 ---
 
 ## Примітки
 
-- **Fix 1 (basis)** — найскладніший технічно, але найважливіший для live-торгівлі. Без нього live-режим не може коректно виконувати угоди.
-- **Fix 2 (position management)** — треба впроваджувати поступово: спочатку break-even, потім signal-exit.
-- **Fix 6 (цикл 200ms)** — потребує аудиту частоти REST-запитів щоб не отримати rate-limit від Bybit.
-- Після впровадження Fix 3 видалити `TEST_EQUITY` і `TEST_RISK_PER_TRADE_PCT` з `orchestrator.py` та `risk_manager.py`.
+- **Fix 8** стоїть першим, бо це чистий локальний domain-fix з мінімальним радіусом впливу і швидкою перевіркою.
+- **Fix 5** та **Fix 4 (+13)** ідуть одразу після нього, бо вони стабілізують pending-order lifecycle без архітектурного рефакторингу.
+- **Fix 12** винесений перед `Fix 3`, щоб dry-run став придатним для перевірки break-even і наступних runtime-змін.
+- **Fix 3 (+11)** виконується після локальної стабілізації entry/runtime-логіки, щоб risk-manager не мінявся одночасно з базовими багфіксами.
+- **Fix 6 (WebSocket)** — це окремий transport/runtime refactor. Його мета не прискорити цикл будь-якою ціною, а прибрати критичну залежність від REST polling для live-стану ордерів і позицій.
+- **Fix 1 (basis)** стоїть перед `Fix 2`, бо без коректного execution pricing не варто добудовувати live position management поверх неправильних цін.
+- **Fix 2 (position management)** треба впроваджувати поступово вже після `Fix 1`: спочатку break-even, потім signal-exit.
+- **Fix 9 (aggregated tape)** навмисно стоїть останнім, бо це quality-upgrade signal logic, а не blocker correctness для runtime/execution.
+- Після впровадження `Fix 3` видалити `TEST_EQUITY` і `TEST_RISK_PER_TRADE_PCT` з `orchestrator.py` та `risk_manager.py`.
+
+---
+
+## Статус виконання
+
+### Виконані fix
+
+- `Fix 1` — Spot-ціни на futures без basis-коригування
+- `Fix 2` — Live позиція не управляється після відкриття
+- `Fix 3` — TEST_EQUITY захардкоджений, risk-параметри ігноруються
+- `Fix 4` — Протилежний сигнал не скасовує pending-ордер
+- `Fix 5` — Відсутній таймаут для pending-ордеру
+- `Fix 6` — Pending/position management переведений з повільного polling на WebSocket
+- `Fix 7` — Відсутній spread filter перед входом
+- `Fix 8` — Take-profit розраховується неправильно відносно протилежної стіни
+- `Fix 10` — Редундантна перевірка дистанції у `_is_long_setup` / `_is_short_setup`
+- `Fix 11` — Dead-код risk-констант у `config.py`
+- `Fix 12` — `tick_size=0.0` у dry-run позиціях блокує break-even
+- `Fix 13` — `wall is None` блокує bot-side invalidation pending-ордеру
+- `Fix 14` — Подвійний `_transition_to_degraded` у `run_cycle`
+
+### Fix, який ще потрібно виконати
+
+- `Fix 9` — Агрегована tape не використовується у фільтрах
