@@ -4,7 +4,7 @@ from typing import Iterable, Optional
 
 import asyncpg
 
-from .config import CANDLES_DATA_SCHEMA, DB_HOST, DB_NAME, DB_PASS, DB_PORT, DB_USER, D1_TABLE_SUFFIX, SPOT_BOT_SCHEMA, SPOT_TRADING_SYMBOLS
+from .config import CANDLES_DATA_SCHEMA, DB_HOST, DB_NAME, DB_PASS, DB_PORT, DB_USER, D1_TABLE_SUFFIX, H4_TABLE_SUFFIX, SPOT_BOT_SCHEMA, SPOT_TRADING_SYMBOLS
 
 _CONNECTION_SETTINGS = {
     "user": DB_USER,
@@ -81,6 +81,10 @@ def d1_table_name(symbol: str) -> str:
     return f"{symbol.lower()}{D1_TABLE_SUFFIX}"
 
 
+def h4_table_name(symbol: str) -> str:
+    return f"{symbol.lower()}{H4_TABLE_SUFFIX}"
+
+
 async def create_tables(symbols: Optional[Iterable[str]] = None) -> None:
     conn = await create_connection()
     selected_symbols = list(symbols or SPOT_TRADING_SYMBOLS)
@@ -94,6 +98,12 @@ async def create_tables(symbols: Optional[Iterable[str]] = None) -> None:
                 CREATE_CANDLES_TABLE_SQL.format(
                     schema=CANDLES_DATA_SCHEMA,
                     table_name=d1_table_name(symbol),
+                )
+            )
+            await conn.execute(
+                CREATE_CANDLES_TABLE_SQL.format(
+                    schema=CANDLES_DATA_SCHEMA,
+                    table_name=h4_table_name(symbol),
                 )
             )
 

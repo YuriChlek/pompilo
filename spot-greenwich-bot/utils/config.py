@@ -27,6 +27,7 @@ APP_ENV = os.getenv("APP_ENV", "dev")
 CANDLES_DATA_SCHEMA = "_candles_trading_data"
 SPOT_BOT_SCHEMA = "_spot_trading_bot"
 D1_TABLE_SUFFIX = "_1d"
+H4_TABLE_SUFFIX = "_4h"
 
 SPOT_TRADING_SYMBOLS = [
     "ETHUSDT",
