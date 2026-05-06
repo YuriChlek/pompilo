@@ -86,6 +86,7 @@ class SpotGridPlanner:
         analysis: PreliminarySymbolAnalysis,
         *,
         portfolio_budget: float | None = None,
+        recovery_budget: float | None = None,
     ) -> StrategyDecision:
         """Commit a preliminary analysis and build a final strategy decision for one symbol."""
         runtime = self._ensure_runtime(context.symbol)
@@ -112,6 +113,9 @@ class SpotGridPlanner:
             tick_size=context.venue_constraints.tick_size if context.venue_constraints is not None else None,
             venue_constraints=context.venue_constraints,
             portfolio_budget=portfolio_budget,
+            recovery_budget=recovery_budget,
+            bars_in_state=state.bars_in_state,
+            structure_snapshot=analysis.structure_snapshot,
         )
         diff_count = target_orders_diff_count(
             context.live_orders,

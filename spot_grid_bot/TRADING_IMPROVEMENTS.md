@@ -1,7 +1,7 @@
 # Spot Grid Bot — Trading Roadmap
 
 > Версія: 2026-05-01
-> Статус: короткий roadmap, узгоджений з поточною кодовою базою
+> Статус: roadmap оновлено після реалізації `R1–R9` станом на 2026-05-06
 
 ---
 
@@ -23,19 +23,19 @@
 
 ## Пріоритети
 
-| ID | Ініціатива | Пріоритет | Очікувана користь | Складність |
-|---|---|---|---|---|
-| R1 | Volume confirmation для regime transitions | Високий | Менше false transitions | Низька |
-| R2 | Conditional underwater averaging | Високий | Менше averaging у шумі | Низька |
-| R3 | Budget split: new entries vs recovery | Високий | Recovery не блокує нові можливості | Середня |
-| R4 | Asymmetric range grid | Високий | Краща відповідність grid до position-in-range | Низька |
-| R5 | ATR-normalized portfolio sizing | Середній | Рівномірніший risk-per-dollar між символами | Середня |
-| R6 | Adaptive sell sizing by unrealized PnL | Середній | Краще керування profit-taking | Низька |
-| R7 | RSI filter для RANGE entries | Середній | Додатковий entry-quality filter | Низька |
-| R8 | Swing-aware range grid levels | Середній | Рівні ближчі до реальної market structure | Середня |
-| R9 | Adaptive grid step by volatility regime | Середній | Grid краще підлаштовується під volatility | Середня |
-| R10 | VWAP anchor у UPTREND | Низький–Середній | Кращі pullback entry levels | Середня |
-| R11 | Trailing sell anchor for strong UPTREND | Низький–Середній | Пізніша фіксація прибутку в сильному тренді | Середня |
+| ID | Ініціатива | Пріоритет | Очікувана користь | Складність | Статус |
+|---|---|---|---|---|---|
+| R1 | Volume confirmation для regime transitions | Високий | Менше false transitions | Низька | Виконано |
+| R2 | Conditional underwater averaging | Високий | Менше averaging у шумі | Низька | Виконано |
+| R3 | Budget split: new entries vs recovery | Високий | Recovery не блокує нові можливості | Середня | Виконано |
+| R4 | Asymmetric range grid | Високий | Краща відповідність grid до position-in-range | Низька | Виконано |
+| R5 | ATR-normalized portfolio sizing | Середній | Рівномірніший risk-per-dollar між символами | Середня | Виконано |
+| R6 | Adaptive sell sizing by unrealized PnL | Середній | Краще керування profit-taking | Низька | Виконано |
+| R7 | RSI filter для RANGE entries | Середній | Додатковий entry-quality filter | Низька | Виконано |
+| R8 | Swing-aware range grid levels | Середній | Рівні ближчі до реальної market structure | Середня | Виконано |
+| R9 | Adaptive grid step by volatility regime | Середній | Grid краще підлаштовується під volatility | Середня | Виконано |
+| R10 | VWAP anchor у UPTREND | Низький–Середній | Кращі pullback entry levels | Середня | Заплановано |
+| R11 | Trailing sell anchor for strong UPTREND | Низький–Середній | Пізніша фіксація прибутку в сильному тренді | Середня | Заплановано |
 
 ---
 
@@ -43,7 +43,7 @@
 
 Перед початком будь-якої роботи важливо враховувати:
 
-- `range_entry_policy.py` уже знижує budget і buy-level count у слабкому RANGE.
+- `range_entry_policy.py` уже знижує budget і buy-level count у слабкому RANGE, а також може повністю блокувати нові BUY при breakdown risk.
 - `uptrend_policy.py` уже має underwater recovery profile.
 - `uptrend_policy.py` уже має adaptive take-profit adjustment для UPTREND.
 - `portfolio_allocator.py` уже робить portfolio-level scoring і budget distribution.
@@ -51,11 +51,15 @@
 
 Тому roadmap не слід трактувати як "боту бракує базових торгових механізмів". Йдеться про подальший тюнінг і refinement.
 
+Станом на 2026-05-06 у кодовій базі вже реалізовані `R1–R9`. У backlog залишаються лише `R10` і `R11`.
+
 ---
 
 ## Фаза 1 — Високий ROI
 
 ### R1. Volume confirmation для regime transitions
+
+**Статус:** Виконано.
 
 **Навіщо.**
 Поточний regime detection не враховує підтвердження об'ємом при переходах. Це може давати false transitions на слабких breakout candles.
@@ -73,6 +77,8 @@
 
 ### R2. Conditional underwater averaging
 
+**Статус:** Виконано.
+
 **Навіщо.**
 Поточне underwater averaging активується без перевірки, наскільки "свіжим" є новий regime. Це може призводити до averaging одразу після шумного transition.
 
@@ -89,12 +95,16 @@
 
 ### R3. Budget split: new entries vs recovery
 
+**Статус:** Виконано.
+
 **Навіщо.**
-Поточний allocator працює з єдиним пулом allocatable quote. При активному recovery нові символи можуть не отримати budget.
+Поточний allocator розподіляє лише portfolio-level new-entry budget, але recovery path далі в planning/execution flow може перехоплювати symbol-level entry budget через окрему recovery logic. У результаті активний recovery може зменшувати простір для нових входів, хоча проблема лежить не лише в allocator layer.
 
 **Що змінювати.**
 
-- Розділити allocatable quote на `new_entry_quota` і `recovery_quota`.
+- Явно розділити budget policy на `new_entry_quota` і `recovery_quota`.
+- `recovery_quota` має бути глобальною на портфель, а не лише локальним symbol-level cap.
+- Частину логіки реалізувати на portfolio allocation layer, а частину — там, де recovery budget підміняє звичайний symbol entry budget.
 - Recovery symbols фінансувати з recovery pool.
 - Невикористаний recovery pool повертати в new-entry pool.
 
@@ -105,8 +115,10 @@
 
 ### R4. Asymmetric range grid
 
+**Статус:** Виконано.
+
 **Навіщо.**
-Поточна RANGE grid симетрична. Якщо ціна вже близько до верхньої або нижньої межі діапазону, симетричний розподіл рівнів не оптимальний.
+Поточна RANGE grid має окремі buy/sell bands, але кількість BUY і SELL levels залишається симетричною. Якщо ціна вже близько до верхньої або нижньої межі діапазону, такий розподіл рівнів не завжди оптимальний.
 
 **Що змінювати.**
 
@@ -122,6 +134,8 @@
 ## Фаза 2 — Середній ROI
 
 ### R5. ATR-normalized portfolio sizing
+
+**Статус:** Виконано.
 
 **Навіщо.**
 Поточний allocator не нормалізує allocation між символами за relative volatility. Це може завищувати exposure до більш "нервових" інструментів.
@@ -139,6 +153,8 @@
 
 ### R6. Adaptive sell sizing by unrealized PnL
 
+**Статус:** Виконано.
+
 **Навіщо.**
 Поточні sell weights статичні. Немає відмінності між inventory у сильному плюсі та inventory біля breakeven.
 
@@ -154,6 +170,8 @@
 ---
 
 ### R7. RSI filter для RANGE entries
+
+**Статус:** Виконано.
 
 **Навіщо.**
 У боті вже є range quality scoring, але немає окремого oversold/overbought filter для RANGE entry quality.
@@ -171,6 +189,8 @@
 
 ### R8. Swing-aware range grid levels
 
+**Статус:** Виконано.
+
 **Навіщо.**
 Поточний regime detection уже використовує swing structure, але самі swing levels не доходять до grid construction.
 
@@ -186,6 +206,8 @@ BUY/SELL levels ближчі до реально значущих ринкови
 ---
 
 ### R9. Adaptive grid step by volatility regime
+
+**Статус:** Виконано.
 
 **Навіщо.**
 Поточний step базується на ATR. Це вже непогано, але короткострокова volatility інколи змінюється швидше, ніж ATR встигає адаптуватися.
@@ -221,12 +243,12 @@ VWAP може дати більш змістовний pullback anchor для up
 ### R11. Trailing sell anchor for strong UPTREND
 
 **Навіщо.**
-У боті вже є adaptive uptrend take-profit adjustment, але немає persisted trailing anchor між циклами.
+У боті вже є adaptive uptrend take-profit adjustment і rebasing sell targets, але немає persisted trailing anchor між циклами. Тому логіка ще не може "пам'ятати" раніше підтягнутий верхній sell anchor у сильному тренді.
 
 **Що змінювати.**
 
 - Додати persisted `last_sell_upper_price` у runtime state.
-- У strong uptrend зсувати sell anchor вгору замість жорсткої прив'язки лише до поточної ціни.
+- У strong uptrend зсувати sell anchor вгору на основі persisted anchor, а не покладатися лише на поточний cycle-local recalculation.
 
 **Коли робити.**
 Лише якщо backtest покаже, що поточний adaptive take-profit усе ще занадто рано фіксує прибуток.
@@ -251,18 +273,18 @@ VWAP може дати більш змістовний pullback anchor для up
 
 ### Етап 1
 
-- R1 Volume confirmation
-- R2 Conditional underwater averaging
-- R3 Budget split: new entries vs recovery
-- R4 Asymmetric range grid
+- R1 Volume confirmation — виконано
+- R2 Conditional underwater averaging — виконано
+- R3 Budget split: new entries vs recovery — виконано
+- R4 Asymmetric range grid — виконано
 
 ### Етап 2
 
-- R5 ATR-normalized sizing
-- R6 Adaptive sell sizing
-- R7 RSI filter
-- R8 Swing-aware grid levels
-- R9 Adaptive grid step
+- R5 ATR-normalized sizing — виконано
+- R6 Adaptive sell sizing — виконано
+- R7 RSI filter — виконано
+- R8 Swing-aware grid levels — виконано
+- R9 Adaptive grid step — виконано
 
 ### Етап 3
 

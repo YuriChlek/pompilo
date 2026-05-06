@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 
+from domain.market_structure import StructureSnapshot
 from domain.allocation import calculate_symbol_entry_budget
 from domain.cost_basis import minimum_exit_price, rebased_take_profit_price
 from domain.de_risk import build_de_risk_orders
@@ -32,12 +33,20 @@ def build_target_orders(
     tick_size: float | None = None,
     venue_constraints=None,
     portfolio_budget: float | None = None,
+    recovery_budget: float | None = None,
+    bars_in_state: int = 0,
+    structure_snapshot: StructureSnapshot | None = None,
 ) -> list[TargetOrder]:
     """Build the next target order set for the current regime and risk state."""
     if risk.force_risk_off or regime == RegimeType.HIGH_VOLATILITY:
         return _build_de_risk_orders(inventory, price, symbol, risk, config)
     if regime == RegimeType.RANGE:
-        grid = grid_builder.build_range_grid(price, indicators, tick_size=tick_size)
+        grid = grid_builder.build_range_grid(
+            price,
+            indicators,
+            tick_size=tick_size,
+            structure_snapshot=structure_snapshot,
+        )
     elif regime == RegimeType.UPTREND:
         grid = grid_builder.build_trend_pullback_grid(price, indicators, tick_size=tick_size)
     elif regime == RegimeType.DOWNTREND:
@@ -51,17 +60,28 @@ def build_target_orders(
         config,
         portfolio_budget=portfolio_budget,
     )
-    recovery_profile = build_underwater_recovery_profile(inventory, regime, config)
+    recovery_profile = build_underwater_recovery_profile(
+        inventory,
+        regime,
+        config,
+        bars_in_state=bars_in_state,
+    )
     is_recovery_averaging_active = False
     if recovery_profile.active:
         original_budget = symbol_entry_budget
-        recovery_budget = inventory.available_quote * recovery_profile.recovery_budget
+        local_recovery_budget = inventory.available_quote * recovery_profile.recovery_budget
+        portfolio_recovery_budget = float("inf") if recovery_budget is None else max(recovery_budget, 0.0)
         remaining_inventory_room = min(
             max(inventory.total_equity * config.risk.max_symbol_inventory_pct_of_equity - inventory.inventory_notional, 0.0),
             max(config.risk.max_symbol_notional_cap - inventory.inventory_notional, 0.0),
             max(config.risk.max_inventory_notional - inventory.inventory_notional, 0.0),
         )
-        symbol_entry_budget = min(recovery_budget, remaining_inventory_room, inventory.available_quote)
+        symbol_entry_budget = min(
+            local_recovery_budget,
+            portfolio_recovery_budget,
+            remaining_inventory_room,
+            inventory.available_quote,
+        )
         if recovery_profile.max_buy_levels is not None:
             grid = limit_buy_levels(grid, recovery_profile.max_buy_levels)
         is_recovery_averaging_active = True

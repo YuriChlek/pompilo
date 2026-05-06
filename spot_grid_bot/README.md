@@ -12,11 +12,16 @@ The bot now includes:
 - Binance Spot candle synchronization
 - Bybit spot balances, live orders, and execution sync
 - indicator + market-structure regime detection
+- volume-confirmed trend transitions and regime hysteresis
 - multi-timeframe regime confirmation
 - risk-aware order planning and staged de-risking
 - portfolio-level budget allocation across symbols
+- split portfolio quotas for fresh entries vs underwater recovery
+- ATR-normalized portfolio sizing across symbols
 - persisted cost basis with `avgPrice` primary source and no-loss sell enforcement
 - tick-aware order diffing and venue-aware grid normalization
+- asymmetric, swing-aware, and volatility-adaptive grid construction
+- RSI-aware range entry quality and adaptive uptrend sell sizing
 - Telegram critical-event notifications
 - live price WebSocket monitoring for off-cycle reaction
 - health/state HTTP endpoints
@@ -174,9 +179,9 @@ For each symbol, the trading process now works like this:
 10. Apply higher-timeframe downtrend confirmation before final entry decisions.
 11. Evaluate risk, projected exposure, and de-risk mode.
 12. Run preliminary analysis for all symbols.
-13. Build a portfolio snapshot and distribute symbol budgets.
+13. Build a portfolio snapshot and distribute separate fresh-entry and recovery budgets.
 14. Advance the symbol state machine.
-15. Build target orders.
+15. Build target orders with range-entry filters, recovery gating, and structure-aware grid placement.
 16. Apply no-loss, venue, and execution guardrails.
 17. Diff target orders against current live orders.
 18. Execute only when rebuild is required.
@@ -224,10 +229,12 @@ Regime detection combines:
 - `ema50` slope
 - `atr14`
 - realized volatility
+- short-vs-long realized volatility ratio
 - range width
 - directional move and directional sign
 - abnormal candle and ATR spike flags
 - swing-high / swing-low market structure
+- breakout volume confirmation against `volume_ma20`
 
 The detector now also uses higher-timeframe confirmation:
 
@@ -294,7 +301,10 @@ It now:
 - runs preliminary symbol analysis across all configured symbols
 - builds one shared portfolio snapshot
 - computes one global new-entry budget from free quote and current outstanding exposure
-- distributes that budget only across eligible symbols
+- computes a separate global recovery quota for underwater symbols
+- distributes fresh-entry budget only across eligible symbols
+- returns unused recovery quota back into the fresh-entry pool
+- applies ATR-normalized scoring so more volatile symbols get smaller weight
 - penalizes underwater inventory and exposure-heavy symbols before local grid sizing
 
 Relevant code:
@@ -334,6 +344,9 @@ Grid planning is now venue-aware.
 The bot:
 
 - builds ATR-based range and trend grids
+- shifts buy/sell level counts inside `RANGE` based on position-in-range
+- can anchor part of the `RANGE` ladder to nearby swing support/resistance
+- widens or tightens grid spacing from short-vs-long realized volatility
 - respects symbol-specific tick size and size step
 - merges duplicate normalized levels after tick rounding
 - preserves merged source tags for diagnostics
@@ -351,6 +364,7 @@ When inventory is underwater, the strategy can shift into controlled recovery be
 
 The bot can:
 
+- require regime maturity before underwater averaging activates
 - reduce or cap new buy levels
 - limit recovery budget to a fraction of free quote
 - use different recovery budgets for `RANGE` and `UPTREND`
@@ -559,4 +573,3 @@ s tests -p 'test_*.py'
 Current suite status:
 
 - `94` tests passing locally in `.venv`
-

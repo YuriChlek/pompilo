@@ -12,11 +12,16 @@
 - Binance Spot синхронізацію свічок
 - Bybit spot баланси, live orders і execution sync
 - regime detection за індикаторами та market structure
+- volume-confirmed trend transitions і regime hysteresis
 - multi-timeframe підтвердження режиму
 - risk-aware planning і staged de-risking
 - portfolio-level budget allocation між символами
+- окремі portfolio quotas для fresh entries і underwater recovery
+- ATR-normalized portfolio sizing між символами
 - persisted cost basis із `avgPrice` як primary source і no-loss логікою для `SELL`
 - tick-aware diff target/live orders і venue-aware normalization grid-рівнів
+- asymmetric, swing-aware і volatility-adaptive grid construction
+- RSI-aware range entry quality і adaptive uptrend sell sizing
 - Telegram notifications для критичних подій
 - live price WebSocket monitoring для позапланової реакції
 - HTTP health/state endpoints
@@ -174,9 +179,9 @@ LIVE_PRICE_MONITOR_COOLDOWN_SECONDS=60
 10. Застосовує higher-timeframe downtrend confirmation до фінальних entry-рішень.
 11. Оцінює risk, projected exposure і de-risk mode.
 12. Робить preliminary analysis для всіх символів.
-13. Будує portfolio snapshot і розподіляє symbol budgets.
+13. Будує portfolio snapshot і розподіляє окремі budgets для fresh-entry та recovery.
 14. Просуває state machine.
-15. Будує target orders.
+15. Будує target orders з range-entry filters, recovery gating і structure-aware grid placement.
 16. Застосовує no-loss, venue і execution guardrails.
 17. Порівнює target orders із поточними live orders.
 18. Виконує sync тільки якщо rebuild справді потрібен.
@@ -224,10 +229,12 @@ Regime detection поєднує:
 - slope `ema50`
 - `atr14`
 - realized volatility
+- short-vs-long realized volatility ratio
 - range width
 - directional move і directional sign
 - abnormal candle та ATR spike flags
 - swing-high / swing-low market structure
+- breakout volume confirmation відносно `volume_ma20`
 
 Детектор тепер також використовує higher-timeframe confirmation:
 
@@ -294,7 +301,10 @@ Planner тепер portfolio-aware ще до фінального per-symbol ord
 - запускає preliminary symbol analysis по всіх configured symbols
 - будує один shared portfolio snapshot
 - рахує один global new-entry budget із free quote і current outstanding exposure
-- розподіляє цей budget тільки між eligible symbols
+- рахує окрему global recovery quota для underwater symbols
+- розподіляє fresh-entry budget тільки між eligible symbols
+- повертає невикористаний recovery budget назад у fresh-entry pool
+- застосовує ATR-normalized scoring, тому більш волатильні символи отримують меншу вагу
 - штрафує underwater inventory і exposure-heavy symbols ще до local grid sizing
 
 Код:
@@ -334,6 +344,9 @@ Grid planning тепер venue-aware.
 Бот:
 
 - будує ATR-based range і trend grids
+- змінює кількість BUY/SELL levels у `RANGE` залежно від position-in-range
+- може прив'язувати частину `RANGE` ladder до найближчих swing support/resistance
+- розширює або стискає step grid через short-vs-long realized volatility
 - поважає symbol-specific tick size і size step
 - зливає duplicate normalized levels після tick rounding
 - зберігає merged source tags для діагностики
@@ -351,6 +364,7 @@ Grid planning тепер venue-aware.
 
 Бот може:
 
+- вимагати, щоб regime прожив мінімальну кількість барів перед underwater averaging
 - зменшувати або обмежувати кількість нових buy levels
 - обмежувати recovery budget часткою від free quote
 - використовувати різні recovery budgets для `RANGE` і `UPTREND`
@@ -552,4 +566,3 @@ Test suite покриває:
 Поточний стан suite:
 
 - `94` тести проходять локально в `.venv`
-

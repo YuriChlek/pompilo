@@ -35,6 +35,7 @@ class RegimeConfig:
     ema_mid_length: int = 50
     ema_slow_length: int = 200
     atr_length: int = 14
+    realized_vol_short_length: int = 5
     realized_vol_length: int = 20
     regime_lookback: int = 30
     range_width_atr_min: float = 1.2
@@ -44,6 +45,8 @@ class RegimeConfig:
     ema_mid_slope_trend_threshold: float = 0.0015
     atr_spike_multiplier: float = 1.8
     abnormal_candle_atr_multiplier: float = 2.2
+    volume_confirmation_enabled: bool = True
+    volume_confirmation_multiplier: float = 1.2
     state_cooldown_bars: int = 4
     hysteresis_confirm_bars: int = 2
     structure_swing_window: int = 2
@@ -53,6 +56,9 @@ class RegimeConfig:
 @dataclass(frozen=True)
 class GridConfig:
     atr_grid_step_multiplier: float = 0.6
+    adaptive_grid_step_enabled: bool = True
+    adaptive_grid_step_ratio_min: float = 0.80
+    adaptive_grid_step_ratio_max: float = 1.35
     range_grid_width_multiplier: float = 2.2
     trend_grid_width_multiplier: float = 1.6
     range_buy_fraction: float = 0.45
@@ -67,12 +73,17 @@ class GridConfig:
     uptrend_sell_levels: int = 3
     uptrend_sell_atr_multipliers: tuple[float, ...] = (1.0, 1.75, 2.5)
     uptrend_sell_size_weights: tuple[float, ...] = (0.2, 0.3, 0.5)
+    adaptive_sell_sizing_enabled: bool = True
+    adaptive_sell_sizing_profit_trigger_pct: float = 0.05
+    adaptive_sell_sizing_full_profit_pct: float = 0.15
+    adaptive_sell_sizing_max_bias: float = 0.35
     uptrend_allocation_weight: float = 1.25
     uptrend_underwater_budget_penalty: float = 0.6
     uptrend_underwater_max_buy_levels: int = 2
     uptrend_max_price_extension_from_ema20_bps: float = 150.0
     underwater_averaging_enabled: bool = True
     underwater_averaging_trigger_pct: float = 0.10
+    underwater_min_bars_in_regime: int = 2
     underwater_recovery_budget_pct: float = 0.30
     underwater_range_budget_multiplier: float = 0.50
     underwater_uptrend_budget_multiplier: float = 1.00
@@ -80,6 +91,11 @@ class GridConfig:
     underwater_deep_stop_pct: float = 0.25
     range_entry_quality_soft_threshold: float = 0.35
     range_entry_quality_hard_threshold: float = 0.20
+    range_rsi_filter_enabled: bool = True
+    range_rsi_overbought_threshold: float = 70.0
+    range_rsi_oversold_threshold: float = 35.0
+    range_rsi_overbought_penalty: float = 0.12
+    range_rsi_oversold_bonus: float = 0.05
     range_weak_entry_budget_penalty: float = 0.90
     range_poor_entry_budget_penalty: float = 0.75
     range_weak_max_buy_levels: int = 4
@@ -87,6 +103,12 @@ class GridConfig:
     range_entry_upper_band_soft_limit: float = 0.82
     range_breakdown_directional_threshold_multiplier: float = 1.0
     underwater_recovery_sell_aggressiveness_atr: float = 0.35
+    range_asymmetry_enabled: bool = True
+    range_asymmetry_soft_position_threshold: float = 0.65
+    range_asymmetry_hard_position_threshold: float = 0.82
+    range_asymmetry_max_level_shift: int = 2
+    range_structure_alignment_enabled: bool = True
+    range_structure_max_anchored_levels: int = 2
     uptrend_strong_trend_threshold: float = 0.70
     uptrend_weak_trend_threshold: float = 0.45
     uptrend_adaptive_take_profit_bonus_atr: float = 0.35
@@ -101,6 +123,7 @@ class RiskConfig:
     max_notional_per_level: float = 1_250.0
     global_quote_reserve_pct: float = 0.25
     global_max_new_entry_pct_of_free_quote: float = 0.30
+    global_recovery_quota_fraction: float = 0.30
     max_symbol_inventory_pct_of_equity: float = 0.08
     max_symbol_new_entry_pct_of_free_quote: float = 0.10
     max_symbol_notional_cap: float = 400.0
@@ -109,6 +132,9 @@ class RiskConfig:
     max_concurrent_entry_symbols: int = 4
     allocation_weight_range: float = 0.8
     allocation_weight_uptrend: float = 1.0
+    allocation_target_atr_pct: float = 0.02
+    allocation_atr_multiplier_min: float = 0.70
+    allocation_atr_multiplier_max: float = 1.30
     min_quote_balance: float = 100.0
     daily_drawdown_pause_pct: float = 0.06
     emergency_volatility_multiplier: float = 2.5

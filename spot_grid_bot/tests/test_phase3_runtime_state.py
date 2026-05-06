@@ -144,6 +144,22 @@ class Phase3RuntimeStateTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(updated_state.pending_regime, RegimeType.UPTREND)
         self.assertEqual(updated_state.pending_count, 1)
 
+    async def test_state_machine_does_not_advance_breakout_pending_count_without_volume_confirmation(self):
+        initial_state = StrategyState(
+            regime=RegimeType.RANGE,
+            bars_in_state=3,
+            cooldown_remaining=0,
+            volatility_cooldown_remaining=0,
+        )
+        machine = StrategyStateMachine(DEFAULT_STRATEGY_CONFIG, initial_state)
+
+        updated_state = machine.on_bar(
+            RegimeSnapshot(RegimeType.UPTREND, 1.0, ["fixed_uptrend", "volume_not_confirmed"], volume_confirmed=False)
+        )
+
+        self.assertEqual(updated_state.pending_regime, RegimeType.UPTREND)
+        self.assertEqual(updated_state.pending_count, 0)
+
     async def test_planner_keeps_runtime_state_isolated_per_symbol(self):
         planner = SpotGridPlanner(DEFAULT_STRATEGY_CONFIG)
         planner.detector.detect = Mock(return_value=RegimeSnapshot(RegimeType.RANGE, 1.0, ["fixed_range"]))
