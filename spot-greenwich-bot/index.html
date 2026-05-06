@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+<py-script>
+    //@version=6
+plot(close)
+indicator("Greenwich SPOT + Smart QQE + VWAP/Gold", overlay=true, max_lines_count=500)
+
+// === ГРУПИ НАЛАШТУВАНЬ ===
+GRP_GW = "Greenwich SPOT Settings"
+GRP_QQE = "Smart QQE Settings"
+GRP_VWAP_GOLD = "VWAP & Gold Line Settings"
+GRP_MID = "Mid Lines Settings"
+GRP_TREND = "Global Trend Settings"
+GRP_RIBBON = "MA Ribbon & 200 MA"
+
+// === GREENWICH SPOT ===
+enableGreenwich = input.bool(true, "Enable Greenwich SPOT", group=GRP_GW)
+length = input.int(98, "ATR Length", group=GRP_GW)
+mult1 = input.float(5.5, "Multiplier 1", group=GRP_GW)
+mult2 = input.float(4.5, "Multiplier 2", group=GRP_GW)
+mult3 = input.float(3.5, "Multiplier 3", group=GRP_GW)
+maType2 = input.string("WMA", "Moving Average Type", options=["EMA", "SMA", "WMA", "RMA"], group=GRP_GW)
+
+// === MID LINES ===
+enableMidLines = input.bool(true, "Enable Mid Lines", group=GRP_MID)
+midDistance = input.float(0.2, "Mid Distance (0=center, 1=full)", minval=0, maxval=1, step=0.1, group=GRP_MID)
+midColor = input.color(color.gray, "Mid Lines Color", group=GRP_MID)
+midFillColor = input.color(color.new(color.gray, 75), "Mid Fill Color", group=GRP_MID)
+
+// === VWAP & GOLD LINE ===
+enableVwapGold = input.bool(true, "Enable VWAP & Gold Line Module", group=GRP_VWAP_GOLD)
+enableGoldLine = input.bool(false, "Enable Gold Line", group=GRP_VWAP_GOLD)
+maType = input.string("SMA", "MA Type", options=["SMA", "EMA", "VWAP"], group=GRP_VWAP_GOLD)
+maLength = input.int(21, "MA Length", minval=1, group=GRP_VWAP_GOLD)
+stepSize = input.int(6, "Step Size", minval=1, group=GRP_VWAP_GOLD)
+smoothing = input.int(32, "Smoothing Factor", minval=1, group=GRP_VWAP_GOLD)
+aboveColor = input.color(color.yellow, "Above Color", group=GRP_VWAP_GOLD)
+belowColor = input.color(color.gray, "Below Color", group=GRP_VWAP_GOLD)
+
+enableVWAP = input.bool(true, "Enable VWAP", group=GRP_VWAP_GOLD)
+vwapLength = input.int(14, "VWAP Period (bars)", group=GRP_VWAP_GOLD)
+vwapOffsetPerc = input.float(0, "VWAP Offset (%)", minval=-0.5, maxval=0.5, step=0.01, group=GRP_VWAP_GOLD)
+vwapColor = input.color(color.yellow, "VWAP Color", group=GRP_VWAP_GOLD)
+vwapWidth = input.int(1, "VWAP Line Width", minval=1, maxval=5, group=GRP_VWAP_GOLD)
+
+// === SMART QQE ===
+enableQQE = input.bool(false, "Enable Smart QQE", group=GRP_QQE)
+RSI_Period = input.int(14, 'RSI Length', group=GRP_QQE)
+SF = input.int(5, 'RSI Smoothing', group=GRP_QQE)
+QQE = input.float(4.238, 'Fast QQE Factor', group=GRP_QQE)
+ThreshHold = input.int(10, 'Thresh-hold', group=GRP_QQE)
+
+sQQEx = input.bool(false, 'Show QQE Signal Crosses', group=GRP_QQE)
+sQQEz = input.bool(false, 'Show RSI Zero Crosses', group=GRP_QQE)
+sQQEc = input.bool(true, 'Show Threshold Channel Exits', group=GRP_QQE)
+
+// НОВІ ЧЕКБОКСИ — УСІ В ГРУПІ QQE
+showQQELongShortLabels = input.bool(true, "Show QQE Long/Short Labels", group=GRP_QQE)
+showQQERSILine         = input.bool(true, "Show QQE RSI Line", group=GRP_QQE)
+showFastRSILine        = input.bool(true, "Show Fast RSI Line", group=GRP_QQE)
+showRSI50Level         = input.bool(true, "Show RSI 50 Level", group=GRP_QQE)
+
+ma_type = input.string('EMA', 'MA Type', options=['ALMA', 'EMA', 'DEMA', 'TEMA', 'WMA', 'VWMA', 'SMA', 'SMMA', 'HMA', 'LSMA', 'PEMA'], group=GRP_QQE)
+lsma_offset = input.int(0, '* LSMA Offset', minval=0, group=GRP_QQE)
+alma_offset = input.float(0.85, '* ALMA Offset', minval=0, step=0.01, group=GRP_QQE)
+alma_sigma = input.int(6, '* ALMA Sigma', minval=0, group=GRP_QQE)
+inpDrawBars = input.bool(false, 'Color bars?', group=GRP_QQE)
+
+// === MA RIBBON & 200 MA ===
+show200ma = input.bool(false, 'Show 200 MA', group=GRP_RIBBON)
+ma200 = input.int(200, 'MA 200 Length', group=GRP_RIBBON)
+matype200 = input.string('SMA', options=['EMA','HMA','SMA','WMA','RMA','VWMA'], group=GRP_RIBBON)
+
+showma = input.bool(false, 'Show MA Ribbon', group=GRP_RIBBON)
+macoloro = input.color(color.new(#ff0000, 0), 'MA Down Color', group=GRP_RIBBON)
+macolorc = input.color(color.new(#62ff42, 0), 'MA Up Color', group=GRP_RIBBON)
+malen = input.int(60, 'MA Length', group=GRP_RIBBON)
+matype = input.string('HMA', options=['EMA','HMA','SMA','WMA','RMA','VWMA'], group=GRP_RIBBON)
+
+// === GLOBAL TREND ===
+enableGlobalTrend = input.bool(false, "Enable Global Trend", group=GRP_TREND)
+coeff = input.float(5.4, 'Multiplier', step=0.1, group=GRP_TREND)
+AP = input.int(100, 'Common Period', group=GRP_TREND)
+novolumedata = input.bool(false, 'No volume data?', group=GRP_TREND)
+
+// === ФУНКЦІЯ MA ===
+ma(type, src, len) =>
+    float result = na
+    switch type
+        "SMA"  => result := ta.sma(src, len)
+        "EMA"  => result := ta.ema(src, len)
+        "DEMA" =>
+            e = ta.ema(src, len)
+            result := 2 * e - ta.ema(e, len)
+        "TEMA" =>
+            e = ta.ema(src, len)
+            result := 3 * (e - ta.ema(e, len)) + ta.ema(ta.ema(e, len), len)
+        "WMA"  => result := ta.wma(src, len)
+        "VWMA" => result := ta.vwma(src, len)
+        "SMMA" =>
+            result := na(result[1]) ? ta.sma(src, len) : (result[1] * (len - 1) + src) / len
+        "HMA"  =>
+            result := ta.wma(2 * ta.wma(src, len / 2) - ta.wma(src, len), math.round(math.sqrt(len)))
+        "LSMA" => result := ta.linreg(src, len, lsma_offset)
+        "ALMA" => result := ta.alma(src, len, alma_offset, alma_sigma)
+        "PEMA" =>
+            ema1 = ta.ema(src, len)
+            ema2 = ta.ema(ema1, len)
+            ema3 = ta.ema(ema2, len)
+            ema4 = ta.ema(ema3, len)
+            ema5 = ta.ema(ema4, len)
+            ema6 = ta.ema(ema5, len)
+            ema7 = ta.ema(ema6, len)
+            ema8 = ta.ema(ema7, len)
+            result := 8*ema1 - 28*ema2 + 56*ema3 - 70*ema4 + 56*ema5 - 28*ema6 + 8*ema7 - ema8
+    result
+
+// === GREENWICH SPOT ===
+basis = ma(maType2, close, length)
+atr = ta.rma(ta.tr, length)
+upper1 = basis + mult1 * atr
+lower1 = basis - mult1 * atr
+upper2 = basis + mult2 * atr
+lower2 = basis - mult2 * atr
+upper3 = basis + mult3 * atr
+lower3 = basis - mult3 * atr
+
+upper1Plot = enableGreenwich ? upper1 : na
+lower1Plot = enableGreenwich ? lower1 : na
+upper2Plot = enableGreenwich ? upper2 : na
+lower2Plot = enableGreenwich ? lower2 : na
+upper3Plot = enableGreenwich ? upper3 : na
+lower3Plot = enableGreenwich ? lower3 : na
+
+midUpper = basis + (upper2 - basis) * midDistance
+midLower = basis + (lower2 - basis) * midDistance
+midUpperPlot = enableGreenwich and enableMidLines ? midUpper : na
+midLowerPlot = enableGreenwich and enableMidLines ? midLower : na
+
+p1 = plot(upper1Plot, color=#f80303, linewidth=3, title="Upper Band 1")
+p2 = plot(lower1Plot, color=#0689f3, linewidth=3, title="Lower Band 1")
+p3 = plot(upper2Plot, color=color.gray, linewidth=1, title="Upper Band 2")
+p4 = plot(lower2Plot, color=color.gray, linewidth=1, title="Lower Band 2")
+p5 = plot(upper3Plot, color=color.gray, linewidth=1, title="Upper Band 3", display=display.none)
+p6 = plot(lower3Plot, color=color.gray, linewidth=1, title="Lower Band 3", display=display.none)
+
+pMid1 = plot(midUpperPlot, color=midColor, linewidth=1, title="Mid Upper Line", display=display.none)
+pMid2 = plot(midLowerPlot, color=midColor, linewidth=1, title="Mid Lower Line", display=display.none)
+
+fill(p1, p3, color=color.new(color.gray, 75))
+fill(p2, p4, color=color.new(color.gray, 75))
+fill(p3, p5, color=color.new(color.gray, 75))
+fill(p4, p6, color=color.new(color.gray, 75))
+fill(pMid1, pMid2, color=enableMidLines ? midFillColor : na)
+
+buySignal = enableGreenwich and ta.crossover(low, lower3) ? low : na
+sellSignal = enableGreenwich and ta.crossunder(close, upper2) ? high : na
+plotshape(buySignal, location=location.belowbar, color=color.green, style=shape.labelup, title="BUY", text="BUY")
+plotshape(sellSignal, location=location.abovebar, color=color.red, style=shape.labeldown, title="SELL", text="SELL")
+
+// === GOLD LINE ===
+float rawMA = switch maType
+    "SMA"  => ta.sma(high, maLength)
+    "EMA"  => ta.ema(high, maLength)
+    "VWAP" => ta.vwap
+    => na
+
+float highestMA = ta.highest(rawMA, smoothing)
+var float stepLine = na
+if bar_index % stepSize == 0 and not na(highestMA)
+    stepLine := highestMA
+
+goldLineColor = close > stepLine ? aboveColor : belowColor
+plot(enableVwapGold and enableGoldLine ? stepLine : na, color=goldLineColor, style=plot.style_stepline, linewidth=2, title="Gold Step Line")
+
+// === VWAP ===
+typPrice = (high + low + close) / 3
+pv = typPrice * volume
+cumPV = ta.sma(pv, vwapLength) * vwapLength
+cumVol = ta.sma(volume, vwapLength) * vwapLength
+vwap = cumPV / cumVol
+vwapPlan = vwap * (1 + vwapOffsetPerc)
+plot(enableVwapGold and enableVWAP ? vwapPlan : na, color=vwapColor, linewidth=vwapWidth, title="VWAP Plan")
+
+// === SMART QQE ===
+src = close
+Wilders_Period = RSI_Period * 2 - 1
+Rsi = ta.rsi(src, RSI_Period)
+RsiMa = ma(ma_type, Rsi, SF)
+AtrRsi = math.abs(RsiMa[1] - RsiMa)
+MaAtrRsi = ma(ma_type, AtrRsi, Wilders_Period)
+dar = ma(ma_type, MaAtrRsi, Wilders_Period) * QQE
+
+var float longband = 0.0
+var float shortband = 0.0
+var int trendx = 1
+
+RSIndex = RsiMa
+newshortband = RSIndex + dar
+newlongband = RSIndex - dar
+longband := RSIndex[1] > longband[1] and RSIndex > longband[1] ? math.max(longband[1], newlongband) : newlongband
+shortband := RSIndex[1] < shortband[1] and RSIndex < shortband[1] ? math.min(shortband[1], newshortband) : newshortband
+cross_1 = ta.cross(longband[1], RSIndex)
+trendx := ta.cross(RSIndex, shortband[1]) ? 1 : cross_1 ? -1 : nz(trendx[1], 1)
+FastAtrRsiTL = trendx == 1 ? longband : shortband
+
+var int QQExlong = 0
+var int QQExshort = 0
+QQExlong := FastAtrRsiTL < RSIndex ? QQExlong + 1 : 0
+QQExshort := FastAtrRsiTL > RSIndex ? QQExshort + 1 : 0
+
+var int QQEzlong = 0
+var int QQEzshort = 0
+QQEzlong := sQQEz and RSIndex >= 50 ? QQEzlong + 1 : 0
+QQEzshort := sQQEz and RSIndex < 50 ? QQEzshort + 1 : 0
+
+var int QQEclong = 0
+var int QQEccshort = 0
+QQEclong := sQQEc and RSIndex > 50 + ThreshHold ? QQEclong + 1 : 0
+QQEccshort := sQQEc and RSIndex < 50 - ThreshHold ? QQEccshort + 1 : 0
+
+// RSI Levels
+orsi = ta.rsi(close, RSI_Period)
+adjrsi = close + ta.atr(100) * orsi / 100
+rsimatype = input.string('SMA', options=['EMA','HMA','SMA','WMA','RMA','VWMA'], group=GRP_QQE)
+rma = rsimatype == 'RMA' ? ta.rma(adjrsi, 50) :
+      rsimatype == 'HMA' ? ta.hma(adjrsi, 50) :
+      rsimatype == 'SMA' ? ta.sma(adjrsi, 50) :
+      rsimatype == 'WMA' ? ta.wma(adjrsi, 50) :
+      rsimatype == 'VWMA' ? ta.vwma(adjrsi, 50) : ta.ema(adjrsi, 50)
+
+rsi100 = rma + ta.atr(100) * 5
+rsi0 = rma - ta.atr(100) * 5
+rsi90 = rma + ta.atr(100) * 3
+rsi10 = rma - ta.atr(100) * 3
+
+// ЛІНІЇ QQE — КЕРУЄМО ЧЕКБОКСАМИ З ГРУПИ QQE
+r100 = plot(enableQQE ? rsi100 : na, linewidth=4, color=color.red, title='RSI100')
+r0 = plot(enableQQE ? rsi0 : na, linewidth=4, color=color.rgb(1, 165, 70), title='RSI0')
+r90 = plot(enableQQE ? rsi90 : na, linewidth=2, color=color.red, title='RSI90')
+r10 = plot(enableQQE ? rsi10 : na, linewidth=2, color=color.rgb(1, 165, 70), title='RSI10')
+
+fill(r100, r90, color=enableQQE ? color.rgb(255, 82, 82, 79) : na, title='Overbought')
+fill(r10, r0, color=enableQQE ? color.rgb(44, 248, 3, 79) : na, title='Oversold')
+
+// RSI 50 Level — КЕРУЄТЬСЯ showRSI50Level
+r2 = plot(enableQQE and showRSI50Level ? rma : na, color=open > rma ? #00ff00 : open < rma ? #ff0000 : #f1e20e, title='RSI-50 Level', linewidth=2)
+
+rsim = rma + ta.atr(100) * (RsiMa - 50) / 10
+frsim = rma + ta.atr(100) * (FastAtrRsiTL - 50) / 10
+
+// QQE RSI Line — КЕРУЄТЬСЯ showQQERSILine
+o8 = plot(enableQQE and showQQERSILine ? rsim : na, color=#62f70bf5, title='QQE RSI', linewidth=2)
+
+// Fast RSI Line — КЕРУЄТЬСЯ showFastRSILine
+o2 = plot(enableQQE and showFastRSILine ? frsim : na, title='Fast RSI', color=#f30303, linewidth=2)
+
+fill(o8, o2, color=enableQQE and RsiMa - 50 > FastAtrRsiTL - 50 ? #144e055e : #8603035b, title='QQE Trend')
+
+// ЛЕЙБЛИ Long/Short — КЕРУЄТЬСЯ showQQELongShortLabels
+qqeLong = enableQQE and showQQELongShortLabels and QQExlong == 1 ? frsim : na
+qqeShort = enableQQE and showQQELongShortLabels and QQExshort == 1 ? frsim : na
+plotshape(qqeLong, title='QQE long', text='Long', textcolor=color.white, style=shape.labelup, location=location.belowbar, color=#216d1f, size=size.auto)
+plotshape(qqeShort, title='QQE short', text='Short', textcolor=color.white, style=shape.labeldown, location=location.abovebar, color=#ff0000, size=size.auto)
+
+// Інші сигнали — залишаються як є
+plotshape(enableQQE and sQQEc and QQEclong == 1 ? rsim : na, title='QQE XC Over', style=shape.diamond, location=location.absolute, color=color.yellow, size=size.auto)
+plotshape(enableQQE and sQQEc and QQEccshort == 1 ? rsim : na, title='QQE XC Under', style=shape.diamond, location=location.absolute, color=color.red, size=size.auto)
+plotshape(enableQQE and sQQEx and QQExlong == 1 ? frsim : na, title='QQE XQ Over', style=shape.circle, location=location.absolute, color=color.lime, size=size.auto)
+plotshape(enableQQE and sQQEx and QQExshort == 1 ? frsim : na, title='QQE XQ Under', style=shape.circle, location=location.absolute, color=color.blue, size=size.auto)
+plotshape(enableQQE and sQQEz and QQEzlong == 1 ? rsim : na, title='QQE XZ Over', style=shape.square, location=location.absolute, color=color.aqua, size=size.auto)
+plotshape(enableQQE and sQQEz and QQEzshort == 1 ? rsim : na, title='QQE XZ Under', style=shape.square, location=location.absolute, color=color.fuchsia, size=size.auto)
+
+bgc = RsiMa - 50 > ThreshHold ? color.rgb(7, 196, 243) : RsiMa - 50 < -ThreshHold ? color.rgb(247, 4, 117) : color.orange
+barcolor(enableQQE and inpDrawBars ? bgc : na)
+
+// === 200 MA ===
+mao200 = matype200 == 'RMA' ? ta.rma(close, ma200) :
+         matype200 == 'HMA' ? ta.hma(close, ma200) :
+         matype200 == 'SMA' ? ta.sma(close, ma200) :
+         matype200 == 'WMA' ? ta.wma(close, ma200) :
+         matype200 == 'VWMA' ? ta.vwma(close, ma200) : ta.ema(close, ma200)
+plot(show200ma ? mao200 : na, title='MA 200', linewidth=3, color=color.blue)
+
+// === MA RIBBON ===
+mao = matype == 'RMA' ? ta.rma(open, malen) : matype == 'HMA' ? ta.hma(open, malen) : matype == 'SMA' ? ta.sma(open, malen) : matype == 'WMA' ? ta.wma(open, malen) : matype == 'VWMA' ? ta.vwma(open, malen) : ta.ema(open, malen)
+mac = matype == 'RMA' ? ta.rma(close, malen) : matype == 'HMA' ? ta.hma(close, malen) : matype == 'SMA' ? ta.sma(close, malen) : matype == 'WMA' ? ta.wma(close, malen) : matype == 'VWMA' ? ta.vwma(close, malen) : ta.ema(close, malen)
+v = plot(showma ? mao : na, color=macoloro, linewidth=1, display=display.none)
+y = plot(showma ? mac : na, color=macolorc, linewidth=1, display=display.none)
+fill(v, y, color=showma and mao > mac ? macoloro : macolorc, title='MA Ribbon')
+
+// === GLOBAL TREND ===
+ATR = ta.sma(ta.tr, AP)
+upT = low - ATR * coeff
+downT = high + ATR * coeff
+var float AlphaTrend = 0.0
+AlphaTrend := (novolumedata ? ta.rsi(close, AP) >= 50 : ta.mfi(hlc3, AP) >= 50) ?
+              (upT < nz(AlphaTrend[1]) ? nz(AlphaTrend[1]) : upT) :
+              (downT > nz(AlphaTrend[1]) ? nz(AlphaTrend[1]) : downT)
+color1 = AlphaTrend > AlphaTrend[2] ? #00E60F : AlphaTrend < AlphaTrend[2] ? #80000B : AlphaTrend[1] > AlphaTrend[3] ? #00E60F : #80000B
+plot(enableGlobalTrend ? AlphaTrend : na, color=color1, linewidth=3, title="Global Trend")
+</py-script>
+</body>
+</html>
