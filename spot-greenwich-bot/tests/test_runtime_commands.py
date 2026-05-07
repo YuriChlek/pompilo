@@ -12,7 +12,7 @@ class RuntimeCommandServiceTests(unittest.TestCase):
         calls: list[tuple[str, object]] = []
 
         class _Init:
-            async def initialize_runtime(self, symbols) -> None:
+            async def initialize_runtime(self, symbols, *, reconcile_positions: bool = False) -> None:
                 calls.append(("init", tuple(symbols)))
 
         class _Cycle:
@@ -21,7 +21,7 @@ class RuntimeCommandServiceTests(unittest.TestCase):
 
         with patch("application.runtime_commands._build_initialization_service", return_value=_Init()):
             with patch("application.runtime_commands._build_live_trading_cycle", return_value=_Cycle()):
-                asyncio.run(RuntimeCommandService().analyze(symbol="ETHUSDT", dry_run=True))
+                asyncio.run(RuntimeCommandService().analyze(symbol="ETHUSDT", dry_run=True, timeframe="4h"))
 
         self.assertEqual(calls, [("init", ("ETHUSDT",)), ("run", ("ETHUSDT", True))])
 
@@ -30,12 +30,12 @@ class RuntimeCommandServiceTests(unittest.TestCase):
 
         class _Scheduler:
             async def run_forever(self, symbols, **kwargs) -> None:
-                calls.append(("live", (tuple(symbols), kwargs["dry_run"])))
+                calls.append(("live", (tuple(symbols), kwargs["dry_run"], kwargs["reconcile_positions"])))
 
         with patch("application.runtime_commands._build_live_trading_scheduler", return_value=_Scheduler()):
             asyncio.run(RuntimeCommandService().live(dry_run=True))
 
-        self.assertEqual(calls, [("live", (("ETHUSDT", "SUIUSDT", "TAOUSDT", "SOLUSDT", "BTCUSDT", "XRPUSDT", "LTCUSDT"), True))])
+        self.assertEqual(calls, [("live", (("ETHUSDT", "SUIUSDT", "TAOUSDT", "SOLUSDT", "BTCUSDT", "XRPUSDT", "LTCUSDT"), True, True))])
 
     def test_init_db_and_migrate_use_new_initialization_service(self) -> None:
         calls: list[str] = []
@@ -54,14 +54,20 @@ class RuntimeCommandServiceTests(unittest.TestCase):
         self.assertEqual(calls, ["create_tables", "run_migrations"])
 
     def test_sync_handlers_use_run_api_helper(self) -> None:
-        calls: list[int] = []
+        calls: list[tuple[int, str, str]] = []
 
-        async def _fake_run_api(*, days: int) -> None:
-            calls.append(days)
+        async def _fake_run_api(*, days: int, timeframe: str = "1d", table_suffix: str = "_1d") -> None:
+            calls.append((days, timeframe, table_suffix))
 
         with patch("application.runtime_commands._run_api", _fake_run_api):
             asyncio.run(RuntimeCommandService().sync(days=42))
             asyncio.run(RuntimeCommandService().sync_3y())
+            asyncio.run(RuntimeCommandService().sync_4h(days=7))
+            asyncio.run(RuntimeCommandService().sync_full())
 
-        self.assertEqual(calls[0], 42)
-        self.assertGreater(calls[1], 1000)
+        self.assertEqual(calls[0], (42, "1d", "_1d"))
+        self.assertGreater(calls[1][0], 1000)
+        self.assertEqual(calls[1][1:], ("1d", "_1d"))
+        self.assertEqual(calls[2], (7, "4h", "_4h"))
+        self.assertEqual(calls[3][1:], ("1d", "_1d"))
+        self.assertEqual(calls[4][1:], ("4h", "_4h"))

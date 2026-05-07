@@ -25,7 +25,7 @@ def decide_spot_execution(
     """Convert the current signal and position state into one execution decision."""
 
     if signal.signal_type == HOLD_SIGNAL:
-        return ExecutionDecision("skip", signal.symbol, signal.signal_price, DECIMAL_ZERO, DECIMAL_ZERO, "no_signal")
+        return ExecutionDecision("skip", signal.symbol, signal.signal_price, DECIMAL_ZERO, DECIMAL_ZERO, "no_signal", signal.timeframe, signal.candle_id)
 
     if signal.signal_type == BUY_SIGNAL:
         if position_state.has_position and signal.signal_price >= position_state.avg_entry_price:
@@ -36,6 +36,8 @@ def decide_spot_execution(
                 DECIMAL_ZERO,
                 DECIMAL_ZERO,
                 "buy_price_not_better_than_avg_entry",
+                signal.timeframe,
+                signal.candle_id,
             )
         quote_amount = _quote_amount_from_balance(available_quote_balance)
         if quote_amount <= 0:
@@ -46,6 +48,8 @@ def decide_spot_execution(
                 DECIMAL_ZERO,
                 DECIMAL_ZERO,
                 "insufficient_quote_balance",
+                signal.timeframe,
+                signal.candle_id,
             )
         quantity = _quantize_quantity(quote_amount / signal.signal_price)
         if quantity <= 0:
@@ -56,6 +60,8 @@ def decide_spot_execution(
                 DECIMAL_ZERO,
                 DECIMAL_ZERO,
                 "buy_quantity_too_small",
+                signal.timeframe,
+                signal.candle_id,
             )
         return ExecutionDecision(
             "buy",
@@ -64,13 +70,15 @@ def decide_spot_execution(
             quantity,
             quote_amount,
             "greenwich_accumulation_buy",
+            signal.timeframe,
+            signal.candle_id,
         )
 
     if not position_state.has_position:
-        return ExecutionDecision("skip", signal.symbol, signal.signal_price, DECIMAL_ZERO, DECIMAL_ZERO, "no_position_to_sell")
+        return ExecutionDecision("skip", signal.symbol, signal.signal_price, DECIMAL_ZERO, DECIMAL_ZERO, "no_position_to_sell", signal.timeframe, signal.candle_id)
 
     min_sell_price = position_state.avg_entry_price * (Decimal("1") + MIN_PROFIT_RATIO)
-    if signal.signal_price <= min_sell_price:
+    if signal.signal_price < min_sell_price:
         return ExecutionDecision(
             "skip",
             signal.symbol,
@@ -78,6 +86,8 @@ def decide_spot_execution(
             DECIMAL_ZERO,
             DECIMAL_ZERO,
             "sell_price_not_profitable",
+            signal.timeframe,
+            signal.candle_id,
         )
     quote_amount = position_state.quantity * signal.signal_price
     return ExecutionDecision(
@@ -87,6 +97,8 @@ def decide_spot_execution(
         position_state.quantity,
         quote_amount,
         "greenwich_profitable_exit",
+        signal.timeframe,
+        signal.candle_id,
     )
 
 

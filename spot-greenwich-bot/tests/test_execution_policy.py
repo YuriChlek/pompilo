@@ -13,8 +13,8 @@ class ExecutionPolicyTests(unittest.TestCase):
         state = PositionState("ETHUSDT", Decimal("0"), Decimal("0"), Decimal("0"))
         decision = decide_spot_execution(signal, state, Decimal("500"))
         self.assertEqual(decision.action, "buy")
-        self.assertEqual(decision.quote_amount, Decimal("50"))
-        self.assertEqual(decision.quantity, Decimal("0.50000000"))
+        self.assertEqual(decision.quote_amount, Decimal("25"))
+        self.assertEqual(decision.quantity, Decimal("0.25000000"))
 
     def test_repeat_buy_requires_better_price_than_average_entry(self) -> None:
         signal = SpotSignal("ETHUSDT", "buy", Decimal("101"), "2026-01-01", "test")
@@ -32,6 +32,13 @@ class ExecutionPolicyTests(unittest.TestCase):
 
     def test_sell_requires_profitable_price(self) -> None:
         signal = SpotSignal("ETHUSDT", "sell", Decimal("99"), "2026-01-01", "test")
+        state = PositionState("ETHUSDT", Decimal("1"), Decimal("100"), Decimal("100"))
+        decision = decide_spot_execution(signal, state, Decimal("500"))
+        self.assertEqual(decision.action, "skip")
+        self.assertEqual(decision.reason, "sell_price_not_profitable")
+
+    def test_sell_requires_default_one_percent_profit_buffer(self) -> None:
+        signal = SpotSignal("ETHUSDT", "sell", Decimal("100.50"), "2026-01-01", "test")
         state = PositionState("ETHUSDT", Decimal("1"), Decimal("100"), Decimal("100"))
         decision = decide_spot_execution(signal, state, Decimal("500"))
         self.assertEqual(decision.action, "skip")

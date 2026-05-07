@@ -2,13 +2,32 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_DOWN
-from functools import lru_cache
+import time
 from typing import Any
+
+try:
+    from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+except ModuleNotFoundError:
+    def retry(*args, **kwargs):
+        def _decorator(func):
+            return func
+
+        return _decorator
+
+    def retry_if_exception_type(*args, **kwargs):
+        return None
+
+    def stop_after_attempt(*args, **kwargs):
+        return None
+
+    def wait_exponential(*args, **kwargs):
+        return None
 
 from utils.config import BYBIT_API_ENDPOINT, BYBIT_API_KEY, BYBIT_API_SECRET, BYBIT_RECV_WINDOW
 
 SPOT_CATEGORY = "spot"
 KNOWN_QUOTE_ASSETS = ("USDT", "USDC", "BTC", "ETH", "EUR")
+SYMBOL_FILTER_CACHE_TTL_SECONDS = 3600
 
 
 @dataclass(frozen=True)
@@ -30,6 +49,12 @@ class BybitBalance:
     @property
     def total(self) -> Decimal:
         return self.free + self.locked
+
+
+@dataclass(frozen=True)
+class _SymbolFilterCacheEntry:
+    filters: BybitSpotFilters
+    expires_at: float
 
 
 def to_decimal(value: Any, default: str = "0") -> Decimal:
@@ -119,6 +144,7 @@ class BybitSpotClient:
     def __init__(self) -> None:
         from pybit.unified_trading import HTTP
 
+        self._symbol_filters_cache: dict[str, _SymbolFilterCacheEntry] = {}
         self.client = HTTP(
             api_key=BYBIT_API_KEY,
             api_secret=BYBIT_API_SECRET,
@@ -127,9 +153,22 @@ class BybitSpotClient:
             testnet=False,
         )
 
-    @lru_cache(maxsize=256)
     def get_symbol_filters(self, symbol: str) -> BybitSpotFilters:
-        response = self.client.get_instruments_info(category=SPOT_CATEGORY, symbol=symbol.upper())
+        normalized_symbol = symbol.upper()
+        now = time.monotonic()
+        cached_entry = self._symbol_filters_cache.get(normalized_symbol)
+        if cached_entry is not None and cached_entry.expires_at > now:
+            return cached_entry.filters
+
+        filters = self._fetch_symbol_filters(normalized_symbol)
+        self._symbol_filters_cache[normalized_symbol] = _SymbolFilterCacheEntry(
+            filters=filters,
+            expires_at=now + SYMBOL_FILTER_CACHE_TTL_SECONDS,
+        )
+        return filters
+
+    def _fetch_symbol_filters(self, symbol: str) -> BybitSpotFilters:
+        response = self.client.get_instruments_info(category=SPOT_CATEGORY, symbol=symbol)
         instruments = ((response.get("result") or {}).get("list")) or []
         if not instruments:
             raise RuntimeError(f"Bybit returned no instrument metadata for {symbol}")
@@ -138,7 +177,7 @@ class BybitSpotClient:
         lot_size_filter = instrument.get("lotSizeFilter") or {}
         step_size = to_decimal(lot_size_filter.get("basePrecision"), "1")
         return BybitSpotFilters(
-            symbol=symbol.upper(),
+            symbol=symbol,
             min_qty=to_decimal(lot_size_filter.get("minOrderQty")),
             max_qty=to_decimal(lot_size_filter.get("maxLimitOrderQty")),
             step_size=step_size,
@@ -170,6 +209,12 @@ class BybitSpotClient:
         response = self.client.get_executions(category=SPOT_CATEGORY, symbol=symbol.upper(), limit=limit)
         return list(((response.get("result") or {}).get("list")) or [])
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type((RuntimeError, ConnectionError, TimeoutError)),
+        reraise=True,
+    )
     def place_market_order(self, symbol: str, side: str, quantity: Decimal) -> dict[str, Any]:
         response = self.client.place_order(
             category=SPOT_CATEGORY,
@@ -182,6 +227,29 @@ class BybitSpotClient:
         if response.get("retCode") != 0:
             raise RuntimeError(f"Bybit order failed: retCode={response.get('retCode')} retMsg={response.get('retMsg')}")
         return response
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type((RuntimeError, ConnectionError, TimeoutError)),
+        reraise=True,
+    )
+    def get_order_status(self, symbol: str, order_id: str) -> dict[str, Any]:
+        response = self.client.get_order_history(
+            category=SPOT_CATEGORY,
+            symbol=symbol.upper(),
+            orderId=order_id,
+        )
+        if response.get("retCode") != 0:
+            raise RuntimeError(f"Bybit order history failed: retCode={response.get('retCode')} retMsg={response.get('retMsg')}")
+        orders = ((response.get("result") or {}).get("list")) or []
+        if not orders:
+            raise RuntimeError(f"Bybit returned no order history for {symbol} order_id={order_id}")
+        order = orders[0]
+        return {
+            "status": order.get("orderStatus"),
+            "raw": order,
+        }
 
     @staticmethod
     def extract_fill_price(order_payload: dict[str, Any], fallback_price: Decimal) -> Decimal:

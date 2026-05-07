@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from decimal import Decimal
+import logging
 from typing import TYPE_CHECKING
 
 from application.execution_service import TradingExecutionService
@@ -8,6 +10,8 @@ from application.ports import MarketDataProvider, PositionExecutor, SignalNotifi
 
 if TYPE_CHECKING:
     from domain.planner import GreenwichSpotPlanner
+
+logger = logging.getLogger(__name__)
 
 
 class TradingCycleService:
@@ -50,6 +54,32 @@ class TradingCycleService:
             "signal": signal,
             "decision": decision,
             "result": result,
+            "position_state": position_state,
+        }
+
+    @staticmethod
+    def build_pnl_summary(results: dict[str, dict]) -> dict:
+        total_realized_pnl = Decimal("0")
+        closed_symbols: list[str] = []
+        for symbol, payload in results.items():
+            if "error" in payload:
+                continue
+            result = payload.get("result")
+            position_state = payload.get("position_state")
+            if (
+                result is not None
+                and position_state is not None
+                and result.executed
+                and result.action == "sell"
+                and result.executed_price is not None
+                and result.quantity is not None
+            ):
+                realized_pnl = (result.executed_price - position_state.avg_entry_price) * result.quantity
+                total_realized_pnl += realized_pnl
+                closed_symbols.append(symbol)
+        return {
+            "closed_symbols": closed_symbols,
+            "total_realized_pnl": total_realized_pnl,
         }
 
     async def run_many(self, symbols: Iterable[str], dry_run: bool = False) -> dict[str, dict]:
@@ -57,7 +87,12 @@ class TradingCycleService:
 
         results: dict[str, dict] = {}
         for symbol in symbols:
-            results[str(symbol).upper()] = await self.run(str(symbol), dry_run=dry_run)
+            normalized_symbol = str(symbol).upper()
+            try:
+                results[normalized_symbol] = await self.run(str(symbol), dry_run=dry_run)
+            except Exception as exc:
+                logger.exception("cycle_failed symbol=%s", normalized_symbol)
+                results[normalized_symbol] = {"error": str(exc)}
         return results
 
 

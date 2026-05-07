@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -13,6 +14,8 @@ from urllib3.util.retry import Retry
 
 from utils.config import BINANCE_D1_INTERVAL, BINANCE_REST_ENDPOINT, CANDLES_DATA_SCHEMA, DEFAULT_LOOKBACK_DAYS, D1_TABLE_SUFFIX, SPOT_TRADING_SYMBOLS
 from utils.db_actions import d1_table_name, get_db_pool
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -72,6 +75,7 @@ class BinanceAPI:
 
 
 def _build_candle_records(candles: Iterable[Candle]) -> list[tuple]:
+    # CVD is retained only for backward-compatible storage; strategy code uses volume.
     cvd = Decimal("0")
     records = []
     for candle in candles:
@@ -112,7 +116,7 @@ async def insert_candles(conn: asyncpg.Connection, table: str, candles: Sequence
         close_time = EXCLUDED.close_time;
     """
     await conn.executemany(sql, records)
-    print(f"💾 Saved {len(records)} candles into {CANDLES_DATA_SCHEMA}.{table}")
+    logger.info("candles_saved schema=%s table=%s count=%s", CANDLES_DATA_SCHEMA, table, len(records))
 
 
 async def fetch_and_store(
@@ -133,14 +137,13 @@ async def fetch_and_store(
     table_name = f"{symbol.lower()}{table_suffix}"
     total_candles = 0
 
-    print(f"📊 Starting candle sync for {symbol} ({timeframe}) over {days} days")
-    print(f"📅 Range: {start_time} -> {end_time}")
+    logger.info("candle_sync_started symbol=%s timeframe=%s days=%s start=%s end=%s", symbol, timeframe, days, start_time, end_time)
 
     try:
         async with pool.acquire() as conn:
             while current_start < end_time:
                 current_end = min(current_start + timedelta(days=chunk_days), end_time)
-                print(f"🔍 Requesting {symbol}: {current_start} -> {current_end}")
+                logger.info("candles_requesting symbol=%s start=%s end=%s", symbol, current_start, current_end)
                 candles = api.fetch(
                     symbol=symbol,
                     start_time=int(current_start.timestamp() * 1000),
@@ -150,12 +153,12 @@ async def fetch_and_store(
                 if candles:
                     await insert_candles(conn, table_name, candles)
                     total_candles += len(candles)
-                    print(f"📈 {symbol}: fetched {len(candles)} candles")
+                    logger.info("candles_fetched symbol=%s count=%s", symbol, len(candles))
                 else:
-                    print(f"⚠️ {symbol}: no candles returned for {current_start} -> {current_end}")
+                    logger.warning("candles_empty symbol=%s start=%s end=%s", symbol, current_start, current_end)
                 current_start = current_end
                 await asyncio.sleep(0.2)
-        print(f"✅ {symbol}: completed, total candles fetched {total_candles}")
+        logger.info("candle_sync_completed symbol=%s total=%s", symbol, total_candles)
     finally:
         api.close()
         if owns_pool:
@@ -166,18 +169,26 @@ async def run_api(
     symbols: Optional[Sequence[str]] = None,
     timeframe: str = BINANCE_D1_INTERVAL,
     days: int = DEFAULT_LOOKBACK_DAYS,
+    *,
+    table_suffix: str = D1_TABLE_SUFFIX,
 ) -> None:
     selected_symbols = list(symbols or SPOT_TRADING_SYMBOLS)
     total = len(selected_symbols)
-    print(f"🔢 Total symbols to sync: {total}")
+    logger.info("sync_batch_started symbols=%s total=%s timeframe=%s days=%s", ",".join(selected_symbols), total, timeframe, days)
     pool = await get_db_pool()
     try:
         for index, symbol in enumerate(selected_symbols, start=1):
-            print(f"\n🔄 Processing symbol {index}/{total}: {symbol}")
-            await fetch_and_store(symbol, timeframe=timeframe, days=days, pool=pool)
+            logger.info("sync_symbol_started index=%s total=%s symbol=%s", index, total, symbol)
+            await fetch_and_store(
+                symbol,
+                timeframe=timeframe,
+                days=days,
+                pool=pool,
+                table_suffix=table_suffix,
+            )
             if index < total:
-                print("⏳ Waiting 0.5 seconds before next symbol...")
+                logger.info("sync_symbol_pause seconds=0.5")
                 await asyncio.sleep(0.5)
-        print(f"\n🎉 All {total} symbols synced successfully")
+        logger.info("sync_batch_completed total=%s", total)
     finally:
         await pool.close()

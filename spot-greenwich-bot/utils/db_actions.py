@@ -62,6 +62,11 @@ CREATE TABLE IF NOT EXISTS {schema}.order_ledger (
     avg_entry_price_after NUMERIC NOT NULL DEFAULT 0,
     exchange_order_id TEXT,
     exchange_payload JSONB,
+    realized_pnl_usdt NUMERIC,
+    realized_pnl_pct NUMERIC,
+    no_loss_check_price NUMERIC,
+    signal_timeframe TEXT,
+    signal_candle_id TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 """

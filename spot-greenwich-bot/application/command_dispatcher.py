@@ -10,8 +10,14 @@ async def dispatch_command(args, handlers) -> None:
     if args.command == "sync-3y":
         await handlers.sync_3y()
         return
+    if args.command == "sync-4h":
+        await handlers.sync_4h(days=args.period)
+        return
+    if args.command == "sync-full":
+        await handlers.sync_full()
+        return
     if args.command == "analyze":
-        await handlers.analyze(symbol=args.symbol, dry_run=args.dry_run)
+        await handlers.analyze(symbol=args.symbol, dry_run=args.dry_run, timeframe=args.timeframe)
         return
     if args.command == "init-db":
         await handlers.init_db()

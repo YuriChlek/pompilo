@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
+from collections.abc import Iterable
 from decimal import Decimal
 
 from domain.models import ExecutionDecision, ExecutionResult, PositionState, SpotSignal
@@ -17,8 +18,8 @@ class MarketDataProvider(Protocol):
 class MarketDataSynchronizer(Protocol):
     """Application port for refreshing external market data before a cycle."""
 
-    async def synchronize(self) -> None:
-        """Refresh market data and return when the local store is up to date."""
+    async def synchronize(self, timeframes: Iterable[str] = ("d1", "h4")) -> None:
+        """Refresh selected market data timeframes and return when the local store is up to date."""
 
 
 class PositionExecutor(Protocol):

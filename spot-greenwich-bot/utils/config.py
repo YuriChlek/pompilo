@@ -23,6 +23,14 @@ BYBIT_RECV_WINDOW = int(os.getenv("BYBIT_RECV_WINDOW", "10000"))
 
 APP_TIMEZONE = os.getenv("APP_TIMEZONE", "Europe/Kyiv")
 APP_ENV = os.getenv("APP_ENV", "dev")
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", os.getenv("TOKEN", ""))
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", os.getenv("CHAT_ID", ""))
+
+HEALTHCHECK_ENABLED = os.getenv("HEALTHCHECK_ENABLED", "true").lower() == "true"
+HEALTHCHECK_HOST = os.getenv("HEALTHCHECK_HOST", "0.0.0.0")
+HEALTHCHECK_PORT = int(os.getenv("HEALTHCHECK_PORT", "8080"))
 
 CANDLES_DATA_SCHEMA = "_candles_trading_data"
 SPOT_BOT_SCHEMA = "_spot_trading_bot"
@@ -40,8 +48,11 @@ SPOT_TRADING_SYMBOLS = [
 ]
 
 BINANCE_D1_INTERVAL = "1d"
+BINANCE_H4_INTERVAL = "4h"
 DEFAULT_LOOKBACK_DAYS = 1095
 THREE_YEARS_DAYS = 1095
+H4_ANALYSIS_DAYS = int(os.getenv("H4_ANALYSIS_DAYS", "180"))
+H4_INCREMENTAL_SYNC_DAYS = int(os.getenv("H4_INCREMENTAL_SYNC_DAYS", "2"))
 DEFAULT_DAILY_TARGET_HOUR = int(os.getenv("DAILY_TARGET_HOUR", "0"))
 DEFAULT_DAILY_TARGET_MINUTE = int(os.getenv("DAILY_TARGET_MINUTE", "0"))
 DEFAULT_DAILY_TARGET_SECOND = int(os.getenv("DAILY_TARGET_SECOND", "1"))
@@ -52,9 +63,20 @@ GREENWICH_MULTIPLIER_1 = Decimal(os.getenv("GREENWICH_MULTIPLIER_1", "5.5"))
 GREENWICH_MULTIPLIER_2 = Decimal(os.getenv("GREENWICH_MULTIPLIER_2", "4.5"))
 GREENWICH_MULTIPLIER_3 = Decimal(os.getenv("GREENWICH_MULTIPLIER_3", "3.5"))
 ANALYSIS_WINDOW = int(os.getenv("ANALYSIS_WINDOW", str(max(240, GREENWICH_LENGTH * 8))))
+H4_ANALYSIS_WINDOW = int(os.getenv("H4_ANALYSIS_WINDOW", str(max(240, GREENWICH_LENGTH * 8))))
+H4_SCHEDULER_ENABLED = os.getenv("H4_SCHEDULER_ENABLED", "true").lower() == "true"
+D1_REGIME_FILTER_ENABLED = os.getenv("D1_REGIME_FILTER_ENABLED", "true").lower() == "true"
 
 ORDER_DEPOSIT_PERCENT = Decimal(os.getenv("ORDER_DEPOSIT_PERCENT", "5"))
-MIN_PROFIT_RATIO = Decimal(os.getenv("MIN_PROFIT_RATIO", "0"))
+MIN_PROFIT_RATIO = Decimal(os.getenv("MIN_PROFIT_RATIO", "0.01"))
+NO_LOSS_GUARD_ENABLED = os.getenv("NO_LOSS_GUARD_ENABLED", "true").lower() == "true"
+
+_MIN_ALLOWED_PROFIT_RATIO = Decimal("0.01")
+if MIN_PROFIT_RATIO < _MIN_ALLOWED_PROFIT_RATIO:
+    raise ValueError(
+        f"MIN_PROFIT_RATIO={MIN_PROFIT_RATIO} lower than minimum allowed "
+        f"{_MIN_ALLOWED_PROFIT_RATIO} (minimum profitable SELL threshold is 1%)"
+    )
 
 BUY_SIGNAL = "buy"
 SELL_SIGNAL = "sell"

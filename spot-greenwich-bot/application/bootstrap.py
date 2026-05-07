@@ -8,12 +8,15 @@ from application.trading_cycle_service import TradingCycleService
 def build_live_trading_cycle() -> TradingCycleService:
     """Compose the current live trading cycle from concrete adapters."""
 
-    from infrastructure import BybitSpotExecutor, DatabaseMarketDataProvider, LoggingSignalNotifier
+    from domain.planner import MultiTimeframeSpotPlanner
+    from infrastructure import BybitSpotExecutor, CompositeSignalNotifier, LoggingSignalNotifier, MultiTimeframeMarketDataProvider, TelegramSignalNotifier
+    from utils.config import D1_REGIME_FILTER_ENABLED
 
     return TradingCycleService(
-        market_data_provider=DatabaseMarketDataProvider(),
+        market_data_provider=MultiTimeframeMarketDataProvider(),
         executor=BybitSpotExecutor(),
-        notifier=LoggingSignalNotifier(),
+        notifier=CompositeSignalNotifier(LoggingSignalNotifier(), TelegramSignalNotifier()),
+        planner=MultiTimeframeSpotPlanner(d1_regime_filter_enabled=D1_REGIME_FILTER_ENABLED),
     )
 
 

@@ -13,8 +13,11 @@ _EXPORTS = {
     "satisfies_min_notional": ("infrastructure.bybit_spot", "satisfies_min_notional"),
     "BybitSpotExecutor": ("infrastructure.execution_service", "BybitSpotExecutor"),
     "DatabaseMarketDataProvider": ("infrastructure.market_data_provider", "DatabaseMarketDataProvider"),
+    "MultiTimeframeMarketDataProvider": ("infrastructure.market_data_provider", "MultiTimeframeMarketDataProvider"),
     "BinanceMarketDataSynchronizer": ("infrastructure.market_data_synchronizer", "BinanceMarketDataSynchronizer"),
+    "CompositeSignalNotifier": ("infrastructure.notifications", "CompositeSignalNotifier"),
     "LoggingSignalNotifier": ("infrastructure.notifications", "LoggingSignalNotifier"),
+    "TelegramSignalNotifier": ("infrastructure.notifications", "TelegramSignalNotifier"),
 }
 
 __all__ = list(_EXPORTS)

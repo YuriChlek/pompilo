@@ -15,6 +15,16 @@ class SpotSignal:
     signal_price: Decimal
     close_time: object
     reason: str
+    timeframe: str = "d1"
+    candle_id: str | None = None
+
+
+@dataclass(frozen=True)
+class MultiTimeframeSignal:
+    symbol: str
+    d1_regime_blocked: bool
+    h4: SpotSignal
+    resolved: SpotSignal
 
 
 @dataclass(frozen=True)
@@ -37,6 +47,8 @@ class ExecutionDecision:
     quantity: Decimal
     quote_amount: Decimal
     reason: str
+    signal_timeframe: str | None = None
+    signal_candle_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -56,6 +68,7 @@ __all__ = [
     "ActionType",
     "ExecutionDecision",
     "ExecutionResult",
+    "MultiTimeframeSignal",
     "PositionState",
     "SignalType",
     "SpotSignal",
