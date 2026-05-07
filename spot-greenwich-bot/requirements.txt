@@ -2,7 +2,6 @@ psycopg2-binary
 asyncpg
 websockets
 pybit
-okx
 httpx
 requests
 tenacity
@@ -15,3 +14,4 @@ sqlalchemy
 pandas
 numpy
 pandas-ta
+python-telegram-bot
