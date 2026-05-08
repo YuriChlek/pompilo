@@ -13,12 +13,13 @@ class LoggingSignalNotifier:
 
     async def notify(self, signal: SpotSignal, result: ExecutionResult) -> None:
         logger.info(
-            "spot_signal_processed symbol=%s signal=%s action=%s executed=%s dry_run=%s reason=%s signal_price=%s executed_price=%s",
+            "spot_signal_processed symbol=%s signal=%s action=%s executed=%s dry_run=%s notification_only=%s reason=%s signal_price=%s executed_price=%s",
             signal.symbol,
             signal.signal_type,
             result.action,
             result.executed,
             result.dry_run,
+            result.notification_only,
             result.reason,
             signal.signal_price,
             result.executed_price,
@@ -38,6 +39,7 @@ class TelegramSignalNotifier:
         should_notify = (
             result.executed
             or (result.dry_run and result.action != "skip")
+            or (result.notification_only and result.action != "skip")
             or result.reason in {"no_loss_guard_infrastructure", "duplicate_signal_order"}
         )
         if not should_notify:
@@ -55,6 +57,7 @@ class TelegramSignalNotifier:
             f"action={result.action}\n"
             f"executed={result.executed}\n"
             f"dry_run={result.dry_run}\n"
+            f"notification_only={result.notification_only}\n"
             f"reason={result.reason}\n"
             f"signal_price={signal.signal_price}\n"
             f"executed_price={result.executed_price}"

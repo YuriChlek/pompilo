@@ -25,22 +25,28 @@ def _run_api(*, days: int, timeframe: str = BINANCE_D1_INTERVAL, table_suffix: s
     return run_api(days=days, timeframe=timeframe, table_suffix=table_suffix)
 
 
-def _build_initialization_service():
+def _build_initialization_service(*, notification_only_mode: bool | None = None):
     from application.bootstrap import build_initialization_service
 
-    return build_initialization_service()
+    return build_initialization_service(notification_only_mode=notification_only_mode)
 
 
-def _build_live_trading_cycle():
+def _build_live_trading_cycle(*, notification_only_mode: bool | None = None):
     from application.bootstrap import build_live_trading_cycle
 
-    return build_live_trading_cycle()
+    return build_live_trading_cycle(notification_only_mode=notification_only_mode)
 
 
-def _build_live_trading_scheduler():
+def _build_live_trading_scheduler(*, notification_only_mode: bool | None = None):
     from application.bootstrap import build_live_trading_scheduler
 
-    return build_live_trading_scheduler()
+    return build_live_trading_scheduler(notification_only_mode=notification_only_mode)
+
+
+def _build_market_data_synchronizer():
+    from application.bootstrap import build_market_data_synchronizer
+
+    return build_market_data_synchronizer()
 
 
 class RuntimeCommandService:
@@ -67,12 +73,42 @@ class RuntimeCommandService:
         await _run_api(days=H4_ANALYSIS_DAYS, timeframe=BINANCE_H4_INTERVAL, table_suffix=H4_TABLE_SUFFIX)
         logger.info("sync_full_completed")
 
-    async def analyze(self, *, symbol: str | None = None, dry_run: bool = False, timeframe: str = "4h") -> None:
-        trading_cycle = _build_live_trading_cycle()
-        initialization_service = _build_initialization_service()
+    async def analyze(
+        self,
+        *,
+        symbol: str | None = None,
+        dry_run: bool = False,
+        timeframe: str = "4h",
+        notification_only: bool = False,
+    ) -> None:
         symbols = [symbol] if symbol else SPOT_TRADING_SYMBOLS
-        await initialization_service.initialize_runtime(symbols)
-        logger.info("analysis_started symbols=%s dry_run=%s timeframe=%s", len(symbols), dry_run, timeframe)
+        if notification_only and not dry_run:
+            scheduler = _build_live_trading_scheduler(notification_only_mode=True)
+            logger.info(
+                "analysis_notification_only_live_started symbols=%s timeframe=%s",
+                len(symbols),
+                timeframe,
+            )
+            await scheduler.run_forever(
+                symbols,
+                target_hour=DEFAULT_DAILY_TARGET_HOUR,
+                target_minute=DEFAULT_DAILY_TARGET_MINUTE,
+                target_second=DEFAULT_DAILY_TARGET_SECOND,
+                dry_run=False,
+                reconcile_positions=True,
+            )
+            return
+
+        trading_cycle = _build_live_trading_cycle(notification_only_mode=notification_only)
+        initialization_service = _build_initialization_service(notification_only_mode=notification_only)
+        await initialization_service.initialize_runtime(symbols, reconcile_positions=False)
+        logger.info(
+            "analysis_started symbols=%s dry_run=%s notification_only=%s timeframe=%s",
+            len(symbols),
+            dry_run,
+            notification_only,
+            timeframe,
+        )
         for current_symbol in symbols:
             logger.info("analysis_symbol_started symbol=%s", current_symbol)
             await trading_cycle.run(current_symbol, dry_run=dry_run)
@@ -90,9 +126,9 @@ class RuntimeCommandService:
         await initialization_service.run_migrations()
         logger.info("migrations_completed")
 
-    async def live(self, *, dry_run: bool = False) -> None:
-        scheduler = _build_live_trading_scheduler()
-        logger.info("live_started symbols=%s", ",".join(SPOT_TRADING_SYMBOLS))
+    async def live(self, *, dry_run: bool = False, notification_only: bool = False) -> None:
+        scheduler = _build_live_trading_scheduler(notification_only_mode=notification_only)
+        logger.info("live_started symbols=%s dry_run=%s notification_only=%s", ",".join(SPOT_TRADING_SYMBOLS), dry_run, notification_only)
         await scheduler.run_forever(
             SPOT_TRADING_SYMBOLS,
             target_hour=DEFAULT_DAILY_TARGET_HOUR,

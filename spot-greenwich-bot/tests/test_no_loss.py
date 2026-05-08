@@ -92,10 +92,83 @@ class NoLossTests(unittest.TestCase):
         self.assertEqual(result.reason, "duplicate_signal_order")
         self.assertEqual(calls, ["skipped"])
 
+    def test_buy_price_guard_blocks_buy_when_market_price_is_too_high(self) -> None:
+        class _Client:
+            def get_symbol_filters(self, symbol: str) -> BybitSpotFilters:
+                return BybitSpotFilters(symbol, Decimal("0.001"), Decimal("1000"), Decimal("0.001"), Decimal("5"), Decimal("0.01"))
+
+            def fetch_current_price(self, symbol: str) -> Decimal:
+                return Decimal("102")
+
+            def place_market_order(self, symbol: str, side: str, quantity: Decimal):
+                raise AssertionError("order should be blocked before exchange placement")
+
+        executor = BybitSpotExecutor(client=_Client())
+        calls = []
+
+        async def _record_ledger(decision, position_state, executed_price, exchange_order_id, status, **kwargs):
+            calls.append((status, kwargs.get("payload")))
+
+        async def _has_executed_signal(decision):
+            return False
+
+        executor._record_ledger = _record_ledger  # type: ignore[attr-defined]
+        executor._has_executed_signal = _has_executed_signal  # type: ignore[method-assign]
+        decision = ExecutionDecision("buy", "ETHUSDT", Decimal("100"), Decimal("0.1"), Decimal("10"), "test_buy", "h4", "2026-01-01")
+        state = PositionState("ETHUSDT", Decimal("0"), Decimal("0"), Decimal("0"))
+
+        with self.assertLogs("infrastructure.execution_service", level="WARNING"):
+            result = asyncio.run(executor.execute(decision, state, dry_run=False))
+
+        self.assertFalse(result.executed)
+        self.assertEqual(result.action, "skip")
+        self.assertEqual(result.reason, "buy_price_guard_infrastructure")
+        self.assertEqual(calls, [("blocked_buy_price_guard", {"current_price": "102", "max_buy_price": "101.00"})])
+
+    def test_buy_price_guard_allows_buy_when_market_price_is_better_than_signal(self) -> None:
+        class _Client:
+            def get_symbol_filters(self, symbol: str) -> BybitSpotFilters:
+                return BybitSpotFilters(symbol, Decimal("0.001"), Decimal("1000"), Decimal("0.001"), Decimal("5"), Decimal("0.01"))
+
+            def fetch_current_price(self, symbol: str) -> Decimal:
+                return Decimal("99")
+
+            def place_market_order(self, symbol: str, side: str, quantity: Decimal):
+                return {"retCode": 0, "result": {"orderId": "abc-123", "avgPrice": "99"}}
+
+            def extract_fill_price(self, order_payload, fallback_price: Decimal) -> Decimal:
+                return Decimal("99")
+
+            def get_order_status(self, symbol: str, order_id: str):
+                return {"status": "Filled"}
+
+        executor = BybitSpotExecutor(client=_Client())
+        calls = []
+
+        async def _apply_position_update(decision, position_state, executed_price, exchange_order_id, order_payload, **kwargs):
+            calls.append((decision.quantity, executed_price, exchange_order_id))
+
+        async def _has_executed_signal(decision):
+            return False
+
+        executor._apply_position_update = _apply_position_update  # type: ignore[attr-defined]
+        executor._has_executed_signal = _has_executed_signal  # type: ignore[method-assign]
+        decision = ExecutionDecision("buy", "ETHUSDT", Decimal("100"), Decimal("0.123456"), Decimal("12.3456"), "test_buy", "h4", "2026-01-01")
+        state = PositionState("ETHUSDT", Decimal("0"), Decimal("0"), Decimal("0"))
+
+        result = asyncio.run(executor.execute(decision, state, dry_run=False))
+
+        self.assertTrue(result.executed)
+        self.assertEqual(result.executed_price, Decimal("99"))
+        self.assertEqual(calls, [(Decimal("0.123"), Decimal("99"), "abc-123")])
+
     def test_order_status_must_be_filled_after_market_order(self) -> None:
         class _Client:
             def get_symbol_filters(self, symbol: str) -> BybitSpotFilters:
                 return BybitSpotFilters(symbol, Decimal("0.001"), Decimal("1000"), Decimal("0.001"), Decimal("5"), Decimal("0.01"))
+
+            def fetch_current_price(self, symbol: str) -> Decimal:
+                return Decimal("100")
 
             def place_market_order(self, symbol: str, side: str, quantity: Decimal):
                 return {"retCode": 0, "result": {"orderId": "abc-123", "avgPrice": "100"}}

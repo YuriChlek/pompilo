@@ -4,7 +4,7 @@ import unittest
 from decimal import Decimal
 from unittest.mock import patch
 
-from domain.signals import generate_spot_signal
+from domain.signals import build_take_profit_signal, generate_spot_signal
 
 
 class SignalGenerationTests(unittest.TestCase):
@@ -61,3 +61,20 @@ class SignalGenerationTests(unittest.TestCase):
 
         self.assertEqual(signal.signal_type, "hold")
         self.assertEqual(signal.reason, "no_greenwich_signal")
+
+    def test_build_take_profit_signal_uses_upper1_and_distinct_candle_id(self) -> None:
+        snapshot = type(
+            "Snapshot",
+            (),
+            {
+                "upper1": Decimal("120"),
+                "close_time": "2026-01-01",
+            },
+        )()
+
+        signal = build_take_profit_signal("ETHUSDT", snapshot, timeframe="h4")
+
+        self.assertEqual(signal.signal_type, "sell")
+        self.assertEqual(signal.signal_price, Decimal("120"))
+        self.assertEqual(signal.reason, "greenwich_take_profit_upper1")
+        self.assertEqual(signal.candle_id, "2026-01-01:upper1_take_profit")

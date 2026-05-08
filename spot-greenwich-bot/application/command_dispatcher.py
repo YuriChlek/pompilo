@@ -17,7 +17,12 @@ async def dispatch_command(args, handlers) -> None:
         await handlers.sync_full()
         return
     if args.command == "analyze":
-        await handlers.analyze(symbol=args.symbol, dry_run=args.dry_run, timeframe=args.timeframe)
+        await handlers.analyze(
+            symbol=args.symbol,
+            dry_run=args.dry_run,
+            timeframe=args.timeframe,
+            notification_only=args.notification_only,
+        )
         return
     if args.command == "init-db":
         await handlers.init_db()
@@ -25,7 +30,7 @@ async def dispatch_command(args, handlers) -> None:
     if args.command == "migrate":
         await handlers.migrate()
         return
-    await handlers.live(dry_run=args.dry_run)
+    await handlers.live(dry_run=args.dry_run, notification_only=args.notification_only)
 
 
 __all__ = ["dispatch_command"]

@@ -20,6 +20,7 @@ class GreenwichSignalSnapshot:
     buy_signal: bool
     sell_signal: bool
     signal_price: Decimal
+    signal_high: Decimal
     close_time: object
 
 
@@ -100,5 +101,6 @@ def build_greenwich_snapshot(df: pd.DataFrame) -> GreenwichSignalSnapshot:
         buy_signal=bool(buy_cross.iloc[-1]),
         sell_signal=bool(sell_cross.iloc[-1]),
         signal_price=_to_decimal(last["close"]),
+        signal_high=_to_decimal(last["high"]),
         close_time=last["close_time"],
     )

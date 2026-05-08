@@ -33,6 +33,8 @@ class PositionState:
     quantity: Decimal
     avg_entry_price: Decimal
     total_cost: Decimal
+    entry_count: int = 0
+    first_take_profit_done: bool = False
 
     @property
     def has_position(self) -> bool:
@@ -62,6 +64,7 @@ class ExecutionResult:
     quantity: Decimal | None = None
     exchange_order_id: str | None = None
     dry_run: bool = False
+    notification_only: bool = False
 
 
 __all__ = [

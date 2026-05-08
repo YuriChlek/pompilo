@@ -21,6 +21,22 @@ def _resolve_candle_id(close_time: object) -> str:
     return str(close_time)
 
 
+def _resolve_take_profit_candle_id(close_time: object) -> str:
+    return f"{close_time}:upper1_take_profit"
+
+
+def build_take_profit_signal(symbol: str, snapshot: GreenwichSignalSnapshot, *, timeframe: str = "d1") -> SpotSignal:
+    return SpotSignal(
+        symbol=symbol,
+        signal_type=SELL_SIGNAL,
+        signal_price=snapshot.upper1,
+        close_time=snapshot.close_time,
+        reason="greenwich_take_profit_upper1",
+        timeframe=timeframe,
+        candle_id=_resolve_take_profit_candle_id(snapshot.close_time),
+    )
+
+
 def generate_spot_signal(symbol: str, candles_df, *, timeframe: str = "d1") -> SpotSignal:
     """Build the trading signal for one symbol from the Greenwich strategy snapshot."""
 
@@ -56,4 +72,4 @@ def generate_spot_signal(symbol: str, candles_df, *, timeframe: str = "d1") -> S
     )
 
 
-__all__ = ["build_greenwich_signal_snapshot", "generate_spot_signal"]
+__all__ = ["build_greenwich_signal_snapshot", "build_take_profit_signal", "generate_spot_signal"]

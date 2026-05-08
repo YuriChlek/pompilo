@@ -44,6 +44,18 @@ CREATE TABLE IF NOT EXISTS {schema}.position_state (
     quantity NUMERIC NOT NULL DEFAULT 0,
     avg_entry_price NUMERIC NOT NULL DEFAULT 0,
     total_cost NUMERIC NOT NULL DEFAULT 0,
+    entry_count INTEGER NOT NULL DEFAULT 0,
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+"""
+
+CREATE_SPOT_POSITION_EXIT_STATE_SQL = """
+CREATE TABLE IF NOT EXISTS {schema}.position_exit_state (
+    symbol TEXT PRIMARY KEY,
+    position_opened_at TIMESTAMP,
+    initial_quantity NUMERIC NOT NULL DEFAULT 0,
+    first_take_profit_done BOOLEAN NOT NULL DEFAULT FALSE,
+    first_take_profit_order_id TEXT,
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 """
@@ -113,6 +125,7 @@ async def create_tables(symbols: Optional[Iterable[str]] = None) -> None:
             )
 
         await conn.execute(CREATE_SPOT_POSITION_STATE_SQL.format(schema=SPOT_BOT_SCHEMA))
+        await conn.execute(CREATE_SPOT_POSITION_EXIT_STATE_SQL.format(schema=SPOT_BOT_SCHEMA))
         await conn.execute(CREATE_SPOT_ORDER_LEDGER_SQL.format(schema=SPOT_BOT_SCHEMA))
     finally:
         await conn.close()

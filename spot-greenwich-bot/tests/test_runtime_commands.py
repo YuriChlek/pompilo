@@ -20,10 +20,41 @@ class RuntimeCommandServiceTests(unittest.TestCase):
                 calls.append(("run", (symbol, dry_run)))
 
         with patch("application.runtime_commands._build_initialization_service", return_value=_Init()):
-            with patch("application.runtime_commands._build_live_trading_cycle", return_value=_Cycle()):
-                asyncio.run(RuntimeCommandService().analyze(symbol="ETHUSDT", dry_run=True, timeframe="4h"))
+            with patch("application.runtime_commands._build_live_trading_cycle", return_value=_Cycle()) as build_cycle:
+                asyncio.run(RuntimeCommandService().analyze(symbol="ETHUSDT", dry_run=True, timeframe="4h", notification_only=True))
 
         self.assertEqual(calls, [("init", ("ETHUSDT",)), ("run", ("ETHUSDT", True))])
+        build_cycle.assert_called_once_with(notification_only_mode=True)
+
+    def test_analyze_notification_only_uses_scheduler_live_loop_for_selected_symbols(self) -> None:
+        calls: list[tuple[str, object]] = []
+
+        class _Scheduler:
+            async def run_forever(self, symbols, **kwargs) -> None:
+                calls.append(
+                    (
+                        "live",
+                        (
+                            tuple(symbols),
+                            kwargs["dry_run"],
+                            kwargs["reconcile_positions"],
+                            kwargs["target_hour"],
+                            kwargs["target_minute"],
+                            kwargs["target_second"],
+                        ),
+                    )
+                )
+
+        with patch("application.runtime_commands._build_live_trading_scheduler", return_value=_Scheduler()) as build_scheduler:
+            asyncio.run(RuntimeCommandService().analyze(symbol="ETHUSDT", dry_run=False, timeframe="4h", notification_only=True))
+
+        self.assertEqual(
+            calls,
+            [
+                ("live", (("ETHUSDT",), False, True, 0, 0, 1)),
+            ],
+        )
+        build_scheduler.assert_called_once_with(notification_only_mode=True)
 
     def test_live_uses_new_scheduler_builder(self) -> None:
         calls: list[tuple[str, object]] = []
@@ -32,10 +63,11 @@ class RuntimeCommandServiceTests(unittest.TestCase):
             async def run_forever(self, symbols, **kwargs) -> None:
                 calls.append(("live", (tuple(symbols), kwargs["dry_run"], kwargs["reconcile_positions"])))
 
-        with patch("application.runtime_commands._build_live_trading_scheduler", return_value=_Scheduler()):
-            asyncio.run(RuntimeCommandService().live(dry_run=True))
+        with patch("application.runtime_commands._build_live_trading_scheduler", return_value=_Scheduler()) as build_scheduler:
+            asyncio.run(RuntimeCommandService().live(dry_run=True, notification_only=True))
 
         self.assertEqual(calls, [("live", (("ETHUSDT", "SUIUSDT", "TAOUSDT", "SOLUSDT", "BTCUSDT", "XRPUSDT", "LTCUSDT"), True, True))])
+        build_scheduler.assert_called_once_with(notification_only_mode=True)
 
     def test_init_db_and_migrate_use_new_initialization_service(self) -> None:
         calls: list[str] = []

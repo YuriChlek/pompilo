@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from domain.models import ExecutionDecision, ExecutionResult, PositionState
 from infrastructure.bybit_spot import BybitSpotClient, derive_avg_entry_price_from_trades, normalize_order_quantity, satisfies_min_notional, split_symbol
-from utils.config import MIN_PROFIT_RATIO, NO_LOSS_GUARD_ENABLED, SPOT_BOT_SCHEMA
+from utils.config import BUY_PRICE_GUARD_ENABLED, BUY_PRICE_GUARD_MAX_DEVIATION_RATIO, MIN_PROFIT_RATIO, NO_LOSS_GUARD_ENABLED, SPOT_BOT_SCHEMA
 
 logger = logging.getLogger(__name__)
 
@@ -22,11 +22,61 @@ def _create_connection():
 class BybitSpotExecutor:
     """Execute spot market decisions on Bybit and persist position/ledger updates."""
 
-    def __init__(self, client: BybitSpotClient | None = None) -> None:
+    def __init__(self, client: BybitSpotClient | None = None, *, notification_only_mode: bool = False) -> None:
         self.client = client or BybitSpotClient()
+        self.notification_only_mode = notification_only_mode
 
     def _minimum_sell_price(self, position_state: PositionState) -> Decimal:
         return position_state.avg_entry_price * (Decimal("1") + MIN_PROFIT_RATIO)
+
+    def _maximum_buy_price(self, signal_price: Decimal) -> Decimal:
+        return signal_price * (Decimal("1") + BUY_PRICE_GUARD_MAX_DEVIATION_RATIO)
+
+    async def _resolve_entry_count_from_order_ledger(
+        self,
+        conn,
+        symbol: str,
+        fallback_entry_count: int,
+    ) -> int:
+        last_sell_id = await conn.fetchval(
+            f"""
+            SELECT COALESCE(MAX(id), 0)
+            FROM {SPOT_BOT_SCHEMA}.order_ledger
+            WHERE symbol = $1
+              AND side = 'sell'
+              AND status IN ('executed', 'no_loss_violation')
+            """,
+            symbol,
+        )
+        buy_count = await conn.fetchval(
+            f"""
+            SELECT COUNT(*)
+            FROM {SPOT_BOT_SCHEMA}.order_ledger
+            WHERE symbol = $1
+              AND side = 'buy'
+              AND status = 'executed'
+              AND id > $2
+            """,
+            symbol,
+            int(last_sell_id or 0),
+        )
+        resolved_entry_count = int(buy_count or 0)
+        if resolved_entry_count > 0:
+            return resolved_entry_count
+        if fallback_entry_count > 0:
+            return fallback_entry_count
+        return 1
+
+    async def _load_position_exit_state(self, conn, symbol: str) -> dict | None:
+        row = await conn.fetchrow(
+            f"""
+            SELECT symbol, position_opened_at, initial_quantity, first_take_profit_done, first_take_profit_order_id
+            FROM {SPOT_BOT_SCHEMA}.position_exit_state
+            WHERE symbol = $1
+            """,
+            symbol,
+        )
+        return dict(row) if row is not None else None
 
     async def get_position_state(self, symbol: str) -> PositionState:
         """Return the local position state reconciled against Bybit balances and trades."""
@@ -35,19 +85,22 @@ class BybitSpotExecutor:
         try:
             row = await conn.fetchrow(
                 f"""
-                SELECT symbol, quantity, avg_entry_price, total_cost
+                SELECT symbol, quantity, avg_entry_price, total_cost, entry_count
                 FROM {SPOT_BOT_SCHEMA}.position_state
                 WHERE symbol = $1
                 """,
                 symbol,
             )
-            local_state = PositionState(symbol=symbol, quantity=Decimal("0"), avg_entry_price=Decimal("0"), total_cost=Decimal("0"))
+            local_state = PositionState(symbol=symbol, quantity=Decimal("0"), avg_entry_price=Decimal("0"), total_cost=Decimal("0"), entry_count=0)
             if row is not None:
+                exit_state = await self._load_position_exit_state(conn, symbol)
                 local_state = PositionState(
                     symbol=row["symbol"],
                     quantity=Decimal(str(row["quantity"])),
                     avg_entry_price=Decimal(str(row["avg_entry_price"])),
                     total_cost=Decimal(str(row["total_cost"])),
+                    entry_count=int(row["entry_count"] or 0),
+                    first_take_profit_done=bool((exit_state or {}).get("first_take_profit_done", False)),
                 )
             return await self._reconcile_position_state(conn, symbol, local_state)
         finally:
@@ -71,42 +124,54 @@ class BybitSpotExecutor:
             balance = self.client.fetch_asset_balance(asset)
             exchange_quantity = balance.total
             if exchange_quantity <= 0:
-                reconciled_state = PositionState(symbol=symbol, quantity=Decimal("0"), avg_entry_price=Decimal("0"), total_cost=Decimal("0"))
+                reconciled_state = PositionState(symbol=symbol, quantity=Decimal("0"), avg_entry_price=Decimal("0"), total_cost=Decimal("0"), entry_count=0, first_take_profit_done=False)
+                await conn.execute(
+                    f"DELETE FROM {SPOT_BOT_SCHEMA}.position_exit_state WHERE symbol = $1",
+                    symbol,
+                )
             else:
                 trades = self.client.fetch_my_trades(symbol)
                 avg_entry_price = derive_avg_entry_price_from_trades(symbol, exchange_quantity, trades)
                 if avg_entry_price <= 0 and local_state.quantity > 0:
                     avg_entry_price = local_state.avg_entry_price
                 total_cost = exchange_quantity * avg_entry_price
+                entry_count = await self._resolve_entry_count_from_order_ledger(conn, symbol, local_state.entry_count)
+                exit_state = await self._load_position_exit_state(conn, symbol)
                 reconciled_state = PositionState(
                     symbol=symbol,
                     quantity=exchange_quantity,
                     avg_entry_price=avg_entry_price,
                     total_cost=total_cost,
+                    entry_count=entry_count,
+                    first_take_profit_done=bool((exit_state or {}).get("first_take_profit_done", False)),
                 )
 
             if reconciled_state != local_state:
                 await conn.execute(
                     f"""
-                    INSERT INTO {SPOT_BOT_SCHEMA}.position_state (symbol, quantity, avg_entry_price, total_cost, updated_at)
-                    VALUES ($1, $2, $3, $4, NOW())
+                    INSERT INTO {SPOT_BOT_SCHEMA}.position_state (symbol, quantity, avg_entry_price, total_cost, entry_count, updated_at)
+                    VALUES ($1, $2, $3, $4, $5, NOW())
                     ON CONFLICT (symbol) DO UPDATE
                     SET quantity = EXCLUDED.quantity,
                         avg_entry_price = EXCLUDED.avg_entry_price,
                         total_cost = EXCLUDED.total_cost,
+                        entry_count = EXCLUDED.entry_count,
                         updated_at = NOW()
                     """,
                     reconciled_state.symbol,
                     reconciled_state.quantity,
                     reconciled_state.avg_entry_price,
                     reconciled_state.total_cost,
+                    reconciled_state.entry_count,
                 )
                 logger.info(
-                    "position_reconciled symbol=%s local_qty=%s exchange_qty=%s avg_entry=%s",
+                    "position_reconciled symbol=%s local_qty=%s exchange_qty=%s avg_entry=%s entry_count=%s first_take_profit_done=%s",
                     symbol,
                     local_state.quantity,
                     reconciled_state.quantity,
                     reconciled_state.avg_entry_price,
+                    reconciled_state.entry_count,
+                    reconciled_state.first_take_profit_done,
                 )
             return reconciled_state
         except Exception as exc:
@@ -138,6 +203,21 @@ class BybitSpotExecutor:
                 quantity=decision.quantity,
                 exchange_order_id=None,
                 dry_run=True,
+            )
+
+        if self.notification_only_mode:
+            await self._record_ledger(decision, position_state, decision.signal_price, None, "notification_only")
+            return ExecutionResult(
+                False,
+                decision.symbol,
+                decision.action,
+                f"notification_only:{decision.reason}",
+                decision.signal_price,
+                executed_price=decision.signal_price,
+                quantity=decision.quantity,
+                exchange_order_id=None,
+                dry_run=False,
+                notification_only=True,
             )
 
         return await self._execute_trade(decision, position_state, dry_run=False)
@@ -186,6 +266,35 @@ class BybitSpotExecutor:
             )
 
         no_loss_check_price: Decimal | None = None
+        if decision.action == "buy" and BUY_PRICE_GUARD_ENABLED:
+            current_price = self.client.fetch_current_price(decision.symbol)
+            max_buy_price = self._maximum_buy_price(decision.signal_price)
+            if current_price > max_buy_price:
+                logger.warning(
+                    "buy_price_guard_triggered symbol=%s current_price=%s signal_price=%s max_buy_price=%s",
+                    decision.symbol,
+                    current_price,
+                    decision.signal_price,
+                    max_buy_price,
+                )
+                await self._record_ledger(
+                    decision,
+                    position_state,
+                    None,
+                    None,
+                    "blocked_buy_price_guard",
+                    payload={"current_price": str(current_price), "max_buy_price": str(max_buy_price)},
+                )
+                return ExecutionResult(
+                    False,
+                    decision.symbol,
+                    "skip",
+                    "buy_price_guard_infrastructure",
+                    decision.signal_price,
+                    quantity=normalized_quantity,
+                    dry_run=dry_run,
+                )
+
         if decision.action == "sell" and position_state.has_position and NO_LOSS_GUARD_ENABLED:
             current_price = self.client.fetch_current_price(decision.symbol)
             no_loss_check_price = current_price
@@ -299,6 +408,9 @@ class BybitSpotExecutor:
                     new_quantity = position_state.quantity + decision.quantity
                     new_total_cost = position_state.total_cost + (decision.quantity * executed_price)
                     new_avg_entry = new_total_cost / new_quantity
+                    new_entry_count = position_state.entry_count + 1
+                    is_opening_new_position = not position_state.has_position
+                    new_first_take_profit_done = False if is_opening_new_position else position_state.first_take_profit_done
                 else:
                     realized_pnl_usdt = (executed_price - position_state.avg_entry_price) * decision.quantity
                     if position_state.total_cost > 0:
@@ -314,25 +426,88 @@ class BybitSpotExecutor:
                             position_state.avg_entry_price,
                             realized_pnl_usdt,
                         )
-                    new_quantity = Decimal("0")
-                    new_total_cost = Decimal("0")
-                    new_avg_entry = Decimal("0")
+                    remaining_quantity = position_state.quantity - decision.quantity
+                    if remaining_quantity > 0:
+                        new_quantity = remaining_quantity
+                        new_total_cost = remaining_quantity * position_state.avg_entry_price
+                        new_avg_entry = position_state.avg_entry_price
+                        new_entry_count = position_state.entry_count
+                        new_first_take_profit_done = decision.reason == "greenwich_take_profit_upper1" or position_state.first_take_profit_done
+                    else:
+                        new_quantity = Decimal("0")
+                        new_total_cost = Decimal("0")
+                        new_avg_entry = Decimal("0")
+                        new_entry_count = 0
+                        new_first_take_profit_done = False
 
                 await conn.execute(
                     f"""
-                    INSERT INTO {SPOT_BOT_SCHEMA}.position_state (symbol, quantity, avg_entry_price, total_cost, updated_at)
-                    VALUES ($1, $2, $3, $4, NOW())
+                    INSERT INTO {SPOT_BOT_SCHEMA}.position_state (symbol, quantity, avg_entry_price, total_cost, entry_count, updated_at)
+                    VALUES ($1, $2, $3, $4, $5, NOW())
                     ON CONFLICT (symbol) DO UPDATE
                     SET quantity = EXCLUDED.quantity,
                         avg_entry_price = EXCLUDED.avg_entry_price,
                         total_cost = EXCLUDED.total_cost,
+                        entry_count = EXCLUDED.entry_count,
                         updated_at = NOW()
                     """,
                     decision.symbol,
                     new_quantity,
                     new_avg_entry,
                     new_total_cost,
+                    new_entry_count,
                 )
+                if decision.action == "buy":
+                    if not position_state.has_position:
+                        await conn.execute(
+                            f"""
+                            INSERT INTO {SPOT_BOT_SCHEMA}.position_exit_state (
+                                symbol, position_opened_at, initial_quantity, first_take_profit_done, first_take_profit_order_id, updated_at
+                            ) VALUES ($1, NOW(), $2, FALSE, NULL, NOW())
+                            ON CONFLICT (symbol) DO UPDATE
+                            SET position_opened_at = EXCLUDED.position_opened_at,
+                                initial_quantity = EXCLUDED.initial_quantity,
+                                first_take_profit_done = FALSE,
+                                first_take_profit_order_id = NULL,
+                                updated_at = NOW()
+                            """,
+                            decision.symbol,
+                            new_quantity,
+                        )
+                    elif not position_state.first_take_profit_done:
+                        await conn.execute(
+                            f"""
+                            INSERT INTO {SPOT_BOT_SCHEMA}.position_exit_state (
+                                symbol, position_opened_at, initial_quantity, first_take_profit_done, first_take_profit_order_id, updated_at
+                            ) VALUES ($1, NOW(), $2, FALSE, NULL, NOW())
+                            ON CONFLICT (symbol) DO UPDATE
+                            SET updated_at = NOW()
+                            """,
+                            decision.symbol,
+                            position_state.quantity,
+                        )
+                else:
+                    if new_quantity > 0:
+                        await conn.execute(
+                            f"""
+                            INSERT INTO {SPOT_BOT_SCHEMA}.position_exit_state (
+                                symbol, position_opened_at, initial_quantity, first_take_profit_done, first_take_profit_order_id, updated_at
+                            ) VALUES ($1, NOW(), $2, $3, $4, NOW())
+                            ON CONFLICT (symbol) DO UPDATE
+                            SET first_take_profit_done = EXCLUDED.first_take_profit_done,
+                                first_take_profit_order_id = EXCLUDED.first_take_profit_order_id,
+                                updated_at = NOW()
+                            """,
+                            decision.symbol,
+                            position_state.quantity,
+                            new_first_take_profit_done,
+                            exchange_order_id if decision.reason == "greenwich_take_profit_upper1" else None,
+                        )
+                    else:
+                        await conn.execute(
+                            f"DELETE FROM {SPOT_BOT_SCHEMA}.position_exit_state WHERE symbol = $1",
+                            decision.symbol,
+                        )
                 await self._record_ledger(
                     decision,
                     position_state,

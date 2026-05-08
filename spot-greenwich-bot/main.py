@@ -34,10 +34,12 @@ def _build_parser() -> argparse.ArgumentParser:
     analyze_parser.add_argument("--symbol", choices=SPOT_TRADING_SYMBOLS)
     analyze_parser.add_argument("--timeframe", choices=("4h",), default="4h")
     analyze_parser.add_argument("--dry-run", action="store_true", help="Calculate signals and execution decisions without real Binance orders")
+    analyze_parser.add_argument("--notification-only", action="store_true", help="Run the analysis cycle without exchange orders while still sending notifications")
 
     subparsers.add_parser("init-db", help="Create candle and spot-ledger tables")
     subparsers.add_parser("migrate", help="Run SQL migrations from the migrations directory")
     parser.add_argument("--dry-run", action="store_true", help="Run the scheduled bot without real Binance orders")
+    parser.add_argument("--notification-only", action="store_true", help="Run the scheduled bot without exchange orders while still sending notifications")
     return parser
 
 

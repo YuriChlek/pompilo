@@ -24,8 +24,8 @@ class CommandDispatcherTests(unittest.TestCase):
             async def sync_full(self) -> None:
                 calls.append(("sync-full", None))
 
-            async def analyze(self, *, symbol=None, dry_run: bool = False, timeframe: str = "4h") -> None:
-                calls.append(("analyze", (symbol, dry_run, timeframe)))
+            async def analyze(self, *, symbol=None, dry_run: bool = False, timeframe: str = "4h", notification_only: bool = False) -> None:
+                calls.append(("analyze", (symbol, dry_run, timeframe, notification_only)))
 
             async def init_db(self) -> None:
                 calls.append(("init-db", None))
@@ -33,15 +33,15 @@ class CommandDispatcherTests(unittest.TestCase):
             async def migrate(self) -> None:
                 calls.append(("migrate", None))
 
-            async def live(self, *, dry_run: bool = False) -> None:
-                calls.append(("live", dry_run))
+            async def live(self, *, dry_run: bool = False, notification_only: bool = False) -> None:
+                calls.append(("live", (dry_run, notification_only)))
 
-        asyncio.run(dispatch_command(SimpleNamespace(command="sync", period=123, dry_run=False, symbol=None), _Handlers()))
-        asyncio.run(dispatch_command(SimpleNamespace(command="sync-4h", period=7, dry_run=False, symbol=None, timeframe=None), _Handlers()))
-        asyncio.run(dispatch_command(SimpleNamespace(command="sync-full", period=None, dry_run=False, symbol=None, timeframe=None), _Handlers()))
-        asyncio.run(dispatch_command(SimpleNamespace(command="analyze", period=None, dry_run=True, symbol="ETHUSDT", timeframe="4h"), _Handlers()))
-        asyncio.run(dispatch_command(SimpleNamespace(command="migrate", period=None, dry_run=False, symbol=None), _Handlers()))
-        asyncio.run(dispatch_command(SimpleNamespace(command=None, period=None, dry_run=True, symbol=None), _Handlers()))
+        asyncio.run(dispatch_command(SimpleNamespace(command="sync", period=123, dry_run=False, notification_only=False, symbol=None), _Handlers()))
+        asyncio.run(dispatch_command(SimpleNamespace(command="sync-4h", period=7, dry_run=False, notification_only=False, symbol=None, timeframe=None), _Handlers()))
+        asyncio.run(dispatch_command(SimpleNamespace(command="sync-full", period=None, dry_run=False, notification_only=False, symbol=None, timeframe=None), _Handlers()))
+        asyncio.run(dispatch_command(SimpleNamespace(command="analyze", period=None, dry_run=True, notification_only=True, symbol="ETHUSDT", timeframe="4h"), _Handlers()))
+        asyncio.run(dispatch_command(SimpleNamespace(command="migrate", period=None, dry_run=False, notification_only=False, symbol=None), _Handlers()))
+        asyncio.run(dispatch_command(SimpleNamespace(command=None, period=None, dry_run=True, notification_only=True, symbol=None), _Handlers()))
 
         self.assertEqual(
             calls,
@@ -49,8 +49,8 @@ class CommandDispatcherTests(unittest.TestCase):
                 ("sync", 123),
                 ("sync-4h", 7),
                 ("sync-full", None),
-                ("analyze", ("ETHUSDT", True, "4h")),
+                ("analyze", ("ETHUSDT", True, "4h", True)),
                 ("migrate", None),
-                ("live", True),
+                ("live", (True, True)),
             ],
         )
