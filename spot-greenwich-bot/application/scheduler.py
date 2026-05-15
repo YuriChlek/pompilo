@@ -8,8 +8,6 @@ from typing import Iterable
 from application.initialization_service import TradingInitializationService
 from application.ports import MarketDataSynchronizer
 from application.trading_cycle_service import TradingCycleService
-from utils.healthcheck import mark_cycle_completed, start_healthcheck_server
-
 logger = logging.getLogger(__name__)
 
 
@@ -64,7 +62,6 @@ class TradingScheduler:
     ) -> None:
         """Run the daily scheduler loop indefinitely."""
 
-        healthcheck_task = asyncio.create_task(start_healthcheck_server())
         if self.initialization_service is not None:
             await self.initialization_service.initialize_runtime(
                 symbols,
@@ -86,9 +83,6 @@ class TradingScheduler:
                 ",".join(pnl_summary["closed_symbols"]),
                 pnl_summary["total_realized_pnl"],
             )
-            mark_cycle_completed()
-            if healthcheck_task.done():
-                healthcheck_task.result()
 
 
 __all__ = ["TradingScheduler", "wait_until_next_daily_run", "wait_until_next_h4_run"]

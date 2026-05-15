@@ -28,10 +28,6 @@ LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", os.getenv("TOKEN", ""))
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", os.getenv("CHAT_ID", ""))
 
-HEALTHCHECK_ENABLED = os.getenv("HEALTHCHECK_ENABLED", "true").lower() == "true"
-HEALTHCHECK_HOST = os.getenv("HEALTHCHECK_HOST", "0.0.0.0")
-HEALTHCHECK_PORT = int(os.getenv("HEALTHCHECK_PORT", "8080"))
-
 CANDLES_DATA_SCHEMA = "_candles_trading_data"
 SPOT_BOT_SCHEMA = "_spot_trading_bot"
 D1_TABLE_SUFFIX = "_1d"

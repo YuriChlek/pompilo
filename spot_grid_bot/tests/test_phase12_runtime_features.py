@@ -4,7 +4,9 @@ import os
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
+from socket import gaierror
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, Mock, patch
 
 from application.dry_run import format_decision_dry_run
 from application.health import HealthCheckServer, RuntimeHealthTracker
@@ -149,6 +151,85 @@ class Phase12RuntimeFeaturesTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].symbol, "ETHUSDT")
         self.assertEqual(events[0].live_price, 111.0)
+
+    async def test_live_price_monitor_uses_configured_open_timeout(self):
+        connect_calls = []
+
+        class _CancelledContextManager:
+            async def __aenter__(self):
+                raise asyncio.CancelledError()
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+        def _fake_connect(*args, **kwargs):
+            connect_calls.append((args, kwargs))
+            return _CancelledContextManager()
+
+        monitor = BybitLivePriceMonitor(
+            reference_provider=lambda _symbol: None,
+            on_deviation=AsyncMock(),
+            open_timeout_seconds=45.0,
+            reconnect_delay_seconds=0.0,
+            websocket_url="wss://example.invalid/ws",
+        )
+
+        with patch("infrastructure.live_price_monitor.websockets.connect", side_effect=_fake_connect):
+            with self.assertRaises(asyncio.CancelledError):
+                await monitor.run_forever(["ETHUSDT"])
+
+        self.assertEqual(len(connect_calls), 1)
+        args, kwargs = connect_calls[0]
+        self.assertEqual(args, ("wss://example.invalid/ws",))
+        self.assertEqual(kwargs["open_timeout"], 45.0)
+        self.assertEqual(kwargs["ping_interval"], 20)
+        self.assertEqual(kwargs["ping_timeout"], 20)
+
+    async def test_live_price_monitor_logs_timeout_without_traceback_and_retries(self):
+        monitor = BybitLivePriceMonitor(
+            reference_provider=lambda _symbol: None,
+            on_deviation=AsyncMock(),
+            open_timeout_seconds=12.0,
+            reconnect_delay_seconds=0.0,
+        )
+        connect_mock = Mock(side_effect=[TimeoutError(), asyncio.CancelledError()])
+
+        with patch("infrastructure.live_price_monitor.websockets.connect", side_effect=connect_mock), patch(
+            "infrastructure.live_price_monitor.logger.warning"
+        ) as warning_log:
+            with self.assertRaises(asyncio.CancelledError):
+                await monitor.run_forever(["ETHUSDT"])
+
+        warning_log.assert_called_once_with(
+            "live_price_monitor_connect_timeout websocket_url=%s open_timeout_seconds=%.1f reconnect_delay_seconds=%.1f",
+            "wss://stream.bybit.com/v5/public/spot",
+            12.0,
+            0.0,
+        )
+
+    async def test_live_price_monitor_logs_dns_error_without_traceback_and_retries(self):
+        monitor = BybitLivePriceMonitor(
+            reference_provider=lambda _symbol: None,
+            on_deviation=AsyncMock(),
+            reconnect_delay_seconds=0.0,
+        )
+        connect_mock = Mock(side_effect=[gaierror("dns failed"), asyncio.CancelledError()])
+
+        with patch("infrastructure.live_price_monitor.websockets.connect", side_effect=connect_mock), patch(
+            "infrastructure.live_price_monitor.logger.warning"
+        ) as warning_log:
+            with self.assertRaises(asyncio.CancelledError):
+                await monitor.run_forever(["ETHUSDT"])
+
+        self.assertEqual(warning_log.call_count, 1)
+        message, websocket_url, error, reconnect_delay = warning_log.call_args[0]
+        self.assertEqual(
+            message,
+            "live_price_monitor_dns_error websocket_url=%s error=%s reconnect_delay_seconds=%.1f",
+        )
+        self.assertEqual(websocket_url, "wss://stream.bybit.com/v5/public/spot")
+        self.assertEqual(str(error), "dns failed")
+        self.assertEqual(reconnect_delay, 0.0)
 
     async def test_dry_run_formatter_outputs_new_cancel_and_keep_lines(self):
         decision = StrategyDecision(

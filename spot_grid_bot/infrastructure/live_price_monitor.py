@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 from dataclasses import dataclass
+from socket import gaierror
 
 import websockets
 
@@ -30,12 +31,16 @@ class BybitLivePriceMonitor:
         on_deviation,
         atr_multiplier: float = 2.0,
         cooldown_seconds: float = 60.0,
+        open_timeout_seconds: float = 45.0,
+        reconnect_delay_seconds: float = 5.0,
         websocket_url: str = "wss://stream.bybit.com/v5/public/spot",
     ) -> None:
         self.reference_provider = reference_provider
         self.on_deviation = on_deviation
         self.atr_multiplier = atr_multiplier
         self.cooldown_seconds = cooldown_seconds
+        self.open_timeout_seconds = open_timeout_seconds
+        self.reconnect_delay_seconds = reconnect_delay_seconds
         self.websocket_url = websocket_url
         self._last_alert_at: dict[str, float] = {}
 
@@ -46,15 +51,36 @@ class BybitLivePriceMonitor:
         subscribe_payload = json.dumps({"op": "subscribe", "args": [f"tickers.{symbol.upper()}" for symbol in symbols]})
         while True:
             try:
-                async with websockets.connect(self.websocket_url, ping_interval=20, ping_timeout=20) as websocket:
+                async with websockets.connect(
+                    self.websocket_url,
+                    open_timeout=self.open_timeout_seconds,
+                    ping_interval=20,
+                    ping_timeout=20,
+                ) as websocket:
                     await websocket.send(subscribe_payload)
                     async for message in websocket:
                         await self.process_message(message)
             except asyncio.CancelledError:
                 raise
+            except TimeoutError:
+                logger.warning(
+                    "live_price_monitor_connect_timeout websocket_url=%s open_timeout_seconds=%.1f reconnect_delay_seconds=%.1f",
+                    self.websocket_url,
+                    self.open_timeout_seconds,
+                    self.reconnect_delay_seconds,
+                )
+                await asyncio.sleep(self.reconnect_delay_seconds)
+            except gaierror as exc:
+                logger.warning(
+                    "live_price_monitor_dns_error websocket_url=%s error=%s reconnect_delay_seconds=%.1f",
+                    self.websocket_url,
+                    exc,
+                    self.reconnect_delay_seconds,
+                )
+                await asyncio.sleep(self.reconnect_delay_seconds)
             except Exception as exc:
                 logger.exception("live_price_monitor_reconnecting error_type=%s", type(exc).__name__)
-                await asyncio.sleep(2.0)
+                await asyncio.sleep(self.reconnect_delay_seconds)
 
     async def process_message(self, raw_message: str) -> None:
         """Process one raw Bybit WebSocket message."""

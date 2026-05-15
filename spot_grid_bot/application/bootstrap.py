@@ -17,6 +17,7 @@ from infrastructure.notifications import LoggingSignalNotifier, TelegramNotifier
 from infrastructure.state_store import PostgresStateStore
 from utils.config import (
     EXECUTION_MODE,
+    BYBIT_PUBLIC_WS_URL,
     CANDLE_LOOKBACK,
     DEFAULT_BASE_ASSET,
     DEFAULT_QUOTE_ASSET,
@@ -40,6 +41,8 @@ from utils.config import (
     ENABLE_LIVE_PRICE_MONITOR,
     LIVE_PRICE_DEVIATION_ATR_MULTIPLIER,
     LIVE_PRICE_MONITOR_COOLDOWN_SECONDS,
+    LIVE_PRICE_MONITOR_OPEN_TIMEOUT_SECONDS,
+    LIVE_PRICE_MONITOR_RECONNECT_DELAY_SECONDS,
 )
 
 logger = logging.getLogger(__name__)
@@ -151,6 +154,9 @@ def build_live_trading_scheduler() -> TradingScheduler:
             on_deviation=None,
             atr_multiplier=LIVE_PRICE_DEVIATION_ATR_MULTIPLIER,
             cooldown_seconds=LIVE_PRICE_MONITOR_COOLDOWN_SECONDS,
+            open_timeout_seconds=LIVE_PRICE_MONITOR_OPEN_TIMEOUT_SECONDS,
+            reconnect_delay_seconds=LIVE_PRICE_MONITOR_RECONNECT_DELAY_SECONDS,
+            websocket_url=BYBIT_PUBLIC_WS_URL,
         )
     return TradingScheduler(
         trading_cycle=trading_cycle,

@@ -5,6 +5,7 @@ import unittest
 from unittest.mock import patch
 
 from infrastructure.market_data_synchronizer import BinanceMarketDataSynchronizer
+from utils.config import H4_INCREMENTAL_SYNC_DAYS
 
 
 class BinanceMarketDataSynchronizerTests(unittest.TestCase):
@@ -17,7 +18,7 @@ class BinanceMarketDataSynchronizerTests(unittest.TestCase):
         with patch("infrastructure.market_data_synchronizer._run_api", _fake_run_api):
             asyncio.run(BinanceMarketDataSynchronizer().synchronize())
 
-        self.assertEqual(calls, [(3, "1d", "_1d"), (2, "4h", "_4h")])
+        self.assertEqual(calls, [(3, "1d", "_1d"), (H4_INCREMENTAL_SYNC_DAYS, "4h", "_4h")])
 
     def test_can_synchronize_h4_only(self) -> None:
         calls: list[tuple[int, str, str]] = []
@@ -28,4 +29,4 @@ class BinanceMarketDataSynchronizerTests(unittest.TestCase):
         with patch("infrastructure.market_data_synchronizer._run_api", _fake_run_api):
             asyncio.run(BinanceMarketDataSynchronizer().synchronize(timeframes=("h4",)))
 
-        self.assertEqual(calls, [(2, "4h", "_4h")])
+        self.assertEqual(calls, [(H4_INCREMENTAL_SYNC_DAYS, "4h", "_4h")])
