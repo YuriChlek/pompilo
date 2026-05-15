@@ -46,13 +46,25 @@ def underwater_ratio(inventory) -> float:
     return (inventory.cost_basis_price - inventory.mark_price) / inventory.cost_basis_price
 
 
-def build_underwater_recovery_profile(inventory, regime: RegimeType, config) -> UnderwaterRecoveryProfile:
+def build_underwater_recovery_profile(
+    inventory,
+    regime: RegimeType,
+    config,
+    *,
+    bars_in_state: int = 0,
+) -> UnderwaterRecoveryProfile:
     """Return trigger-based underwater averaging posture for range/uptrend recovery only."""
     ratio = underwater_ratio(inventory)
     if not config.grid.underwater_averaging_enabled or ratio <= 0:
         return UnderwaterRecoveryProfile()
     if ratio < config.grid.underwater_averaging_trigger_pct:
         return UnderwaterRecoveryProfile(ratio=ratio, severity="below_trigger", reason="below_trigger")
+    if bars_in_state < max(config.grid.underwater_min_bars_in_regime, 0):
+        return UnderwaterRecoveryProfile(
+            ratio=ratio,
+            severity="awaiting_regime_maturity",
+            reason="awaiting_regime_maturity",
+        )
     if ratio >= config.grid.underwater_deep_stop_pct:
         return UnderwaterRecoveryProfile(ratio=ratio, severity="deep_stop", block_new_buys=True, reason="deep_stop")
     if regime not in {RegimeType.RANGE, RegimeType.UPTREND}:

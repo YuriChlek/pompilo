@@ -51,7 +51,7 @@ class InventoryManager:
         buy_level_weights = self._buy_level_weights(grid.regime, viable_buy_levels)
         spent_budget = 0.0
         viable_sell_levels = self._viable_sell_level_count(sell_levels, inventory, venue_constraints)
-        sell_level_weights = self._sell_level_weights(grid.regime, viable_sell_levels)
+        sell_level_weights = self._sell_level_weights(grid.regime, viable_sell_levels, inventory)
         if viable_buy_levels < len(buy_levels):
             logger.info(
                 "planner_buy_levels_reduced_due_to_budget total_buy_levels=%s viable_buy_levels=%s effective_budget=%s min_order_notional=%s",
@@ -155,7 +155,7 @@ class InventoryManager:
         )
         return normalized_weights
 
-    def _sell_level_weights(self, regime: RegimeType, levels_count: int) -> list[float]:
+    def _sell_level_weights(self, regime: RegimeType, levels_count: int, inventory: InventorySnapshot) -> list[float]:
         """Return normalized sell-size weights for the current regime and sell ladder size."""
         if levels_count <= 0:
             return []
@@ -179,12 +179,58 @@ class InventoryManager:
             return [equal_weight] * levels_count
 
         normalized_weights = [max(weight, 0.0) / total_weight for weight in raw_weights]
+        normalized_weights = self._adaptive_sell_level_weights(normalized_weights, inventory)
         logger.info(
             "uptrend_sell_weights_applied levels=%s weights=%s",
             levels_count,
             ",".join(f"{weight:.4f}" for weight in normalized_weights),
         )
         return normalized_weights
+
+    def _adaptive_sell_level_weights(self, base_weights: list[float], inventory: InventorySnapshot) -> list[float]:
+        """Tilt higher sell levels upward when the inventory is materially in profit."""
+        if not self.config.grid.adaptive_sell_sizing_enabled or len(base_weights) <= 1:
+            return base_weights
+
+        profit_ratio = self._unrealized_profit_ratio(inventory)
+        if profit_ratio <= self.config.grid.adaptive_sell_sizing_profit_trigger_pct:
+            return base_weights
+
+        full_profit_pct = max(
+            self.config.grid.adaptive_sell_sizing_full_profit_pct,
+            self.config.grid.adaptive_sell_sizing_profit_trigger_pct + 1e-9,
+        )
+        progress = (
+            (profit_ratio - self.config.grid.adaptive_sell_sizing_profit_trigger_pct)
+            / (full_profit_pct - self.config.grid.adaptive_sell_sizing_profit_trigger_pct)
+        )
+        progress = max(min(progress, 1.0), 0.0)
+        bias = self.config.grid.adaptive_sell_sizing_max_bias * progress
+        center = (len(base_weights) - 1) / 2
+        adjusted_weights = []
+        for index, weight in enumerate(base_weights):
+            if center <= 0:
+                gradient = 0.0
+            else:
+                gradient = (index - center) / center
+            adjusted_weights.append(max(weight * (1.0 + bias * gradient), 0.0))
+
+        total_weight = sum(adjusted_weights)
+        if total_weight <= 0:
+            return base_weights
+        return [weight / total_weight for weight in adjusted_weights]
+
+    @staticmethod
+    def _unrealized_profit_ratio(inventory: InventorySnapshot) -> float:
+        """Return current unrealized profit ratio versus cost basis for active inventory."""
+        if (
+            inventory.base_balance <= 0
+            or inventory.cost_basis_price is None
+            or inventory.cost_basis_price <= 0
+            or inventory.mark_price <= inventory.cost_basis_price
+        ):
+            return 0.0
+        return (inventory.mark_price - inventory.cost_basis_price) / inventory.cost_basis_price
 
     def _viable_sell_level_count(
         self,

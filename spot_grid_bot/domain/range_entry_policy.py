@@ -27,6 +27,7 @@ def evaluate_range_entry_profile(
     """Return whether range entries should stay normal, soften, or pause entirely."""
     atr = max(indicators.atr14, 1e-9)
     atr_units_width = indicators.range_width / atr
+    reasons: list[str] = []
 
     slope_pressure = min(
         abs(indicators.ema50_slope) / max(config.regime.ema_mid_slope_flat_threshold * 3.0, 1e-9),
@@ -57,6 +58,15 @@ def evaluate_range_entry_profile(
         + 0.15 * min(upper_band_pressure, 1.0)
         + 0.10 * width_penalty
     )
+
+    if config.grid.range_rsi_filter_enabled:
+        if indicators.rsi14 >= config.grid.range_rsi_overbought_threshold:
+            quality_score -= config.grid.range_rsi_overbought_penalty
+            reasons.append("range_entry_rsi_overbought")
+        elif indicators.rsi14 <= config.grid.range_rsi_oversold_threshold:
+            quality_score += config.grid.range_rsi_oversold_bonus
+            reasons.append("range_entry_rsi_oversold")
+
     quality_score = max(min(quality_score, 1.0), 0.0)
 
     breakdown_risk = (
@@ -71,7 +81,7 @@ def evaluate_range_entry_profile(
         return RangeEntryProfile(
             quality_score=quality_score,
             block_new_buys=True,
-            reasons=("range_breakdown_risk",),
+            reasons=tuple([*reasons, "range_breakdown_risk"]),
         )
 
     if quality_score <= config.grid.range_entry_quality_hard_threshold:
@@ -79,7 +89,7 @@ def evaluate_range_entry_profile(
             quality_score=quality_score,
             budget_penalty=config.grid.range_poor_entry_budget_penalty,
             max_buy_levels=max(1, config.grid.range_poor_max_buy_levels),
-            reasons=("range_entry_quality_poor",),
+            reasons=tuple([*reasons, "range_entry_quality_poor"]),
         )
 
     if quality_score <= config.grid.range_entry_quality_soft_threshold:
@@ -87,7 +97,7 @@ def evaluate_range_entry_profile(
             quality_score=quality_score,
             budget_penalty=config.grid.range_weak_entry_budget_penalty,
             max_buy_levels=max(1, config.grid.range_weak_max_buy_levels),
-            reasons=("range_entry_quality_weak",),
+            reasons=tuple([*reasons, "range_entry_quality_weak"]),
         )
 
-    return RangeEntryProfile(quality_score=quality_score)
+    return RangeEntryProfile(quality_score=quality_score, reasons=tuple(reasons))

@@ -48,6 +48,12 @@ class IndicatorSnapshot:
     directional_sign: float
     abnormal_candle: bool
     atr_spike: bool
+    range_position: float = 0.5
+    rsi14: float = 50.0
+    current_volume: float = 0.0
+    volume_ma20: float = 0.0
+    realized_volatility_short: float = 0.0
+    volatility_regime_ratio: float = 1.0
 
 
 @dataclass(slots=True, frozen=True)
@@ -57,6 +63,7 @@ class RegimeSnapshot:
     regime: RegimeType
     confidence: float
     reasons: list[str] = field(default_factory=list)
+    volume_confirmed: bool = True
 
 
 @dataclass(slots=True, frozen=True)

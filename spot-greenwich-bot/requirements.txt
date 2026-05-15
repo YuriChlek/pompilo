@@ -1,0 +1,10 @@
+aiohttp
+asyncpg
+pandas
+psycopg2-binary
+pybit
+pytest
+python-telegram-bot
+requests
+sqlalchemy
+tenacity

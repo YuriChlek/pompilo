@@ -1,4 +1,5 @@
 import unittest
+from dataclasses import replace
 
 from domain.indicators import compute_snapshot
 from domain.models import Candle, RegimeType
@@ -44,6 +45,23 @@ def _broken_uptrend_candles() -> list[Candle]:
     return candles
 
 
+def _trend_candles_with_volume_confirmation(*, confirmed: bool) -> list[Candle]:
+    candles = _trend_candles(start=100.0, step=0.4)
+    last_index = len(candles) - 1
+    last_volume = 15.0 if confirmed else 10.0
+    return [
+        Candle(
+            timestamp=candle.timestamp,
+            open=candle.open,
+            high=candle.high,
+            low=candle.low,
+            close=candle.close,
+            volume=last_volume if index == last_index else 10.0,
+        )
+        for index, candle in enumerate(candles)
+    ]
+
+
 class Phase5RegimeTests(unittest.TestCase):
     def setUp(self) -> None:
         self.detector = MarketRegimeDetector(DEFAULT_STRATEGY_CONFIG)
@@ -83,3 +101,33 @@ class Phase5RegimeTests(unittest.TestCase):
         regime = self.detector.detect(candles, snapshot)
 
         self.assertEqual(regime.regime, RegimeType.RANGE)
+
+    def test_uptrend_breakout_marks_volume_as_not_confirmed_when_last_volume_is_weak(self):
+        config = replace(
+            DEFAULT_STRATEGY_CONFIG,
+            regime=replace(DEFAULT_STRATEGY_CONFIG.regime, volume_confirmation_multiplier=1.2),
+        )
+        detector = MarketRegimeDetector(config)
+        candles = _trend_candles_with_volume_confirmation(confirmed=False)
+        snapshot = compute_snapshot(candles, config)
+
+        regime = detector.detect(candles, snapshot)
+
+        self.assertEqual(regime.regime, RegimeType.UPTREND)
+        self.assertFalse(regime.volume_confirmed)
+        self.assertIn("volume_not_confirmed", regime.reasons)
+
+    def test_uptrend_breakout_marks_volume_as_confirmed_when_last_volume_is_strong(self):
+        config = replace(
+            DEFAULT_STRATEGY_CONFIG,
+            regime=replace(DEFAULT_STRATEGY_CONFIG.regime, volume_confirmation_multiplier=1.2),
+        )
+        detector = MarketRegimeDetector(config)
+        candles = _trend_candles_with_volume_confirmation(confirmed=True)
+        snapshot = compute_snapshot(candles, config)
+
+        regime = detector.detect(candles, snapshot)
+
+        self.assertEqual(regime.regime, RegimeType.UPTREND)
+        self.assertTrue(regime.volume_confirmed)
+        self.assertIn("volume_confirmed", regime.reasons)

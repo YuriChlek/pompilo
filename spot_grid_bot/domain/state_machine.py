@@ -38,6 +38,11 @@ class StrategyStateMachine:
             self.state = updated
             return updated
 
+        if not self._should_advance_pending_count(regime_snapshot):
+            updated = replace(updated, pending_regime=regime_snapshot.regime, pending_count=0)
+            self.state = updated
+            return updated
+
         if updated.pending_regime != regime_snapshot.regime:
             updated = replace(updated, pending_regime=regime_snapshot.regime, pending_count=1)
             self.state = updated
@@ -56,3 +61,11 @@ class StrategyStateMachine:
 
         self.state = updated
         return updated
+
+    def _should_advance_pending_count(self, regime_snapshot: RegimeSnapshot) -> bool:
+        """Return whether the current transition candidate is eligible to advance."""
+        if not self.config.regime.volume_confirmation_enabled:
+            return True
+        if regime_snapshot.regime not in {RegimeType.UPTREND, RegimeType.DOWNTREND}:
+            return True
+        return regime_snapshot.volume_confirmed

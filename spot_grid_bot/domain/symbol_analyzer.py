@@ -21,6 +21,7 @@ def analyze_symbol(
     live_orders = context.live_orders
     indicators = compute_snapshot(candles, config)
     regime_snapshot = detector.detect(candles, indicators, risk_off=False)
+    structure_snapshot = detector.extract_structure(candles)
     higher_timeframe_regime = None
     if context.higher_timeframe_candles:
         higher_timeframe_indicators = compute_snapshot(context.higher_timeframe_candles, config)
@@ -63,4 +64,5 @@ def analyze_symbol(
             kill_switch_count=risk_runtime.kill_switch_count,
             recent_equity=list(risk_runtime.recent_equity),
         ),
+        structure_snapshot=structure_snapshot,
     )

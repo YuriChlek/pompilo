@@ -77,10 +77,16 @@ class SpotTradingCycleService:
             return results
         for symbol in context_by_symbol:
             try:
+                recovery_budget = (
+                    allocation_plan.recovery_budget_for(symbol)
+                    if hasattr(allocation_plan, "recovery_budget_for")
+                    else None
+                )
                 decision = self.planner.plan_from_analysis(
                     context_by_symbol[symbol],
                     analysis_by_symbol[symbol],
                     portfolio_budget=allocation_plan.budget_for(symbol),
+                    recovery_budget=recovery_budget,
                 )
                 if self.health_tracker is not None:
                     runtime_state = self.planner.export_symbol_runtime(symbol)

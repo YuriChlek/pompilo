@@ -9,6 +9,7 @@ from domain.models import Candle, InventorySnapshot, MarketContext, OrderSide, P
 from domain.grid_builder import GridBuilder
 from domain.grid_viability import apply_venue_viability
 from domain.inventory_manager import InventoryManager
+from domain.market_structure import StructureBias, StructureSnapshot, SwingPoint
 from domain.range_entry_policy import evaluate_range_entry_profile
 from domain.spot_grid_planner import SpotGridPlanner
 
@@ -80,6 +81,282 @@ class Phase12CheapSymbolPlanningTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(buy_prices)
         self.assertTrue(all(price < 0.1 for price in buy_prices))
         self.assertTrue(all(round(price / 0.00001) * 0.00001 == price for price in buy_prices))
+
+    def test_range_grid_adds_more_sell_levels_when_price_is_near_range_high(self):
+        builder = GridBuilder(DEFAULT_STRATEGY_CONFIG)
+        indicators = IndicatorSnapshot(
+            ema20=100.0,
+            ema50=100.0,
+            ema200=100.0,
+            atr14=4.0,
+            realized_volatility=0.01,
+            ema50_slope=0.0,
+            range_width=16.0,
+            price_vs_ema50=0.0,
+            directional_move=0.0,
+            directional_sign=0.0,
+            abnormal_candle=False,
+            atr_spike=False,
+            range_position=0.9,
+        )
+
+        grid = builder.build_range_grid(100.0, indicators, tick_size=0.1)
+        buy_levels = [level for level in grid.levels if level.side == OrderSide.BUY]
+        sell_levels = [level for level in grid.levels if level.side == OrderSide.SELL]
+
+        self.assertLess(len(buy_levels), len(sell_levels))
+
+    def test_range_grid_adds_more_buy_levels_when_price_is_near_range_low(self):
+        builder = GridBuilder(DEFAULT_STRATEGY_CONFIG)
+        indicators = IndicatorSnapshot(
+            ema20=100.0,
+            ema50=100.0,
+            ema200=100.0,
+            atr14=4.0,
+            realized_volatility=0.01,
+            ema50_slope=0.0,
+            range_width=16.0,
+            price_vs_ema50=0.0,
+            directional_move=0.0,
+            directional_sign=0.0,
+            abnormal_candle=False,
+            atr_spike=False,
+            range_position=0.1,
+        )
+
+        grid = builder.build_range_grid(100.0, indicators, tick_size=0.1)
+        buy_levels = [level for level in grid.levels if level.side == OrderSide.BUY]
+        sell_levels = [level for level in grid.levels if level.side == OrderSide.SELL]
+
+        self.assertGreater(len(buy_levels), len(sell_levels))
+
+    def test_range_grid_stays_symmetric_near_range_midpoint(self):
+        builder = GridBuilder(DEFAULT_STRATEGY_CONFIG)
+        indicators = IndicatorSnapshot(
+            ema20=100.0,
+            ema50=100.0,
+            ema200=100.0,
+            atr14=4.0,
+            realized_volatility=0.01,
+            ema50_slope=0.0,
+            range_width=16.0,
+            price_vs_ema50=0.0,
+            directional_move=0.0,
+            directional_sign=0.0,
+            abnormal_candle=False,
+            atr_spike=False,
+            range_position=0.5,
+        )
+
+        grid = builder.build_range_grid(100.0, indicators, tick_size=0.1)
+        buy_levels = [level for level in grid.levels if level.side == OrderSide.BUY]
+        sell_levels = [level for level in grid.levels if level.side == OrderSide.SELL]
+
+        self.assertEqual(len(buy_levels), len(sell_levels))
+
+    def test_range_grid_aligns_levels_to_nearby_swing_support_and_resistance(self):
+        builder = GridBuilder(DEFAULT_STRATEGY_CONFIG)
+        indicators = IndicatorSnapshot(
+            ema20=100.0,
+            ema50=100.0,
+            ema200=100.0,
+            atr14=4.0,
+            realized_volatility=0.01,
+            ema50_slope=0.0,
+            range_width=16.0,
+            price_vs_ema50=0.0,
+            directional_move=0.0,
+            directional_sign=0.0,
+            abnormal_candle=False,
+            atr_spike=False,
+            range_position=0.5,
+        )
+        structure_snapshot = StructureSnapshot(
+            bias=StructureBias.RANGE,
+            confidence=0.7,
+            swing_highs=[SwingPoint(index=20, price=102.3), SwingPoint(index=40, price=103.7)],
+            swing_lows=[SwingPoint(index=10, price=97.3), SwingPoint(index=30, price=95.9)],
+            reasons=["range_like_structure"],
+        )
+
+        base_grid = builder.build_range_grid(100.0, indicators, tick_size=0.1)
+        structured_grid = builder.build_range_grid(
+            100.0,
+            indicators,
+            tick_size=0.1,
+            structure_snapshot=structure_snapshot,
+        )
+
+        base_buy_prices = [level.price for level in base_grid.levels if level.side == OrderSide.BUY]
+        base_sell_prices = [level.price for level in base_grid.levels if level.side == OrderSide.SELL]
+        structured_buy_prices = [level.price for level in structured_grid.levels if level.side == OrderSide.BUY]
+        structured_sell_prices = [level.price for level in structured_grid.levels if level.side == OrderSide.SELL]
+
+        self.assertNotIn(97.3, [round(price, 1) for price in base_buy_prices])
+        self.assertNotIn(102.3, [round(price, 1) for price in base_sell_prices])
+        self.assertIn(97.3, [round(price, 1) for price in structured_buy_prices])
+        self.assertIn(102.3, [round(price, 1) for price in structured_sell_prices])
+
+    def test_range_grid_widens_when_short_term_volatility_exceeds_long_term_volatility(self):
+        builder = GridBuilder(DEFAULT_STRATEGY_CONFIG)
+        calm_indicators = IndicatorSnapshot(
+            ema20=100.0,
+            ema50=100.0,
+            ema200=100.0,
+            atr14=4.0,
+            realized_volatility=0.01,
+            ema50_slope=0.0,
+            range_width=16.0,
+            price_vs_ema50=0.0,
+            directional_move=0.0,
+            directional_sign=0.0,
+            abnormal_candle=False,
+            atr_spike=False,
+            volatility_regime_ratio=1.0,
+        )
+        stress_indicators = IndicatorSnapshot(
+            ema20=100.0,
+            ema50=100.0,
+            ema200=100.0,
+            atr14=4.0,
+            realized_volatility=0.01,
+            ema50_slope=0.0,
+            range_width=16.0,
+            price_vs_ema50=0.0,
+            directional_move=0.0,
+            directional_sign=0.0,
+            abnormal_candle=False,
+            atr_spike=False,
+            volatility_regime_ratio=1.5,
+        )
+
+        calm_grid = builder.build_range_grid(100.0, calm_indicators, tick_size=0.1)
+        stress_grid = builder.build_range_grid(100.0, stress_indicators, tick_size=0.1)
+
+        calm_buy_prices = [level.price for level in calm_grid.levels if level.side == OrderSide.BUY]
+        stress_buy_prices = [level.price for level in stress_grid.levels if level.side == OrderSide.BUY]
+
+        self.assertLess(min(stress_buy_prices), min(calm_buy_prices))
+        self.assertGreater(stress_grid.step, calm_grid.step)
+
+    def test_uptrend_grid_uses_wider_pullback_offsets_in_stress_volatility(self):
+        builder = GridBuilder(DEFAULT_STRATEGY_CONFIG)
+        calm_indicators = IndicatorSnapshot(
+            ema20=100.0,
+            ema50=99.0,
+            ema200=95.0,
+            atr14=4.0,
+            realized_volatility=0.01,
+            ema50_slope=0.01,
+            range_width=0.0,
+            price_vs_ema50=0.0,
+            directional_move=0.0,
+            directional_sign=0.0,
+            abnormal_candle=False,
+            atr_spike=False,
+            volatility_regime_ratio=1.0,
+        )
+        stress_indicators = IndicatorSnapshot(
+            ema20=100.0,
+            ema50=99.0,
+            ema200=95.0,
+            atr14=4.0,
+            realized_volatility=0.01,
+            ema50_slope=0.01,
+            range_width=0.0,
+            price_vs_ema50=0.0,
+            directional_move=0.0,
+            directional_sign=0.0,
+            abnormal_candle=False,
+            atr_spike=False,
+            volatility_regime_ratio=1.5,
+        )
+
+        calm_grid = builder.build_trend_pullback_grid(100.0, calm_indicators, tick_size=0.1)
+        stress_grid = builder.build_trend_pullback_grid(100.0, stress_indicators, tick_size=0.1)
+
+        calm_buy_prices = [level.price for level in calm_grid.levels if level.side == OrderSide.BUY]
+        stress_buy_prices = [level.price for level in stress_grid.levels if level.side == OrderSide.BUY]
+        calm_sell_prices = [level.price for level in calm_grid.levels if level.side == OrderSide.SELL]
+        stress_sell_prices = [level.price for level in stress_grid.levels if level.side == OrderSide.SELL]
+
+        self.assertLess(min(stress_buy_prices), min(calm_buy_prices))
+        self.assertGreater(max(stress_sell_prices), max(calm_sell_prices))
+        self.assertGreater(stress_grid.step, calm_grid.step)
+
+    def test_planner_passes_structure_snapshot_into_range_grid_construction(self):
+        planner = SpotGridPlanner(DEFAULT_STRATEGY_CONFIG)
+        inventory = InventorySnapshot(
+            base_balance=3.0,
+            quote_balance=10_000.0,
+            reserved_quote=0.0,
+            mark_price=100.0,
+            cost_basis_price=90.0,
+        )
+        indicators = IndicatorSnapshot(
+            ema20=100.0,
+            ema50=100.0,
+            ema200=100.0,
+            atr14=4.0,
+            realized_volatility=0.01,
+            ema50_slope=0.0,
+            range_width=16.0,
+            price_vs_ema50=0.0,
+            directional_move=0.1,
+            directional_sign=0.0,
+            abnormal_candle=False,
+            atr_spike=False,
+            range_position=0.5,
+        )
+        structure_snapshot = StructureSnapshot(
+            bias=StructureBias.RANGE,
+            confidence=0.7,
+            swing_highs=[SwingPoint(index=20, price=102.3)],
+            swing_lows=[SwingPoint(index=10, price=97.3)],
+            reasons=["range_like_structure"],
+        )
+        analysis = PreliminarySymbolAnalysis(
+            symbol="ETHUSDT",
+            indicators=indicators,
+            regime_snapshot=RegimeSnapshot(RegimeType.RANGE, 1.0, ["fixed_range"]),
+            risk=RiskDecision(
+                can_trade=True,
+                pause_entries=False,
+                force_risk_off=False,
+                cancel_entries=False,
+                allow_exit_only=False,
+            ),
+            strategy_state=StrategyState(regime=RegimeType.RANGE, bars_in_state=3),
+            risk_state=RiskRuntimeState(),
+            structure_snapshot=structure_snapshot,
+        )
+        candles = [
+            Candle(timestamp=index, open=100.0, high=101.0, low=99.0, close=100.0, volume=1000.0)
+            for index in range(260)
+        ]
+
+        decision = planner.plan_from_analysis(
+            MarketContext(
+                symbol="ETHUSDT",
+                candles=candles,
+                inventory=inventory,
+                live_orders=[],
+                venue_constraints=VenueConstraints(
+                    tick_size=0.1,
+                    qty_step=0.0001,
+                    min_order_qty=0.0001,
+                    min_order_amt=5.0,
+                ),
+            ),
+            analysis,
+            portfolio_budget=500.0,
+        )
+
+        buy_prices = [order.price for order in decision.target_orders if order.side == OrderSide.BUY]
+        sell_prices = [order.price for order in decision.target_orders if order.side == OrderSide.SELL]
+
+        self.assertIn(97.3, [round(price, 1) for price in buy_prices])
+        self.assertIn(102.3, [round(price, 1) for price in sell_prices])
 
     def test_venue_viability_merges_duplicate_levels_after_tick_normalization(self):
         target_orders = [
@@ -263,6 +540,145 @@ class Phase12CheapSymbolPlanningTests(unittest.IsolatedAsyncioTestCase):
         self.assertLess(sell_levels[0].size, sell_levels[1].size)
         self.assertLess(sell_levels[1].size, sell_levels[2].size)
         self.assertLessEqual(sum(level.size for level in sell_levels), inventory.base_balance)
+
+    def test_strong_unrealized_profit_pushes_more_size_to_upper_uptrend_sell_levels(self):
+        builder = GridBuilder(DEFAULT_STRATEGY_CONFIG)
+        inventory_manager = InventoryManager(DEFAULT_STRATEGY_CONFIG)
+        indicators = IndicatorSnapshot(
+            ema20=100.0,
+            ema50=99.0,
+            ema200=95.0,
+            atr14=4.0,
+            realized_volatility=0.01,
+            ema50_slope=0.01,
+            range_width=0.0,
+            price_vs_ema50=0.0,
+            directional_move=0.0,
+            directional_sign=0.0,
+            abnormal_candle=False,
+            atr_spike=False,
+        )
+        grid = builder.build_trend_pullback_grid(100.0, indicators, tick_size=0.1)
+        breakeven_inventory = InventorySnapshot(
+            base_balance=10.0,
+            quote_balance=10_000.0,
+            reserved_quote=0.0,
+            mark_price=100.0,
+            cost_basis_price=99.0,
+        )
+        strong_profit_inventory = InventorySnapshot(
+            base_balance=10.0,
+            quote_balance=10_000.0,
+            reserved_quote=0.0,
+            mark_price=100.0,
+            cost_basis_price=80.0,
+        )
+
+        breakeven_grid = inventory_manager.allocate_grid(
+            builder.build_trend_pullback_grid(100.0, indicators, tick_size=0.1),
+            breakeven_inventory,
+            symbol_entry_budget=0.0,
+            venue_constraints=VenueConstraints(
+                tick_size=0.1,
+                qty_step=0.0001,
+                min_order_qty=0.0001,
+                min_order_amt=1.0,
+            ),
+        )
+        strong_profit_grid = inventory_manager.allocate_grid(
+            builder.build_trend_pullback_grid(100.0, indicators, tick_size=0.1),
+            strong_profit_inventory,
+            symbol_entry_budget=0.0,
+            venue_constraints=VenueConstraints(
+                tick_size=0.1,
+                qty_step=0.0001,
+                min_order_qty=0.0001,
+                min_order_amt=1.0,
+            ),
+        )
+
+        breakeven_sell_levels = sorted(
+            [level for level in breakeven_grid.levels if level.side == OrderSide.SELL and level.size > 0],
+            key=lambda level: level.price,
+        )
+        strong_profit_sell_levels = sorted(
+            [level for level in strong_profit_grid.levels if level.side == OrderSide.SELL and level.size > 0],
+            key=lambda level: level.price,
+        )
+
+        self.assertGreater(
+            strong_profit_sell_levels[-1].size / sum(level.size for level in strong_profit_sell_levels),
+            breakeven_sell_levels[-1].size / sum(level.size for level in breakeven_sell_levels),
+        )
+
+    def test_underwater_inventory_does_not_make_uptrend_sell_sizing_more_aggressive(self):
+        builder = GridBuilder(DEFAULT_STRATEGY_CONFIG)
+        inventory_manager = InventoryManager(DEFAULT_STRATEGY_CONFIG)
+        indicators = IndicatorSnapshot(
+            ema20=100.0,
+            ema50=99.0,
+            ema200=95.0,
+            atr14=4.0,
+            realized_volatility=0.01,
+            ema50_slope=0.01,
+            range_width=0.0,
+            price_vs_ema50=0.0,
+            directional_move=0.0,
+            directional_sign=0.0,
+            abnormal_candle=False,
+            atr_spike=False,
+        )
+        breakeven_inventory = InventorySnapshot(
+            base_balance=10.0,
+            quote_balance=10_000.0,
+            reserved_quote=0.0,
+            mark_price=100.0,
+            cost_basis_price=99.0,
+        )
+        underwater_inventory = InventorySnapshot(
+            base_balance=10.0,
+            quote_balance=10_000.0,
+            reserved_quote=0.0,
+            mark_price=100.0,
+            cost_basis_price=120.0,
+        )
+
+        breakeven_grid = inventory_manager.allocate_grid(
+            builder.build_trend_pullback_grid(100.0, indicators, tick_size=0.1),
+            breakeven_inventory,
+            symbol_entry_budget=0.0,
+            venue_constraints=VenueConstraints(
+                tick_size=0.1,
+                qty_step=0.0001,
+                min_order_qty=0.0001,
+                min_order_amt=1.0,
+            ),
+        )
+        underwater_grid = inventory_manager.allocate_grid(
+            builder.build_trend_pullback_grid(100.0, indicators, tick_size=0.1),
+            underwater_inventory,
+            symbol_entry_budget=0.0,
+            venue_constraints=VenueConstraints(
+                tick_size=0.1,
+                qty_step=0.0001,
+                min_order_qty=0.0001,
+                min_order_amt=1.0,
+            ),
+        )
+
+        breakeven_sell_levels = sorted(
+            [level for level in breakeven_grid.levels if level.side == OrderSide.SELL and level.size > 0],
+            key=lambda level: level.price,
+        )
+        underwater_sell_levels = sorted(
+            [level for level in underwater_grid.levels if level.side == OrderSide.SELL and level.size > 0],
+            key=lambda level: level.price,
+        )
+
+        self.assertEqual(
+            [round(level.size, 4) for level in breakeven_sell_levels],
+            [round(level.size, 4) for level in underwater_sell_levels],
+        )
 
     def test_buy_levels_below_two_usdt_notional_are_not_built(self):
         builder = GridBuilder(DEFAULT_STRATEGY_CONFIG)
@@ -556,6 +972,70 @@ class Phase12CheapSymbolPlanningTests(unittest.IsolatedAsyncioTestCase):
         self.assertLessEqual(len(buy_orders), DEFAULT_STRATEGY_CONFIG.grid.underwater_max_recovery_levels)
         self.assertLess(sum(order.price * order.size for order in buy_orders), 300.0)
 
+    def test_underwater_uptrend_recovery_respects_portfolio_recovery_budget_cap(self):
+        planner = SpotGridPlanner(DEFAULT_STRATEGY_CONFIG)
+        inventory = InventorySnapshot(
+            base_balance=2.0,
+            quote_balance=10_000.0,
+            reserved_quote=0.0,
+            mark_price=100.0,
+            cost_basis_price=120.0,
+        )
+        indicators = IndicatorSnapshot(
+            ema20=99.0,
+            ema50=96.0,
+            ema200=90.0,
+            atr14=4.0,
+            realized_volatility=0.01,
+            ema50_slope=0.01,
+            range_width=0.0,
+            price_vs_ema50=0.0,
+            directional_move=0.0,
+            directional_sign=0.0,
+            abnormal_candle=False,
+            atr_spike=False,
+        )
+        analysis = PreliminarySymbolAnalysis(
+            symbol="SOLUSDT",
+            indicators=indicators,
+            regime_snapshot=RegimeSnapshot(RegimeType.UPTREND, 1.0, ["fixed_uptrend"]),
+            risk=RiskDecision(
+                can_trade=True,
+                pause_entries=False,
+                force_risk_off=False,
+                cancel_entries=False,
+                allow_exit_only=False,
+            ),
+            strategy_state=StrategyState(regime=RegimeType.UPTREND, bars_in_state=3),
+            risk_state=RiskRuntimeState(),
+        )
+        candles = [
+            Candle(timestamp=index, open=100.0, high=101.0, low=99.0, close=100.0, volume=1000.0)
+            for index in range(260)
+        ]
+
+        decision = planner.plan_from_analysis(
+            MarketContext(
+                symbol="SOLUSDT",
+                candles=candles,
+                inventory=inventory,
+                live_orders=[],
+                venue_constraints=VenueConstraints(
+                    tick_size=0.1,
+                    qty_step=0.0001,
+                    min_order_qty=0.0001,
+                    min_order_amt=5.0,
+                ),
+            ),
+            analysis,
+            portfolio_budget=0.0,
+            recovery_budget=50.0,
+        )
+
+        buy_orders = [order for order in decision.target_orders if order.side == OrderSide.BUY]
+        self.assertTrue(buy_orders)
+        self.assertLessEqual(sum(order.price * order.size for order in buy_orders), 50.0)
+
     def test_weak_range_entry_quality_profile_reduces_budget_and_levels(self):
         builder = GridBuilder(DEFAULT_STRATEGY_CONFIG)
         indicators = IndicatorSnapshot(
@@ -582,6 +1062,108 @@ class Phase12CheapSymbolPlanningTests(unittest.IsolatedAsyncioTestCase):
         self.assertLessEqual(profile.quality_score, DEFAULT_STRATEGY_CONFIG.grid.range_entry_quality_soft_threshold)
         self.assertLess(profile.budget_penalty, 1.0)
         self.assertIsNotNone(profile.max_buy_levels)
+
+    def test_range_entry_rsi_overbought_penalizes_quality(self):
+        builder = GridBuilder(DEFAULT_STRATEGY_CONFIG)
+        neutral_indicators = IndicatorSnapshot(
+            ema20=100.0,
+            ema50=100.0,
+            ema200=100.0,
+            atr14=4.0,
+            realized_volatility=0.01,
+            ema50_slope=0.0,
+            range_width=16.0,
+            price_vs_ema50=0.0,
+            directional_move=0.2,
+            directional_sign=0.0,
+            abnormal_candle=False,
+            atr_spike=False,
+            rsi14=55.0,
+        )
+        overbought_indicators = IndicatorSnapshot(
+            ema20=100.0,
+            ema50=100.0,
+            ema200=100.0,
+            atr14=4.0,
+            realized_volatility=0.01,
+            ema50_slope=0.0,
+            range_width=16.0,
+            price_vs_ema50=0.0,
+            directional_move=0.2,
+            directional_sign=0.0,
+            abnormal_candle=False,
+            atr_spike=False,
+            rsi14=78.0,
+        )
+        neutral_grid = builder.build_range_grid(100.0, neutral_indicators, tick_size=0.1)
+        overbought_grid = builder.build_range_grid(100.0, overbought_indicators, tick_size=0.1)
+
+        neutral_profile = evaluate_range_entry_profile(
+            price=100.0,
+            indicators=neutral_indicators,
+            grid=neutral_grid,
+            config=DEFAULT_STRATEGY_CONFIG,
+        )
+        overbought_profile = evaluate_range_entry_profile(
+            price=100.0,
+            indicators=overbought_indicators,
+            grid=overbought_grid,
+            config=DEFAULT_STRATEGY_CONFIG,
+        )
+
+        self.assertLess(overbought_profile.quality_score, neutral_profile.quality_score)
+        self.assertIn("range_entry_rsi_overbought", overbought_profile.reasons)
+
+    def test_range_entry_rsi_oversold_slightly_improves_quality(self):
+        builder = GridBuilder(DEFAULT_STRATEGY_CONFIG)
+        neutral_indicators = IndicatorSnapshot(
+            ema20=100.0,
+            ema50=100.0,
+            ema200=100.0,
+            atr14=4.0,
+            realized_volatility=0.01,
+            ema50_slope=0.0,
+            range_width=16.0,
+            price_vs_ema50=0.0,
+            directional_move=0.2,
+            directional_sign=0.0,
+            abnormal_candle=False,
+            atr_spike=False,
+            rsi14=55.0,
+        )
+        oversold_indicators = IndicatorSnapshot(
+            ema20=100.0,
+            ema50=100.0,
+            ema200=100.0,
+            atr14=4.0,
+            realized_volatility=0.01,
+            ema50_slope=0.0,
+            range_width=16.0,
+            price_vs_ema50=0.0,
+            directional_move=0.2,
+            directional_sign=0.0,
+            abnormal_candle=False,
+            atr_spike=False,
+            rsi14=28.0,
+        )
+        neutral_grid = builder.build_range_grid(100.0, neutral_indicators, tick_size=0.1)
+        oversold_grid = builder.build_range_grid(100.0, oversold_indicators, tick_size=0.1)
+
+        neutral_profile = evaluate_range_entry_profile(
+            price=100.0,
+            indicators=neutral_indicators,
+            grid=neutral_grid,
+            config=DEFAULT_STRATEGY_CONFIG,
+        )
+        oversold_profile = evaluate_range_entry_profile(
+            price=100.0,
+            indicators=oversold_indicators,
+            grid=oversold_grid,
+            config=DEFAULT_STRATEGY_CONFIG,
+        )
+
+        self.assertGreater(oversold_profile.quality_score, neutral_profile.quality_score)
+        self.assertIn("range_entry_rsi_oversold", oversold_profile.reasons)
 
     def test_range_breakdown_risk_blocks_new_buy_entries(self):
         planner = SpotGridPlanner(DEFAULT_STRATEGY_CONFIG)
@@ -831,6 +1413,69 @@ class Phase12CheapSymbolPlanningTests(unittest.IsolatedAsyncioTestCase):
         buy_orders = [order for order in decision.target_orders if order.side == OrderSide.BUY]
         self.assertTrue(buy_orders)
         self.assertLessEqual(len(buy_orders), DEFAULT_STRATEGY_CONFIG.grid.underwater_max_recovery_levels)
+
+    def test_underwater_range_averaging_waits_for_regime_maturity(self):
+        planner = SpotGridPlanner(DEFAULT_STRATEGY_CONFIG)
+        inventory = InventorySnapshot(
+            base_balance=2.0,
+            quote_balance=10_000.0,
+            reserved_quote=0.0,
+            mark_price=88.0,
+            cost_basis_price=100.0,
+        )
+        indicators = IndicatorSnapshot(
+            ema20=88.5,
+            ema50=88.0,
+            ema200=86.0,
+            atr14=3.0,
+            realized_volatility=0.01,
+            ema50_slope=0.0,
+            range_width=9.0,
+            price_vs_ema50=0.0,
+            directional_move=0.8,
+            directional_sign=-1.0,
+            abnormal_candle=False,
+            atr_spike=False,
+        )
+        analysis = PreliminarySymbolAnalysis(
+            symbol="ETHUSDT",
+            indicators=indicators,
+            regime_snapshot=RegimeSnapshot(RegimeType.RANGE, 1.0, ["fixed_range"]),
+            risk=RiskDecision(
+                can_trade=True,
+                pause_entries=False,
+                force_risk_off=False,
+                cancel_entries=False,
+                allow_exit_only=False,
+            ),
+            strategy_state=StrategyState(regime=RegimeType.RANGE, bars_in_state=1),
+            risk_state=RiskRuntimeState(),
+        )
+        candles = [
+            Candle(timestamp=index, open=88.0, high=89.0, low=87.0, close=88.0, volume=1000.0)
+            for index in range(260)
+        ]
+
+        decision = planner.plan_from_analysis(
+            MarketContext(
+                symbol="ETHUSDT",
+                candles=candles,
+                inventory=inventory,
+                live_orders=[],
+                venue_constraints=VenueConstraints(
+                    tick_size=0.1,
+                    qty_step=0.0001,
+                    min_order_qty=0.0001,
+                    min_order_amt=5.0,
+                ),
+            ),
+            analysis,
+            portfolio_budget=300.0,
+        )
+
+        buy_orders = [order for order in decision.target_orders if order.side == OrderSide.BUY]
+        self.assertTrue(buy_orders)
+        self.assertGreater(len(buy_orders), DEFAULT_STRATEGY_CONFIG.grid.underwater_max_recovery_levels)
 
     def test_underwater_downtrend_does_not_average(self):
         planner = SpotGridPlanner(DEFAULT_STRATEGY_CONFIG)
