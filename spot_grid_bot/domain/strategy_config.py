@@ -94,6 +94,7 @@ class GridConfig:
     range_rsi_filter_enabled: bool = True
     range_rsi_overbought_threshold: float = 70.0
     range_rsi_oversold_threshold: float = 35.0
+    sell_rsi_threshold: float = 65.0
     range_rsi_overbought_penalty: float = 0.12
     range_rsi_oversold_bonus: float = 0.05
     range_weak_entry_budget_penalty: float = 0.90

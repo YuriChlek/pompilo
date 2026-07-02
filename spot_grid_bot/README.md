@@ -89,25 +89,19 @@ LIVE_PRICE_MONITOR_COOLDOWN_SECONDS=60
 ./.venv/bin/python main.py sync --period 365 --timeframe 4h
 ```
 
-### 4. Run one planning/execution cycle
-
-```bash
-./.venv/bin/python main.py once
-```
-
-### 5. Preview changes without touching live orders
+### 4. Preview changes without touching live orders
 
 ```bash
 ./.venv/bin/python main.py dry-run
 ```
 
-### 6. Run the recurring live scheduler
+### 5. Run the recurring live scheduler
 
 ```bash
 ./.venv/bin/python main.py live
 ```
 
-### 7. Run the full test suite
+### 6. Run the full test suite
 
 ```bash
 ./.venv/bin/python -m unittest discover -s tests -p 'test_*.py'
@@ -122,14 +116,6 @@ Downloads Binance Spot candles and stores them in PostgreSQL.
 ```bash
 ./.venv/bin/python main.py sync --period 365 --timeframe 1h
 ./.venv/bin/python main.py sync --period 30 --timeframe 4h
-```
-
-### `once`
-
-Runs one full analysis/planning/execution cycle for all configured symbols.
-
-```bash
-./.venv/bin/python main.py once
 ```
 
 ### `dry-run`

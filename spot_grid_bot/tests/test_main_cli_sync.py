@@ -47,3 +47,12 @@ class MainCliSyncTests(unittest.IsolatedAsyncioTestCase):
 
         with self.assertRaises(SystemExit):
             parser.parse_args(["sync", "--timeframe", "15m"])
+
+    def test_build_parser_rejects_removed_once_command_and_requires_command(self):
+        parser = main._build_parser()
+
+        with self.assertRaises(SystemExit):
+            parser.parse_args(["once"])
+
+        with self.assertRaises(SystemExit):
+            parser.parse_args([])

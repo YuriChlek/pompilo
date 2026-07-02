@@ -149,6 +149,14 @@ def build_target_orders(
         indicators.ema20,
         config.grid.uptrend_max_price_extension_from_ema20_bps,
     )
+    block_buy_entries_by_rsi = (
+        config.grid.range_rsi_filter_enabled
+        and indicators.rsi14 > config.grid.range_rsi_oversold_threshold
+    )
+    block_sell_entries_by_rsi = (
+        config.grid.range_rsi_filter_enabled
+        and indicators.rsi14 <= config.grid.sell_rsi_threshold
+    )
     if block_uptrend_entries:
         extension_bps = ((price - indicators.ema20) / indicators.ema20) * 10_000 if indicators.ema20 > 0 else 0.0
         logger.info(
@@ -159,6 +167,20 @@ def build_target_orders(
             extension_bps,
             config.grid.uptrend_max_price_extension_from_ema20_bps,
         )
+    if block_buy_entries_by_rsi:
+        logger.info(
+            "buy_entries_blocked_due_to_rsi symbol=%s rsi14=%.2f threshold=%.2f",
+            symbol.upper(),
+            indicators.rsi14,
+            config.grid.range_rsi_oversold_threshold,
+        )
+    if block_sell_entries_by_rsi:
+        logger.info(
+            "sell_entries_blocked_due_to_rsi symbol=%s rsi14=%.2f threshold=%.2f",
+            symbol.upper(),
+            indicators.rsi14,
+            config.grid.sell_rsi_threshold,
+        )
     for level in grid.levels:
         if level.size <= 0:
             continue
@@ -168,6 +190,8 @@ def build_target_orders(
             block_range_entries and level.side == OrderSide.BUY
         ) or (
             recovery_profile.block_new_buys and level.side == OrderSide.BUY
+        ) or (
+            block_buy_entries_by_rsi and level.side == OrderSide.BUY
         ):
             continue
         target_price = level.price
@@ -190,6 +214,8 @@ def build_target_orders(
                 strategy_config=config,
                 tick_size=tick_size,
             )
+            if block_sell_entries_by_rsi:
+                continue
         if level.side == OrderSide.SELL and not _is_sell_order_allowed(inventory, target_price, config):
             blocked_no_loss_sell_count += 1
             continue

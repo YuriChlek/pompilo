@@ -130,6 +130,17 @@ class Phase1RebuildTests(unittest.TestCase):
 
     def test_second_pass_skips_rebuild_when_live_orders_match_target(self):
         candles = _build_candles()
+        for offset in range(15):
+            index = len(candles) - 15 + offset
+            close = 100.0 - offset * 0.005
+            candles[index] = Candle(
+                timestamp=index,
+                open=close + 0.002,
+                high=close + 0.8,
+                low=close - 0.8,
+                close=close,
+                volume=10.0,
+            )
         planner = SpotGridPlanner(DEFAULT_STRATEGY_CONFIG)
         planner.detector.detect = Mock(return_value=RegimeSnapshot(RegimeType.RANGE, 1.0, ["test_fixed_range"]))
         inventory = InventorySnapshot(

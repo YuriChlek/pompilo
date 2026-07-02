@@ -89,25 +89,19 @@ LIVE_PRICE_MONITOR_COOLDOWN_SECONDS=60
 ./.venv/bin/python main.py sync --period 365 --timeframe 4h
 ```
 
-### 4. Запусти один planning/execution cycle
-
-```bash
-./.venv/bin/python main.py once
-```
-
-### 5. Переглянь зміни без торкання live orders
+### 4. Переглянь зміни без торкання live orders
 
 ```bash
 ./.venv/bin/python main.py dry-run
 ```
 
-### 6. Запусти recurring live scheduler
+### 5. Запусти recurring live scheduler
 
 ```bash
 ./.venv/bin/python main.py live
 ```
 
-### 7. Запусти повний набір тестів
+### 6. Запусти повний набір тестів
 
 ```bash
 ./.venv/bin/python -m unittest discover -s tests -p 'test_*.py'
@@ -122,14 +116,6 @@ LIVE_PRICE_MONITOR_COOLDOWN_SECONDS=60
 ```bash
 ./.venv/bin/python main.py sync --period 365 --timeframe 1h
 ./.venv/bin/python main.py sync --period 30 --timeframe 4h
-```
-
-### `once`
-
-Запускає один повний analysis/planning/execution cycle для всіх налаштованих символів.
-
-```bash
-./.venv/bin/python main.py once
 ```
 
 ### `dry-run`

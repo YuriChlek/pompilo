@@ -30,8 +30,7 @@ def _positive_period(raw_value: str) -> int:
 def _build_parser() -> argparse.ArgumentParser:
     """Build the command-line parser for one-shot and scheduled bot execution."""
     parser = argparse.ArgumentParser(description="Spot grid bot entrypoint.")
-    subparsers = parser.add_subparsers(dest="command")
-    subparsers.add_parser("once", help="Run one trading cycle for all configured symbols.")
+    subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("dry-run", help="Preview planner diffs without syncing any orders.")
     subparsers.add_parser("live", help="Run the scheduler with scheduled 1h + 4h candle refresh.")
     sync_parser = subparsers.add_parser("sync", help="Manually sync one candle timeframe from Binance into its dedicated DB tables.")
@@ -43,15 +42,6 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Manual sync timeframe. Allowed: 1h, 4h. Default: 1h.",
     )
     return parser
-
-
-async def _run_once() -> None:
-    """Run one trading cycle for each configured symbol."""
-    logger.info("bot_starting mode=once symbols=%s", ",".join(TRADING_SYMBOLS))
-    trading_cycle = build_live_trading_cycle()
-    await trading_cycle.initialize(TRADING_SYMBOLS)
-    await trading_cycle.run_many(TRADING_SYMBOLS)
-    logger.info("bot_finished mode=once symbols=%s", ",".join(TRADING_SYMBOLS))
 
 
 async def _run_sync(period_days: int, timeframe: str) -> None:
@@ -123,7 +113,6 @@ async def start() -> None:
     if args.command == "dry-run":
         await _run_dry_run()
         return
-    await _run_once()
 
 
 if __name__ == "__main__":

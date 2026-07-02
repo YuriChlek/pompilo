@@ -151,13 +151,6 @@ Persistence and reporting:
 7. Execution gateway synchronizes guarded orders to Bybit.
 8. Runtime state is persisted.
 
-### Once mode
-
-1. Ensure candle tables and runtime tables.
-2. Load latest candles from PostgreSQL.
-3. Run the same two-pass planning flow.
-4. Synchronize orders once.
-
 ### Sync mode
 
 1. Ensure candle schema and symbol tables.

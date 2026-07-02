@@ -1,3 +1,4 @@
+from dataclasses import replace
 import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -12,6 +13,7 @@ from domain.inventory_manager import InventoryManager
 from domain.market_structure import StructureBias, StructureSnapshot, SwingPoint
 from domain.range_entry_policy import evaluate_range_entry_profile
 from domain.spot_grid_planner import SpotGridPlanner
+from domain.target_order_builder import build_target_orders
 
 
 class _FakeExchange:
@@ -73,6 +75,7 @@ class Phase12CheapSymbolPlanningTests(unittest.IsolatedAsyncioTestCase):
             directional_sign=0.0,
             abnormal_candle=False,
             atr_spike=False,
+            rsi14=65.1,
         )
 
         grid = builder.build_range_grid(0.08173, indicators, tick_size=0.00001)
@@ -146,6 +149,7 @@ class Phase12CheapSymbolPlanningTests(unittest.IsolatedAsyncioTestCase):
             abnormal_candle=False,
             atr_spike=False,
             range_position=0.5,
+            rsi14=35.0,
         )
 
         grid = builder.build_range_grid(100.0, indicators, tick_size=0.1)
@@ -170,6 +174,7 @@ class Phase12CheapSymbolPlanningTests(unittest.IsolatedAsyncioTestCase):
             abnormal_candle=False,
             atr_spike=False,
             range_position=0.5,
+            rsi14=35.0,
         )
         structure_snapshot = StructureSnapshot(
             bias=StructureBias.RANGE,
@@ -285,7 +290,11 @@ class Phase12CheapSymbolPlanningTests(unittest.IsolatedAsyncioTestCase):
         self.assertGreater(stress_grid.step, calm_grid.step)
 
     def test_planner_passes_structure_snapshot_into_range_grid_construction(self):
-        planner = SpotGridPlanner(DEFAULT_STRATEGY_CONFIG)
+        config = replace(
+            DEFAULT_STRATEGY_CONFIG,
+            grid=replace(DEFAULT_STRATEGY_CONFIG.grid, range_rsi_filter_enabled=False),
+        )
+        planner = SpotGridPlanner(config)
         inventory = InventorySnapshot(
             base_balance=3.0,
             quote_balance=10_000.0,
@@ -307,6 +316,7 @@ class Phase12CheapSymbolPlanningTests(unittest.IsolatedAsyncioTestCase):
             abnormal_candle=False,
             atr_spike=False,
             range_position=0.5,
+            rsi14=35.0,
         )
         structure_snapshot = StructureSnapshot(
             bias=StructureBias.RANGE,
@@ -440,6 +450,7 @@ class Phase12CheapSymbolPlanningTests(unittest.IsolatedAsyncioTestCase):
             directional_sign=0.0,
             abnormal_candle=False,
             atr_spike=False,
+            rsi14=35.0,
         )
 
         grid = builder.build_trend_pullback_grid(100.0, indicators, tick_size=0.1)
@@ -468,6 +479,7 @@ class Phase12CheapSymbolPlanningTests(unittest.IsolatedAsyncioTestCase):
             directional_sign=0.0,
             abnormal_candle=False,
             atr_spike=False,
+            rsi14=35.0,
         )
         inventory = InventorySnapshot(
             base_balance=0.0,
@@ -512,6 +524,7 @@ class Phase12CheapSymbolPlanningTests(unittest.IsolatedAsyncioTestCase):
             directional_sign=0.0,
             abnormal_candle=False,
             atr_spike=False,
+            rsi14=35.0,
         )
         inventory = InventorySnapshot(
             base_balance=10.0,
@@ -557,6 +570,7 @@ class Phase12CheapSymbolPlanningTests(unittest.IsolatedAsyncioTestCase):
             directional_sign=0.0,
             abnormal_candle=False,
             atr_spike=False,
+            rsi14=65.1,
         )
         grid = builder.build_trend_pullback_grid(100.0, indicators, tick_size=0.1)
         breakeven_inventory = InventorySnapshot(
@@ -866,6 +880,7 @@ class Phase12CheapSymbolPlanningTests(unittest.IsolatedAsyncioTestCase):
             directional_sign=0.0,
             abnormal_candle=False,
             atr_spike=False,
+            rsi14=65.1,
         )
         analysis = PreliminarySymbolAnalysis(
             symbol="SOLUSDT",
@@ -930,6 +945,7 @@ class Phase12CheapSymbolPlanningTests(unittest.IsolatedAsyncioTestCase):
             directional_sign=0.0,
             abnormal_candle=False,
             atr_spike=False,
+            rsi14=35.0,
         )
         analysis = PreliminarySymbolAnalysis(
             symbol="SOLUSDT",
@@ -994,6 +1010,7 @@ class Phase12CheapSymbolPlanningTests(unittest.IsolatedAsyncioTestCase):
             directional_sign=0.0,
             abnormal_candle=False,
             atr_spike=False,
+            rsi14=35.0,
         )
         analysis = PreliminarySymbolAnalysis(
             symbol="SOLUSDT",
@@ -1165,6 +1182,142 @@ class Phase12CheapSymbolPlanningTests(unittest.IsolatedAsyncioTestCase):
         self.assertGreater(oversold_profile.quality_score, neutral_profile.quality_score)
         self.assertIn("range_entry_rsi_oversold", oversold_profile.reasons)
 
+    def test_buy_grid_is_blocked_when_rsi_is_above_oversold_threshold(self):
+        indicators = IndicatorSnapshot(
+            ema20=100.0,
+            ema50=100.0,
+            ema200=100.0,
+            atr14=4.0,
+            realized_volatility=0.01,
+            ema50_slope=0.0,
+            range_width=16.0,
+            price_vs_ema50=0.0,
+            directional_move=0.2,
+            directional_sign=0.0,
+            abnormal_candle=False,
+            atr_spike=False,
+            rsi14=35.1,
+        )
+
+        target_orders = build_target_orders(
+            price=100.0,
+            indicators=indicators,
+            inventory=InventorySnapshot(base_balance=0.0, quote_balance=10_000.0, reserved_quote=0.0, mark_price=100.0),
+            regime=RegimeType.RANGE,
+            risk=RiskDecision(can_trade=True, pause_entries=False, force_risk_off=False, cancel_entries=False, allow_exit_only=False),
+            symbol="ETHUSDT",
+            config=DEFAULT_STRATEGY_CONFIG,
+            grid_builder=GridBuilder(DEFAULT_STRATEGY_CONFIG),
+            inventory_manager=InventoryManager(DEFAULT_STRATEGY_CONFIG),
+            tick_size=0.1,
+            venue_constraints=VenueConstraints(tick_size=0.1, qty_step=0.0001, min_order_qty=0.0001, min_order_amt=5.0),
+            portfolio_budget=500.0,
+        )
+
+        self.assertFalse([order for order in target_orders if order.side == OrderSide.BUY])
+
+    def test_buy_grid_is_allowed_when_rsi_equals_oversold_threshold(self):
+        indicators = IndicatorSnapshot(
+            ema20=100.0,
+            ema50=100.0,
+            ema200=100.0,
+            atr14=4.0,
+            realized_volatility=0.01,
+            ema50_slope=0.0,
+            range_width=16.0,
+            price_vs_ema50=0.0,
+            directional_move=0.2,
+            directional_sign=0.0,
+            abnormal_candle=False,
+            atr_spike=False,
+            rsi14=35.0,
+        )
+
+        target_orders = build_target_orders(
+            price=100.0,
+            indicators=indicators,
+            inventory=InventorySnapshot(base_balance=0.0, quote_balance=10_000.0, reserved_quote=0.0, mark_price=100.0),
+            regime=RegimeType.RANGE,
+            risk=RiskDecision(can_trade=True, pause_entries=False, force_risk_off=False, cancel_entries=False, allow_exit_only=False),
+            symbol="ETHUSDT",
+            config=DEFAULT_STRATEGY_CONFIG,
+            grid_builder=GridBuilder(DEFAULT_STRATEGY_CONFIG),
+            inventory_manager=InventoryManager(DEFAULT_STRATEGY_CONFIG),
+            tick_size=0.1,
+            venue_constraints=VenueConstraints(tick_size=0.1, qty_step=0.0001, min_order_qty=0.0001, min_order_amt=5.0),
+            portfolio_budget=500.0,
+        )
+
+        self.assertTrue([order for order in target_orders if order.side == OrderSide.BUY])
+
+    def test_sell_grid_is_blocked_when_rsi_is_not_above_sell_threshold(self):
+        indicators = IndicatorSnapshot(
+            ema20=100.0,
+            ema50=100.0,
+            ema200=100.0,
+            atr14=4.0,
+            realized_volatility=0.01,
+            ema50_slope=0.0,
+            range_width=16.0,
+            price_vs_ema50=0.0,
+            directional_move=0.2,
+            directional_sign=0.0,
+            abnormal_candle=False,
+            atr_spike=False,
+            rsi14=65.0,
+        )
+
+        target_orders = build_target_orders(
+            price=100.0,
+            indicators=indicators,
+            inventory=InventorySnapshot(base_balance=2.0, quote_balance=10_000.0, reserved_quote=0.0, mark_price=100.0, cost_basis_price=90.0),
+            regime=RegimeType.RANGE,
+            risk=RiskDecision(can_trade=True, pause_entries=False, force_risk_off=False, cancel_entries=False, allow_exit_only=False),
+            symbol="ETHUSDT",
+            config=DEFAULT_STRATEGY_CONFIG,
+            grid_builder=GridBuilder(DEFAULT_STRATEGY_CONFIG),
+            inventory_manager=InventoryManager(DEFAULT_STRATEGY_CONFIG),
+            tick_size=0.1,
+            venue_constraints=VenueConstraints(tick_size=0.1, qty_step=0.0001, min_order_qty=0.0001, min_order_amt=5.0),
+            portfolio_budget=0.0,
+        )
+
+        self.assertFalse([order for order in target_orders if order.side == OrderSide.SELL])
+
+    def test_sell_grid_is_allowed_when_rsi_is_above_sell_threshold(self):
+        indicators = IndicatorSnapshot(
+            ema20=100.0,
+            ema50=100.0,
+            ema200=100.0,
+            atr14=4.0,
+            realized_volatility=0.01,
+            ema50_slope=0.0,
+            range_width=16.0,
+            price_vs_ema50=0.0,
+            directional_move=0.2,
+            directional_sign=0.0,
+            abnormal_candle=False,
+            atr_spike=False,
+            rsi14=65.1,
+        )
+
+        target_orders = build_target_orders(
+            price=100.0,
+            indicators=indicators,
+            inventory=InventorySnapshot(base_balance=2.0, quote_balance=10_000.0, reserved_quote=0.0, mark_price=100.0, cost_basis_price=90.0),
+            regime=RegimeType.RANGE,
+            risk=RiskDecision(can_trade=True, pause_entries=False, force_risk_off=False, cancel_entries=False, allow_exit_only=False),
+            symbol="ETHUSDT",
+            config=DEFAULT_STRATEGY_CONFIG,
+            grid_builder=GridBuilder(DEFAULT_STRATEGY_CONFIG),
+            inventory_manager=InventoryManager(DEFAULT_STRATEGY_CONFIG),
+            tick_size=0.1,
+            venue_constraints=VenueConstraints(tick_size=0.1, qty_step=0.0001, min_order_qty=0.0001, min_order_amt=5.0),
+            portfolio_budget=0.0,
+        )
+
+        self.assertTrue([order for order in target_orders if order.side == OrderSide.SELL])
+
     def test_range_breakdown_risk_blocks_new_buy_entries(self):
         planner = SpotGridPlanner(DEFAULT_STRATEGY_CONFIG)
         inventory = InventorySnapshot(
@@ -1187,6 +1340,7 @@ class Phase12CheapSymbolPlanningTests(unittest.IsolatedAsyncioTestCase):
             directional_sign=-1.0,
             abnormal_candle=False,
             atr_spike=False,
+            rsi14=35.0,
         )
         analysis = PreliminarySymbolAnalysis(
             symbol="ETHUSDT",
@@ -1247,6 +1401,7 @@ class Phase12CheapSymbolPlanningTests(unittest.IsolatedAsyncioTestCase):
             directional_sign=0.0,
             abnormal_candle=False,
             atr_spike=False,
+            rsi14=65.1,
         )
         analysis = PreliminarySymbolAnalysis(
             symbol="SOLUSDT",
@@ -1312,6 +1467,7 @@ class Phase12CheapSymbolPlanningTests(unittest.IsolatedAsyncioTestCase):
             directional_sign=-1.0,
             abnormal_candle=False,
             atr_spike=False,
+            rsi14=35.0,
         )
         analysis = PreliminarySymbolAnalysis(
             symbol="ETHUSDT",
@@ -1373,6 +1529,7 @@ class Phase12CheapSymbolPlanningTests(unittest.IsolatedAsyncioTestCase):
             directional_sign=-1.0,
             abnormal_candle=False,
             atr_spike=False,
+            rsi14=35.0,
         )
         analysis = PreliminarySymbolAnalysis(
             symbol="ETHUSDT",
@@ -1436,6 +1593,7 @@ class Phase12CheapSymbolPlanningTests(unittest.IsolatedAsyncioTestCase):
             directional_sign=-1.0,
             abnormal_candle=False,
             atr_spike=False,
+            rsi14=35.0,
         )
         analysis = PreliminarySymbolAnalysis(
             symbol="ETHUSDT",

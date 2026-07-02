@@ -24,6 +24,22 @@ def _candles(price: float = 100.0) -> list[Candle]:
     return candles
 
 
+def _overbought_candles(price: float = 100.0) -> list[Candle]:
+    candles = _candles(price)
+    for offset in range(15):
+        index = len(candles) - 15 + offset
+        close = price + offset * 0.5
+        candles[index] = Candle(
+            timestamp=index,
+            open=close - 0.1,
+            high=close + 1.0,
+            low=close - 1.0,
+            close=close,
+            volume=10.0,
+        )
+    return candles
+
+
 class Phase4CostBasisTests(unittest.TestCase):
     def test_minimum_exit_price_requires_one_percent_markup_over_cost_basis(self):
         inventory = InventorySnapshot(
@@ -41,7 +57,7 @@ class Phase4CostBasisTests(unittest.TestCase):
     def test_range_sell_targets_are_rebased_above_cost_basis_floor(self):
         planner = SpotGridPlanner(DEFAULT_STRATEGY_CONFIG)
         planner.detector.detect = Mock(return_value=RegimeSnapshot(RegimeType.RANGE, 1.0, ["fixed_range"]))
-        candles = _candles(100.0)
+        candles = _overbought_candles(100.0)
         inventory = InventorySnapshot(
             base_balance=3.0,
             quote_balance=1000.0,
@@ -61,7 +77,7 @@ class Phase4CostBasisTests(unittest.TestCase):
     def test_uptrend_sell_targets_are_rebased_from_cost_basis_not_buy_ladder_only(self):
         planner = SpotGridPlanner(DEFAULT_STRATEGY_CONFIG)
         planner.detector.detect = Mock(return_value=RegimeSnapshot(RegimeType.UPTREND, 1.0, ["fixed_uptrend"]))
-        candles = _candles(130.0)
+        candles = _overbought_candles(130.0)
         inventory = InventorySnapshot(
             base_balance=2.0,
             quote_balance=1000.0,
@@ -81,7 +97,7 @@ class Phase4CostBasisTests(unittest.TestCase):
     def test_planner_does_not_build_sell_targets_when_cost_basis_is_unknown(self):
         planner = SpotGridPlanner(DEFAULT_STRATEGY_CONFIG)
         planner.detector.detect = Mock(return_value=RegimeSnapshot(RegimeType.RANGE, 1.0, ["fixed_range"]))
-        candles = _candles(100.0)
+        candles = _overbought_candles(100.0)
         inventory = InventorySnapshot(
             base_balance=3.0,
             quote_balance=1000.0,
@@ -98,7 +114,7 @@ class Phase4CostBasisTests(unittest.TestCase):
     def test_planner_logs_when_no_loss_floor_blocks_sell_levels(self):
         planner = SpotGridPlanner(DEFAULT_STRATEGY_CONFIG)
         planner.detector.detect = Mock(return_value=RegimeSnapshot(RegimeType.RANGE, 1.0, ["fixed_range"]))
-        candles = _candles(100.0)
+        candles = _overbought_candles(100.0)
         inventory = InventorySnapshot(
             base_balance=3.0,
             quote_balance=1000.0,
