@@ -1,0 +1,139 @@
+/* ===== Base colors ===== */
+:root {
+    /* Primary */
+    --color-primary: #4f46e5;
+    --color-primary-hover: #4338ca;
+    --color-primary-light: rgba(79, 70, 229, 0.16);
+    --color-chart-line-primary: #4f46e5;
+
+    /* Neutral */
+    --color-white: #ffffff;
+    --color-black: #000000;
+    --color-shadow-rgb: 15, 23, 42;
+    --color-background-accent-start: rgba(79, 70, 229, 0.14);
+    --color-background-accent-end: rgba(99, 102, 241, 0.1);
+    --color-accent-glow: rgba(99, 102, 241, 0.24);
+    --color-backdrop: rgba(15, 23, 42, 0.48);
+    --color-spinner-highlight: rgba(148, 163, 184, 0.16);
+
+    /* Gray scale - light theme default */
+    --color-gray-50: #f8fafc;
+    --color-gray-100: #f1f5f9;
+    --color-gray-200: #e2e8f0;
+    --color-gray-300: #cbd5e1;
+    --color-gray-400: #94a3b8;
+    --color-gray-500: #64748b;
+    --color-gray-600: #475569;
+    --color-gray-700: #334155;
+    --color-gray-800: #1e293b;
+    --color-gray-900: #0f172a;
+}
+
+/* ===== Theme variables ===== */
+:root[data-theme='light'] {
+    /* Backgrounds */
+    --color-background: #f8fafc;
+    --color-surface: #ffffff;
+    --color-surface-secondary: #f1f5f9;
+
+    /* App Aliases (Mockup naming) */
+    --color-app-bg: #f8fafc;
+    --color-app-surface: #ffffff;
+    --color-app-surface-hover: #f1f5f9;
+    --color-app-accent: #4f46e5;
+    --color-app-accent-dark: #4338ca;
+    --color-app-accent-soft: rgba(79, 70, 229, 0.1);
+    --color-app-text: #0f172a;
+    --color-app-text-muted: #64748b;
+    --color-app-border: #e2e8f0;
+    --color-app-border-dark: #cbd5e1;
+
+    /* Text */
+    --color-text-primary: #0f172a;
+    --color-text-secondary: #475569;
+    --color-text-tertiary: #64748b;
+
+    /* Borders */
+    --color-border-primary: #e2e8f0;
+    --color-border-secondary: #f1f5f9;
+    --color-border-tertiary: #cbd5e1;
+
+    /* Buttons */
+    --color-button-primary-bg: var(--color-app-accent);
+    --color-button-primary-hover: var(--color-app-accent-dark);
+    --color-button-secondary-bg: transparent;
+    --color-button-secondary-hover: var(--color-app-surface-hover);
+    --color-button-secondary-border: var(--color-app-border);
+
+    /* Semantic */
+    --color-text-positive: #15803d;
+    --color-text-negative: #b91c1c;
+    --color-text-warning: #d97706;
+    --color-surface-negative-soft: rgba(185, 28, 28, 0.08);
+    --color-border-negative-soft: rgba(185, 28, 28, 0.18);
+    
+    --color-app-danger: #b91c1c;
+    --color-app-warning: #d97706;
+    --color-app-success: #15803d;
+
+    --color-background-accent-start: rgba(79, 70, 229, 0.1);
+    --color-background-accent-end: rgba(129, 140, 248, 0.08);
+    --color-accent-glow: rgba(79, 70, 229, 0.16);
+    --color-backdrop: rgba(17, 24, 39, 0.28);
+    --color-spinner-highlight: rgba(79, 70, 229, 0.14);
+    --color-shadow-rgb: 17, 24, 39;
+}
+
+:root[data-theme='dark'] {
+    /* Backgrounds */
+    --color-background: #0f172a;
+    --color-surface: #1e293b;
+    --color-surface-secondary: #334155;
+
+    /* App Aliases (Mockup naming - adapted for dark) */
+    --color-app-bg: #0f172a;
+    --color-app-surface: #1e293b;
+    --color-app-surface-hover: #334155;
+    --color-app-accent: #6366f1;
+    --color-app-accent-dark: #4f46e5;
+    --color-app-accent-soft: rgba(99, 102, 241, 0.2);
+    --color-app-text: #f8fafc;
+    --color-app-text-muted: #94a3b8;
+    --color-app-border: #334155;
+    --color-app-border-dark: #475569;
+
+    /* Text */
+    --color-text-primary: #f8fafc;
+    --color-text-secondary: #cbd5e1;
+    --color-text-tertiary: #94a3b8;
+
+    /* Borders */
+    --color-border-primary: #334155;
+    --color-border-secondary: #475569;
+    --color-border-tertiary: #1e293b;
+
+    /* Buttons */
+    --color-button-primary-bg: var(--color-app-accent);
+    --color-button-primary-hover: var(--color-app-accent-dark);
+    --color-button-secondary-bg: transparent;
+    --color-button-secondary-hover: var(--color-app-surface-hover);
+    --color-button-secondary-border: var(--color-app-border);
+
+    /* Semantic */
+    --color-text-positive: #4ade80;
+    --color-text-negative: #f87171;
+    --color-text-warning: #fbbf24;
+    --color-surface-negative-soft: rgba(248, 113, 113, 0.14);
+    --color-border-negative-soft: rgba(248, 113, 113, 0.22);
+    
+    --color-app-danger: #f87171;
+    --color-app-warning: #fbbf24;
+    --color-app-success: #4ade80;
+
+    --color-background-accent-start: rgba(99, 102, 241, 0.14);
+    --color-background-accent-end: rgba(79, 70, 229, 0.1);
+    --color-accent-glow: rgba(99, 102, 241, 0.16);
+    --color-backdrop: rgba(2, 6, 23, 0.72);
+    --color-spinner-highlight: rgba(148, 163, 184, 0.12);
+    --color-shadow-rgb: 2, 6, 23;
+}

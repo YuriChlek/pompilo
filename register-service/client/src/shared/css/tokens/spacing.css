@@ -1,0 +1,25 @@
+/* ===== Spacing tokens ===== */
+:root {
+    /* Base unit */
+    --spacing-unit: 0.25rem;
+
+    /* Spacing scale */
+    --spacing-0: 0;
+    --spacing-1: calc(var(--spacing-unit) * 1); /* 0.25rem */
+    --spacing-2: calc(var(--spacing-unit) * 2); /* 0.5rem */
+    --spacing-3: calc(var(--spacing-unit) * 3); /* 0.75rem */
+    --spacing-4: calc(var(--spacing-unit) * 4); /* 1rem */
+    --spacing-5: calc(var(--spacing-unit) * 5); /* 1.25rem */
+    --spacing-6: calc(var(--spacing-unit) * 6); /* 1.5rem */
+    --spacing-8: calc(var(--spacing-unit) * 8); /* 2rem */
+    --spacing-10: calc(var(--spacing-unit) * 10); /* 2.5rem */
+    --spacing-12: calc(var(--spacing-unit) * 12); /* 3rem */
+    --spacing-16: calc(var(--spacing-unit) * 16); /* 4rem */
+    --spacing-20: calc(var(--spacing-unit) * 20); /* 5rem */
+
+    /* Specific tokens */
+    --header-padding: var(--spacing-4) var(--spacing-8);
+    --modal-padding: var(--spacing-6);
+    --form-gap: var(--spacing-4);
+    --field-gap: var(--spacing-2);
+}

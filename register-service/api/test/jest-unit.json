@@ -1,0 +1,18 @@
+{
+    "moduleFileExtensions": ["js", "json", "ts", "tsx"],
+    "rootDir": "..",
+    "testMatch": ["<rootDir>/test/unit/**/*.spec.{ts,tsx}"],
+    "testEnvironment": "node",
+    "transform": {
+        "^.+\\.(t|j)sx?$": [
+            "ts-jest",
+            {
+                "useESM": true
+            }
+        ]
+    },
+    "moduleNameMapper": {
+        "^@/(.*)$": "<rootDir>/src/$1",
+        "^@config/(.*)$": "<rootDir>/src/config/$1"
+    }
+}

@@ -1,0 +1,25 @@
+services:
+  mailpit:
+    profiles: ["mail"]
+    image: axllent/mailpit:v1.18
+    restart: always
+    networks:
+      - platform
+    environment:
+      MP_MAX_MESSAGES: 500
+      MP_DATABASE: /data/mailpit.db
+    volumes:
+      - platform_mailpit_data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8025/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+volumes:
+  platform_mailpit_data:
+    name: platform_mailpit_data
+
+networks:
+  platform:
+    name: platform_network
+    driver: bridge

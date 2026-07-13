@@ -1,0 +1,88 @@
+services:
+  api:
+    profiles: ["identity"]
+    build:
+      context: ../../register-service/api
+      dockerfile: Dockerfile
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      PORT: 3000
+      NODE_ENV: production
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-admin}
+      DB_PASSWORD: ${DB_PASSWORD:-admin_pass}
+      DB_NAME: ${DB_NAME:-pampilo_db}
+      DB_POOL_MAX: 30
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      CLIENT_ORIGIN: https://localhost
+      MAIL_QUEUE_LIMITER_MAX: 100
+      MAIL_QUEUE_LIMITER_DURATION: 1000
+      MAIL_WORKER_CONCURRENCY: 4
+    networks:
+      - platform
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health/readiness').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  client:
+    profiles: ["identity"]
+    build:
+      context: ../../register-service/client
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: https://localhost
+        NEXT_PUBLIC_API_PORT: 443
+        API_BASE_URL: http://api:3000
+    restart: always
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      PORT: 3001
+      HOSTNAME: 0.0.0.0
+      NEXT_PUBLIC_API_URL: https://localhost
+      NEXT_PUBLIC_API_PORT: 443
+      API_BASE_URL: http://api:3000
+    networks:
+      - platform
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  gateway:
+    profiles: ["identity"]
+    build:
+      context: ../../infra/nginx
+      dockerfile: Dockerfile
+    restart: always
+    depends_on:
+      client:
+        condition: service_healthy
+    ports:
+      - "${GATEWAY_HTTP_PORT:-80}:80"
+      - "${GATEWAY_HTTPS_PORT:-443}:443"
+    networks:
+      - platform
+    healthcheck:
+      test: ["CMD", "wget", "--no-check-certificate", "--spider", "-q", "https://127.0.0.1/"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+networks:
+  platform:
+    name: platform_network

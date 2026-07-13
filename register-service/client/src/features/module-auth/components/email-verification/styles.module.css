@@ -1,0 +1,141 @@
+.card {
+    width: 100%;
+    max-width: 28rem;
+    margin: auto;
+    padding: 2.5rem 2rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(10px);
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    min-height: calc(100vh - 8rem);
+}
+
+.iconContainer {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--color-primary-start, #0070f3), var(--color-primary-end, #00dfd8));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 2rem;
+    color: #fff;
+    box-shadow: 0 0 20px rgba(0, 112, 243, 0.4);
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(0, 112, 243, 0.4);
+    }
+    70% {
+        box-shadow: 0 0 0 15px rgba(0, 112, 243, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(0, 112, 243, 0);
+    }
+}
+
+.title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--color-app-text, #fff);
+    margin-bottom: 1rem;
+}
+
+.description {
+    font-size: 0.95rem;
+    color: var(--color-app-text-muted, #ccc);
+    line-height: 1.6;
+    margin-bottom: 2rem;
+}
+
+.emailHighlight {
+    font-weight: 600;
+    color: #00dfd8;
+}
+
+.buttonContainer {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.primaryButton {
+    background: linear-gradient(90deg, #0070f3, #00dfd8);
+    color: #fff;
+    font-weight: 600;
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    box-shadow: 0 4px 14px 0 rgba(0, 118, 255, 0.39);
+}
+
+.primaryButton:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 118, 255, 0.5);
+}
+
+.secondaryButton {
+    background: transparent;
+    color: var(--color-app-text-muted, #ccc);
+    font-weight: 500;
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.secondaryButton:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: #fff;
+}
+
+.link {
+    font-size: 0.875rem;
+    color: #0070f3;
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+.link:hover {
+    color: #00dfd8;
+}
+
+.successText {
+    color: #4caf50;
+    font-weight: 600;
+    margin-top: 1rem;
+}
+
+.errorText {
+    color: #f44336;
+    font-weight: 600;
+    margin-top: 1rem;
+}
+
+.spinner {
+    border: 3px solid rgba(255, 255, 255, 0.1);
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border-left-color: #00dfd8;
+    animation: spin 1s linear infinite;
+    margin-bottom: 1.5rem;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}

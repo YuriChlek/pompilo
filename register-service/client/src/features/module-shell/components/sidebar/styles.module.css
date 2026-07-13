@@ -1,0 +1,183 @@
+.sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 244px;
+    background-color: var(--color-app-surface);
+    border-right: 1px solid var(--color-app-border);
+    display: flex;
+    flex-direction: column;
+    z-index: var(--z-index-sticky);
+    transition: width 0.3s ease;
+    display: none; /* Mobile first: hidden */
+}
+
+@media (min-width: 768px) {
+    .sidebar {
+        display: flex;
+        position: sticky;
+        top: 0;
+        height: 100vh;
+        align-self: flex-start;
+    }
+}
+
+.collapsed {
+    width: 80px;
+}
+
+.header {
+    padding: var(--spacing-5);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 80px;
+    border-bottom: 1px solid transparent;
+}
+
+.collapsed .header {
+    justify-content: center;
+    padding: var(--spacing-5) 0;
+}
+
+.logoWrapper {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+}
+
+.collapsed .logoWrapper {
+    display: none;
+}
+
+.toggleButton {
+    background: transparent;
+    border: none;
+    color: var(--color-app-text-muted);
+    cursor: pointer;
+    padding: var(--spacing-2);
+    border-radius: var(--border-radius-md);
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.toggleButton:hover {
+    background-color: var(--color-app-surface-hover);
+    color: var(--color-app-text);
+}
+
+.nav {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--spacing-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-1);
+}
+
+.collapsed .nav {
+    padding: var(--spacing-4) 0;
+    align-items: center;
+}
+
+.navItem {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-3);
+    padding: var(--spacing-3) var(--spacing-4);
+    border-radius: var(--border-radius-xl);
+    color: var(--color-text-secondary);
+    text-decoration: none;
+    transition: all 0.2s ease;
+    font-weight: 400;
+}
+
+.navItem:hover {
+    background-color: var(--color-app-surface-hover);
+    color: var(--color-app-text);
+    transform: scale(1.02);
+}
+
+.navItemActive {
+    background-color: var(--color-app-accent-soft);
+    color: var(--color-app-accent);
+    font-weight: 400;
+}
+
+.navItemActive:hover {
+    background-color: var(--color-app-accent-soft);
+    color: var(--color-app-accent);
+}
+
+.icon {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+}
+
+.label {
+    white-space: nowrap;
+    opacity: 1;
+    transition: opacity 0.2s ease;
+}
+
+.collapsed .label {
+    display: none;
+}
+
+.collapsed .navItem {
+    padding: var(--spacing-3) 0;
+    justify-content: center;
+    width: 100%;
+}
+
+.footer {
+    padding: var(--spacing-4);
+    border-top: 1px solid var(--color-app-border);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-3);
+}
+
+.collapsed .footer {
+    padding: var(--spacing-4) 0;
+    align-items: center;
+}
+
+.footerActions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-2);
+}
+
+.collapsed .footerActions {
+    flex-direction: column;
+    width: 100%;
+}
+
+/* Base styles for labels to ensure smooth transition */
+.label {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.iconWrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}

@@ -1,0 +1,83 @@
+discovery.docker "containers" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "10s"
+}
+
+discovery.relabel "platform_containers" {
+  targets = discovery.docker.containers.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(pampilo-platform-.+)"
+    target_label  = "container"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/pampilo-platform-(api|client|gateway|postgres|redis|mailpit|loki|alloy|grafana|spot_grid_bot)-[0-9]+"
+    action        = "keep"
+  }
+
+  rule {
+    target_label = "stack"
+    replacement  = "pampilo-platform"
+  }
+}
+
+loki.source.docker "platform" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.platform_containers.output
+  forward_to = [loki.process.platform.receiver]
+}
+
+loki.process "platform" {
+  stage.json {
+    expressions = {
+      timestamp   = "timestamp",
+      time        = "time",
+      level       = "level",
+      service     = "service",
+      environment = "environment",
+      channel     = "channel",
+      context     = "context",
+      requestId   = "requestId",
+      message     = "message",
+      msg         = "msg",
+      userId      = "userId",
+      jobId       = "jobId",
+      conversationId = "conversationId",
+    }
+  }
+
+  stage.labels {
+    values = {
+      service     = "",
+      environment = "",
+      level       = "",
+      channel     = "",
+    }
+  }
+
+  stage.structured_metadata {
+    values = {
+      context        = "",
+      requestId      = "",
+      userId         = "",
+      jobId          = "",
+      conversationId = "",
+    }
+  }
+
+  stage.timestamp {
+    source = "timestamp"
+    format = "RFC3339Nano"
+  }
+
+  forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

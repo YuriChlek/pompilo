@@ -1,0 +1,21 @@
+{
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+        "outDir": "./dist",
+        "composite": false,
+        "declaration": false,
+        "emitDecoratorMetadata": false,
+        "experimentalDecorators": false
+    },
+    "include": [
+        "scripts/cli/operations/build-data-patches.ts",
+        "scripts/cli/operations/run-data-patches.ts",
+        "data-patches/**/*"
+    ],
+    "exclude": [
+        "node_modules",
+        "test",
+        "dist",
+        "**/*.spec.ts"
+    ]
+}

@@ -1,0 +1,10 @@
+services:
+  api:
+    env_file:
+      - ../../register-service/.env.production
+  client:
+    env_file:
+      - ../../register-service/.env.production
+  spot_grid_bot:
+    env_file:
+      - ../../spot_grid_bot/.env.production
