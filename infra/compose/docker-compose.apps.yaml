@@ -2,7 +2,7 @@ services:
   api:
     profiles: ["identity"]
     build:
-      context: ../../register-service/api
+      context: ../../control-panel/api
       dockerfile: Dockerfile
     restart: always
     depends_on:
@@ -37,7 +37,7 @@ services:
   client:
     profiles: ["identity"]
     build:
-      context: ../../register-service/client
+      context: ../../control-panel/client
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_URL: https://localhost

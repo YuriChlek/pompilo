@@ -7,12 +7,12 @@ services:
       - "${REDIS_PORT:-6379}:6379"
   api:
     env_file:
-      - ../../register-service/.env
+      - ../../control-panel/.env
     ports:
       - "${API_HOST_PORT:-3000}:3000"
   client:
     env_file:
-      - ../../register-service/.env
+      - ../../control-panel/.env
   loki:
     ports:
       - "${LOKI_HOST_PORT:-3100}:3100"
