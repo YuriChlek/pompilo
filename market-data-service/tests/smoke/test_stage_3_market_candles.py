@@ -25,7 +25,7 @@ class Stage3MarketCandlesTests(unittest.TestCase):
             SERVICE_ROOT / "alembic/versions/20260714_0003_create_market_candles_partitions.py"
         ).read_text(encoding="utf-8")
 
-        self.assertIn('revision = "0003_create_market_candles_partitions"', migration)
+        self.assertIn('revision = "0003_market_candles_partitions"', migration)
         self.assertIn('down_revision = "0002_seed_symbol_registry"', migration)
         self.assertIn("PARTITION BY LIST (timeframe)", migration)
         self.assertIn("market_candles_1h", migration)

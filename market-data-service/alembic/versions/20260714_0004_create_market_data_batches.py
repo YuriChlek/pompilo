@@ -4,7 +4,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision = "0004_create_market_data_batches"
-down_revision = "0003_create_market_candles_partitions"
+down_revision = "0003_market_candles_partitions"
 branch_labels = None
 depends_on = None
 

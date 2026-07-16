@@ -3,7 +3,7 @@ from __future__ import annotations
 from alembic import op
 import sqlalchemy as sa
 
-revision = "0008_extend_sync_jobs_for_backfill"
+revision = "0008_extend_sync_backfill"
 down_revision = "0007_create_sync_jobs"
 branch_labels = None
 depends_on = None

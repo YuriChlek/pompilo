@@ -5,7 +5,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 revision = "0002_seed_symbol_registry"
-down_revision = "0001_create_market_data_schema_shell"
+down_revision = "0001_market_data_schema"
 branch_labels = None
 depends_on = None
 

@@ -21,6 +21,7 @@ def run_migrations_offline() -> None:
     context.configure(
         url=config.get_main_option("sqlalchemy.url"),
         target_metadata=target_metadata,
+        version_table="market_data_alembic_version",
         include_schemas=True,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
@@ -34,6 +35,7 @@ def do_run_migrations(connection) -> None:
     context.configure(
         connection=connection,
         target_metadata=target_metadata,
+        version_table="market_data_alembic_version",
         include_schemas=True,
     )
 

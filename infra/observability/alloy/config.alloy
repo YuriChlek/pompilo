@@ -14,7 +14,7 @@ discovery.relabel "platform_containers" {
 
   rule {
     source_labels = ["__meta_docker_container_name"]
-    regex         = "/pampilo-platform-(api|client|gateway|postgres|redis|mailpit|loki|alloy|grafana|spot_grid_bot)-[0-9]+"
+    regex         = "/pampilo-platform-(api|client|gateway|postgres|redis|mailpit|loki|alloy|grafana|market_data_migrate|bot_platform_migrate|bot_platform)-[0-9]+"
     action        = "keep"
   }
 

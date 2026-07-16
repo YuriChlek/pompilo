@@ -149,13 +149,17 @@ def build_target_orders(
         indicators.ema20,
         config.grid.uptrend_max_price_extension_from_ema20_bps,
     )
+    buy_rsi_threshold = _buy_rsi_threshold_for_regime(regime, config)
     block_buy_entries_by_rsi = (
         config.grid.range_rsi_filter_enabled
-        and indicators.rsi14 > config.grid.range_rsi_oversold_threshold
+        and buy_rsi_threshold is not None
+        and indicators.rsi14 > buy_rsi_threshold
     )
+    sell_rsi_threshold = _sell_rsi_threshold_for_regime(regime, config)
     block_sell_entries_by_rsi = (
         config.grid.range_rsi_filter_enabled
-        and indicators.rsi14 <= config.grid.sell_rsi_threshold
+        and sell_rsi_threshold is not None
+        and indicators.rsi14 < sell_rsi_threshold
     )
     if block_uptrend_entries:
         extension_bps = ((price - indicators.ema20) / indicators.ema20) * 10_000 if indicators.ema20 > 0 else 0.0
@@ -172,14 +176,14 @@ def build_target_orders(
             "buy_entries_blocked_due_to_rsi symbol=%s rsi14=%.2f threshold=%.2f",
             symbol.upper(),
             indicators.rsi14,
-            config.grid.range_rsi_oversold_threshold,
+            buy_rsi_threshold,
         )
     if block_sell_entries_by_rsi:
         logger.info(
             "sell_entries_blocked_due_to_rsi symbol=%s rsi14=%.2f threshold=%.2f",
             symbol.upper(),
             indicators.rsi14,
-            config.grid.sell_rsi_threshold,
+            sell_rsi_threshold,
         )
     for level in grid.levels:
         if level.size <= 0:
@@ -278,3 +282,21 @@ def _is_sell_order_allowed(inventory, target_price: float, config) -> bool:
     if min_allowed_price is None:
         return False
     return target_price >= min_allowed_price
+
+
+def _buy_rsi_threshold_for_regime(regime: RegimeType, config) -> float | None:
+    """Return the configured BUY RSI ceiling for regimes that can open entries."""
+    if regime == RegimeType.RANGE:
+        return config.grid.range_rsi_oversold_threshold
+    if regime == RegimeType.UPTREND:
+        return config.grid.uptrend_rsi_oversold_threshold
+    return None
+
+
+def _sell_rsi_threshold_for_regime(regime: RegimeType, config) -> float | None:
+    """Return the configured SELL RSI floor for regimes that can take profit."""
+    if regime == RegimeType.RANGE:
+        return config.grid.sell_rsi_threshold
+    if regime == RegimeType.UPTREND:
+        return config.grid.uptrend_sell_rsi_threshold
+    return None

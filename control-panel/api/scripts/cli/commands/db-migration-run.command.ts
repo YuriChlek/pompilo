@@ -19,12 +19,19 @@ export class DbMigrationRunCommand implements CliCommand {
             const projectRoot = __dirname.includes('dist')
                 ? path.resolve(__dirname, '../../../..')
                 : path.resolve(__dirname, '../../..');
+            const configPath = __dirname.includes('dist')
+                ? path.join(projectRoot, 'dist', 'drizzle.config.js')
+                : path.join(projectRoot, 'drizzle.config.ts');
 
-            const result = spawnSync('npx', ['drizzle-kit', 'migrate'], {
+            const result = spawnSync(
+                'npx',
+                ['--no-install', 'drizzle-kit', 'migrate', '--config', configPath],
+                {
                 cwd: projectRoot,
                 stdio: 'inherit',
                 env: { ...process.env, ...context.env },
-            });
+                },
+            );
 
             if (result.status !== 0) {
                 return {

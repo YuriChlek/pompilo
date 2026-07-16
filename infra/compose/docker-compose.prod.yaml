@@ -5,6 +5,3 @@ services:
   client:
     env_file:
       - ../../control-panel/.env.production
-  spot_grid_bot:
-    env_file:
-      - ../../spot_grid_bot/.env.production

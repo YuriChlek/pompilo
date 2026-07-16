@@ -1,0 +1,89 @@
+services:
+  market_data_migrate:
+    profiles: ["platform"]
+    build:
+      context: ../../market-data-service
+      dockerfile: Dockerfile
+    image: platform_market_data_service
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-admin}
+      DB_PASSWORD: ${DB_PASSWORD:-admin_pass}
+      DB_NAME: ${DB_NAME:-pampilo_db}
+      DATABASE: ${DB_NAME:-pampilo_db}
+    command: ["alembic", "upgrade", "head"]
+    networks:
+      - platform
+
+  bot_platform_migrate:
+    profiles: ["platform"]
+    build:
+      context: ../../bot-platform-service
+      dockerfile: Dockerfile
+    image: platform_bot_platform_service
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      market_data_migrate:
+        condition: service_completed_successfully
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-admin}
+      DB_PASSWORD: ${DB_PASSWORD:-admin_pass}
+      DB_NAME: ${DB_NAME:-pampilo_db}
+      DATABASE: ${DB_NAME:-pampilo_db}
+    command: ["alembic", "upgrade", "head"]
+    networks:
+      - platform
+
+  bot_platform:
+    profiles: ["platform"]
+    build:
+      context: ../../bot-platform-service
+      dockerfile: Dockerfile
+    image: platform_bot_platform_service
+    restart: "no"
+    depends_on:
+      bot_platform_migrate:
+        condition: service_completed_successfully
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-admin}
+      DB_PASSWORD: ${DB_PASSWORD:-admin_pass}
+      DB_NAME: ${DB_NAME:-pampilo_db}
+      DATABASE: ${DB_NAME:-pampilo_db}
+    networks:
+      - platform
+
+  bot_modules_sync:
+    profiles: ["platform"]
+    build:
+      context: ../../bot-platform-service
+      dockerfile: Dockerfile
+    image: platform_bot_platform_service
+    restart: "no"
+    depends_on:
+      bot_platform_migrate:
+        condition: service_completed_successfully
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-admin}
+      DB_PASSWORD: ${DB_PASSWORD:-admin_pass}
+      DB_NAME: ${DB_NAME:-pampilo_db}
+      DATABASE: ${DB_NAME:-pampilo_db}
+    command: ["python", "-m", "bot_platform_service.main", "bot:modules:sync"]
+    networks:
+      - platform
+
+networks:
+  platform:
+    name: platform_network

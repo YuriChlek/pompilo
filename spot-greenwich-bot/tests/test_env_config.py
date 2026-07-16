@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import importlib
 import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
+from utils import config
 from utils.env import load_project_env
 
 
@@ -33,6 +35,26 @@ class EnvConfigTests(unittest.TestCase):
         self.assertIn("PORTFOLIO_POSITION_LIMIT=3", content)
         self.assertIn("PORTFOLIO_PRIORITY_SYMBOLS=BTCUSDT,ETHUSDT", content)
         self.assertIn("DRY_RUN_QUOTE_BALANCE=1000", content)
+        self.assertIn("MARKET_DATA_SERVICE_ENABLED=false", content)
+
+    def test_market_data_service_feature_flag_defaults_to_false(self) -> None:
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertFalse(config._get_bool_env("MARKET_DATA_SERVICE_ENABLED", "false"))
+
+    def test_market_data_service_feature_flag_accepts_enabled_values(self) -> None:
+        enabled_values = ("1", "true", "yes", "on", "TRUE")
+
+        for value in enabled_values:
+            with self.subTest(value=value):
+                with patch.dict(os.environ, {"MARKET_DATA_SERVICE_ENABLED": value}):
+                    self.assertTrue(config._get_bool_env("MARKET_DATA_SERVICE_ENABLED", "false"))
+
+    def test_market_data_service_runtime_constant_is_disabled_by_default(self) -> None:
+        with patch.dict(os.environ, {"MARKET_DATA_SERVICE_ENABLED": "false"}):
+            reloaded_config = importlib.reload(config)
+
+        self.assertFalse(reloaded_config.MARKET_DATA_SERVICE_ENABLED)
+        importlib.reload(config)
 
     def test_load_project_env_uses_production_first_and_env_as_fallback(self) -> None:
         with TemporaryDirectory() as tmpdir:

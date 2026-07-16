@@ -75,10 +75,10 @@ const OPTIONS = [
     selected: false,
   },
   {
-    id: 'trading-bot',
-    label: 'Spot Grid Trading Bot',
-    services: ['spot_grid_bot'],
-    profiles: ['trading'],
+    id: 'platform',
+    label: 'Platform migration jobs',
+    services: ['market_data_migrate', 'bot_platform_migrate', 'bot_platform'],
+    profiles: ['infra', 'platform'],
     selected: false,
   },
 ];
@@ -91,7 +91,7 @@ const COMPOSE_FILE_ARGS = [
   '-p',
   COMPOSE_PROJECT,
   '--env-file',
-  'register-service/.env',
+  'control-panel/.env',
   '-f',
   'infra/compose/docker-compose.yaml',
   '-f',

@@ -3,8 +3,12 @@ import { loadApiEnvFiles } from '@config/api-env.config';
 
 loadApiEnvFiles();
 
+const isCompiledConfig = __dirname.endsWith('/dist');
+
 export default defineConfig({
-    schema: './src/module-drizzle/schemas/index.ts',
+    schema: isCompiledConfig
+        ? './dist/src/module-drizzle/schemas/index.js'
+        : './src/module-drizzle/schemas/index.ts',
     out: './drizzle-migrations',
     dialect: 'postgresql',
     dbCredentials: {

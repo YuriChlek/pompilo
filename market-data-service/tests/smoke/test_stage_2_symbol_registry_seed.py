@@ -14,7 +14,7 @@ class Stage2SymbolRegistrySeedTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
 
         self.assertIn('revision = "0002_seed_symbol_registry"', migration)
-        self.assertIn('down_revision = "0001_create_market_data_schema_shell"', migration)
+        self.assertIn('down_revision = "0001_market_data_schema"', migration)
         self.assertIn('SUPPORTED_TIMEFRAMES = ["1h", "4h", "1d"]', migration)
         self.assertIn('Column("status"', migration)
         self.assertIn('Column("supported_timeframes"', migration)

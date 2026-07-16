@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from alembic import op
 
-revision = "0003_create_market_candles_partitions"
+revision = "0003_market_candles_partitions"
 down_revision = "0002_seed_symbol_registry"
 branch_labels = None
 depends_on = None

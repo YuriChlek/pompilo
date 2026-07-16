@@ -73,7 +73,13 @@ describe('DB CLI Commands', () => {
         ][];
         const lastCall = mockCalls[mockCalls.length - 1];
         expect(lastCall[0]).toBe('npx');
-        expect(lastCall[1]).toEqual(['drizzle-kit', 'migrate']);
+        expect(lastCall[1]).toEqual([
+            '--no-install',
+            'drizzle-kit',
+            'migrate',
+            '--config',
+            expect.stringContaining('drizzle.config.ts'),
+        ]);
     });
 
     it('db:migration:run should reject positional arguments', async () => {
@@ -94,7 +100,13 @@ describe('DB CLI Commands', () => {
         ][];
         const lastCall = mockCalls[mockCalls.length - 1];
         expect(lastCall[0]).toBe('npx');
-        expect(lastCall[1]).toEqual(['drizzle-kit', 'migrate']);
+        expect(lastCall[1]).toEqual([
+            '--no-install',
+            'drizzle-kit',
+            'migrate',
+            '--config',
+            expect.stringContaining('drizzle.config.ts'),
+        ]);
 
         // Assert NODE_ENV is development
         const options = lastCall[2];
