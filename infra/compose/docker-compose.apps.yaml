@@ -21,10 +21,12 @@ services:
       DB_POOL_MAX: 30
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      LOGIN_CHECKPOINT_ENABLED: ${LOGIN_CHECKPOINT_ENABLED:-false}
       CLIENT_ORIGIN: https://localhost
       MAIL_QUEUE_LIMITER_MAX: 100
       MAIL_QUEUE_LIMITER_DURATION: 1000
       MAIL_WORKER_CONCURRENCY: 4
+      BOT_PLATFORM_BASE_URL: ${BOT_PLATFORM_BASE_URL:-http://bot_platform:8092}
     networks:
       - platform
     healthcheck:

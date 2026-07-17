@@ -20,6 +20,7 @@ import { validateEnvironment } from '@config/environment.validation';
 import { HealthModule } from '@/common/health/health.module';
 import { LoggerModule } from '@/module-logger/logger.module';
 import { IntegrationModule } from '@/module-integration/integration.module';
+import { AdminBotsModule } from '@/module-admin-bots/admin-bots.module';
 
 @Module({
     imports: [
@@ -50,6 +51,7 @@ import { IntegrationModule } from '@/module-integration/integration.module';
         AccountCoreModule,
         MailModule,
         IntegrationModule,
+        AdminBotsModule,
         LoggerModule,
         HealthModule,
     ],

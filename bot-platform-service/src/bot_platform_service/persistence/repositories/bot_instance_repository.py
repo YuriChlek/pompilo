@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 
 from bot_platform_service.domain.enums import BotInstanceStatus, BotMode, BotPermission
 from bot_platform_service.domain.models import BotInstanceConfig
+from bot_platform_service.application.bot_instance_admin_service import AdminBotInstanceSummary
 from bot_platform_service.persistence.tables import (
     bot_instance_configs,
     bot_instances,
@@ -223,6 +224,89 @@ class BotInstanceRepository:
             config=dict(row.config_json),
             tenant_id=str(row.tenant_id) if row.tenant_id is not None else None,
             name=str(row.name) if row.name is not None else None,
+        )
+
+    async def list_instances(self) -> tuple[AdminBotInstanceSummary, ...]:
+        """Return configured instances with active config metadata for admin reads."""
+
+        statement = (
+            select(
+                bot_instances.c.instance_id,
+                bot_instances.c.module_id,
+                bot_instances.c.tenant_id,
+                bot_instances.c.name,
+                bot_instances.c.mode,
+                bot_instances.c.status,
+                bot_instances.c.symbols,
+                bot_instances.c.timeframes,
+                bot_instance_configs.c.config_schema_version,
+                bot_instance_configs.c.config_json,
+            )
+            .select_from(
+                bot_instances.join(
+                    bot_instance_configs,
+                    bot_instance_configs.c.instance_id == bot_instances.c.instance_id,
+                )
+            )
+            .where(bot_instance_configs.c.is_active.is_(True))
+            .order_by(bot_instances.c.instance_id)
+        )
+        result = await self.connection.execute(statement)
+        return tuple(
+            AdminBotInstanceSummary(
+                instance_id=str(row.instance_id),
+                module_id=str(row.module_id),
+                tenant_id=str(row.tenant_id) if row.tenant_id is not None else None,
+                name=str(row.name),
+                mode=BotMode(str(row.mode)),
+                status=BotInstanceStatus(str(row.status)),
+                symbols=tuple(str(symbol) for symbol in row.symbols),
+                timeframes=tuple(str(timeframe) for timeframe in row.timeframes),
+                config_schema_version=int(row.config_schema_version),
+                config=dict(row.config_json),
+            )
+            for row in result.fetchall()
+        )
+
+    async def list_enabled_instances(self) -> tuple[BotInstanceConfig, ...]:
+        """Return enabled instances with active configs for runner discovery."""
+
+        statement = (
+            select(
+                bot_instances.c.instance_id,
+                bot_instances.c.module_id,
+                bot_instances.c.tenant_id,
+                bot_instances.c.name,
+                bot_instances.c.mode,
+                bot_instances.c.symbols,
+                bot_instances.c.timeframes,
+                bot_instance_configs.c.config_schema_version,
+                bot_instance_configs.c.config_json,
+            )
+            .select_from(
+                bot_instances.join(
+                    bot_instance_configs,
+                    bot_instance_configs.c.instance_id == bot_instances.c.instance_id,
+                )
+            )
+            .where(bot_instances.c.status == BotInstanceStatus.ENABLED.value)
+            .where(bot_instance_configs.c.is_active.is_(True))
+            .order_by(bot_instances.c.instance_id)
+        )
+        result = await self.connection.execute(statement)
+        return tuple(
+            BotInstanceConfig(
+                instance_id=str(row.instance_id),
+                module_id=str(row.module_id),
+                mode=BotMode(str(row.mode)),
+                symbols=tuple(str(symbol) for symbol in row.symbols),
+                timeframes=tuple(str(timeframe) for timeframe in row.timeframes),
+                config_schema_version=int(row.config_schema_version),
+                config=dict(row.config_json),
+                tenant_id=str(row.tenant_id) if row.tenant_id is not None else None,
+                name=str(row.name) if row.name is not None else None,
+            )
+            for row in result.fetchall()
         )
 
     async def list_enabled_instances_for_snapshot(self, *, source: str, canonical_symbol: str, timeframe: str) -> tuple[BotInstanceConfig, ...]:

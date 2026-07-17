@@ -155,6 +155,21 @@ describe('validateEnvironment', () => {
         expect(environment.AUTH_CLOCK_SKEW_SECONDS).toBe(30);
     });
 
+    it('validates optional bot platform base URL', () => {
+        const environment = validateEnvironment({
+            ...validEnvironment,
+            BOT_PLATFORM_BASE_URL: 'http://bot_platform:8092',
+        });
+
+        expect(environment.BOT_PLATFORM_BASE_URL).toBe('http://bot_platform:8092');
+
+        const error = getValidationError({
+            ...validEnvironment,
+            BOT_PLATFORM_BASE_URL: 'bot_platform:8092',
+        });
+        expect(error.message).toContain('BOT_PLATFORM_BASE_URL must be a valid absolute URL');
+    });
+
     it('parses previous jwt secrets for secret rotation', () => {
         const previousSecret = 'p'.repeat(32);
         const secondPreviousSecret = 'q'.repeat(32);

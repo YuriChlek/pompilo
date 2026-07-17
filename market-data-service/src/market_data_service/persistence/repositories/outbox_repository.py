@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import or_, select, update
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncConnection
 
@@ -68,6 +68,18 @@ class OutboxRepository:
         )
         rows = (await self.connection.execute(query)).mappings().all()
         return [_row_to_outbox_event(row) for row in rows]
+
+    async def list_replay_events(self, *, from_id: str | None, to_id: str | None) -> tuple[OutboxEvent, ...]:
+        conditions = []
+        if from_id:
+            conditions.append(outbox_events.c.id >= from_id)
+        if to_id:
+            conditions.append(outbox_events.c.id <= to_id)
+        query = select(outbox_events).order_by(outbox_events.c.created_at, outbox_events.c.id)
+        if conditions:
+            query = query.where(and_(*conditions))
+        rows = (await self.connection.execute(query)).mappings().all()
+        return tuple(_row_to_outbox_event(row) for row in rows)
 
     async def mark_published(self, *, event_id: str, published_at: datetime) -> None:
         statement = (

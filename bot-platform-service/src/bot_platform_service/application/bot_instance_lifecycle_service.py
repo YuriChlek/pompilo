@@ -180,7 +180,12 @@ class BotInstanceLifecycleService:
             instance_id,
             actor=actor,
             target_status=BotInstanceStatus.ENABLED,
-            allowed={BotInstanceStatus.VALIDATED, BotInstanceStatus.PAUSED, BotInstanceStatus.DISABLED},
+            allowed={
+                BotInstanceStatus.CREATED,
+                BotInstanceStatus.VALIDATED,
+                BotInstanceStatus.PAUSED,
+                BotInstanceStatus.DISABLED,
+            },
             event_type="INSTANCE_ENABLED",
             correlation_id=correlation_id,
         )

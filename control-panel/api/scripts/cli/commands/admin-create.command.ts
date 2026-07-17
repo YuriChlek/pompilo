@@ -17,7 +17,7 @@ export class AdminCreateCommand implements CliCommand {
     public readonly usage =
         'admin:create --admin-email=<email> --admin-password=<password> --admin-firstname=<firstname> --admin-lastname=<lastname> [--role=<role>]';
     public readonly examples = [
-        'npm run cli -- admin:create --admin-email=admin@example.com --admin-password=SecurePassword123 --admin-firstname=John --admin-lastname=Doe --role=admin',
+        'npm run cli -- admin:create --admin-email=admin@example.com --admin-password=SecurePassword123 --admin-firstname=John --admin-lastname=Doe --role=platformAdmin',
     ];
 
     public async run(context: CliCommandContext): Promise<CliCommandResult> {

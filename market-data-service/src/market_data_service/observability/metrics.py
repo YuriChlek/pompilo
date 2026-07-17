@@ -19,6 +19,10 @@ MARKET_DATA_PROVIDER_RATE_LIMITED_TOTAL = "market_data_provider_rate_limited_tot
 MARKET_DATA_QUEUE_LAG_SECONDS = "market_data_queue_lag_seconds"
 MARKET_DATA_OUTBOX_LAG_SECONDS = "market_data_outbox_lag_seconds"
 MARKET_DATA_SYNC_JOBS_STUCK_TOTAL = "market_data_sync_jobs_stuck_total"
+MARKET_DATA_SCHEDULER_TICKS_TOTAL = "market_data_scheduler_ticks_total"
+MARKET_DATA_OUTBOX_EVENTS_FETCHED_TOTAL = "market_data_outbox_events_fetched_total"
+MARKET_DATA_OUTBOX_EVENTS_PUBLISHED_TOTAL = "market_data_outbox_events_published_total"
+MARKET_DATA_OUTBOX_EVENTS_FAILED_TOTAL = "market_data_outbox_events_failed_total"
 
 STABLE_METRIC_NAMES = (
     MARKET_DATA_SYNC_DURATION_SECONDS,
@@ -33,6 +37,10 @@ STABLE_METRIC_NAMES = (
     MARKET_DATA_QUEUE_LAG_SECONDS,
     MARKET_DATA_OUTBOX_LAG_SECONDS,
     MARKET_DATA_SYNC_JOBS_STUCK_TOTAL,
+    MARKET_DATA_SCHEDULER_TICKS_TOTAL,
+    MARKET_DATA_OUTBOX_EVENTS_FETCHED_TOTAL,
+    MARKET_DATA_OUTBOX_EVENTS_PUBLISHED_TOTAL,
+    MARKET_DATA_OUTBOX_EVENTS_FAILED_TOTAL,
 )
 
 
@@ -132,3 +140,25 @@ def record_sync_jobs_stuck(recorder: MetricsRecorder | None, *, stuck_count: int
     if recorder is None:
         return
     recorder.record(MetricSample(MARKET_DATA_SYNC_JOBS_STUCK_TOTAL, float(stuck_count), {}, "gauge"))
+
+
+def record_scheduler_tick(recorder: MetricsRecorder | None, *, status: str) -> None:
+    if recorder is None:
+        return
+    recorder.record(MetricSample(MARKET_DATA_SCHEDULER_TICKS_TOTAL, 1.0, {"status": status}, "counter"))
+
+
+def record_outbox_publish_batch(
+    recorder: MetricsRecorder | None,
+    *,
+    fetched_count: int,
+    published_count: int,
+    failed_count: int,
+    status: str,
+) -> None:
+    if recorder is None:
+        return
+    labels = {"status": status}
+    recorder.record(MetricSample(MARKET_DATA_OUTBOX_EVENTS_FETCHED_TOTAL, float(fetched_count), labels, "counter"))
+    recorder.record(MetricSample(MARKET_DATA_OUTBOX_EVENTS_PUBLISHED_TOTAL, float(published_count), labels, "counter"))
+    recorder.record(MetricSample(MARKET_DATA_OUTBOX_EVENTS_FAILED_TOTAL, float(failed_count), labels, "counter"))

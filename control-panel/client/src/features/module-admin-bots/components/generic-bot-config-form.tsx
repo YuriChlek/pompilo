@@ -37,7 +37,7 @@ interface GenericBotConfigFormProps {
     initialValue?: Record<string, BotConfigValue>;
     isSaving?: boolean;
     onValidate?: (config: Record<string, BotConfigValue>) => Promise<string[]> | string[];
-    onSubmit: (config: Record<string, BotConfigValue>) => void;
+    onSubmit: (config: Record<string, BotConfigValue>) => void | Promise<void>;
 }
 
 export const GenericBotConfigForm = ({
@@ -76,7 +76,7 @@ export const GenericBotConfigForm = ({
             }
         }
 
-        onSubmit(config);
+        await onSubmit(config);
     };
 
     const disabled = isSaving || isValidating;

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from collections.abc import Mapping
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncConnection
 
@@ -17,6 +17,15 @@ class BotRunRepository:
 
     def __init__(self, connection: AsyncConnection) -> None:
         self.connection = connection
+
+    async def acquire_instance_run_lock(self, *, instance_id: str) -> bool:
+        """Acquire a transaction-scoped PostgreSQL advisory lock for one instance run."""
+
+        result = await self.connection.execute(
+            text("select pg_try_advisory_xact_lock(hashtext(:lock_key))"),
+            {"lock_key": f"bot-platform:manual-run:{instance_id}"},
+        )
+        return bool(result.scalar_one())
 
     async def create_run(
         self,

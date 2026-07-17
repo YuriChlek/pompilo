@@ -94,6 +94,33 @@ class SnapshotRepository:
             return None
         return _row_to_snapshot(row)
 
+    async def get_latest_complete_snapshot(
+        self,
+        *,
+        source: MarketDataSource,
+        canonical_symbol: str,
+        timeframe: str,
+    ) -> MarketSnapshot | None:
+        query = (
+            select(market_snapshots)
+            .where(
+                market_snapshots.c.source == source.value,
+                market_snapshots.c.canonical_symbol == canonical_symbol,
+                market_snapshots.c.timeframe == timeframe,
+                market_snapshots.c.completeness_status == CandleRangeStatus.COMPLETE.value,
+            )
+            .order_by(
+                market_snapshots.c.last_closed_candle_time.desc(),
+                market_snapshots.c.snapshot_version.desc(),
+                market_snapshots.c.created_at.desc(),
+            )
+            .limit(1)
+        )
+        row = (await self.connection.execute(query)).mappings().one_or_none()
+        if row is None:
+            return None
+        return _row_to_snapshot(row)
+
     async def read_snapshot_candles(self, snapshot_id: str) -> list[CanonicalCandle]:
         snapshot = await self.get_snapshot(snapshot_id)
         if snapshot is None:

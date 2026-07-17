@@ -62,6 +62,7 @@ export interface Environment {
     SERVICE_TO_SERVICE_SECRET?: string;
     TRADING_ONBOARDING_TOKEN_SECRET?: string;
     TRADING_ONBOARDING_TOKEN_TTL_SECONDS: number;
+    BOT_PLATFORM_BASE_URL?: string;
     LOG_LEVEL: LoggerLevel;
     LOG_FORMAT: LoggerFormat;
     LOG_OUTPUT: LoggerOutput;
@@ -321,6 +322,11 @@ export function validateEnvironment(input: Record<string, unknown>): Environment
             min: 30,
             max: 3600,
         },
+    );
+    environment.BOT_PLATFORM_BASE_URL = readOptionalHttpUrl(
+        environment,
+        'BOT_PLATFORM_BASE_URL',
+        errors,
     );
 
     Object.assign(environment, readLoggerEnvironment(environment, errors, nodeEnv));

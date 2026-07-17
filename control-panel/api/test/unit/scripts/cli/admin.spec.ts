@@ -6,7 +6,7 @@ jest.mock('../../../../scripts/cli/operations/create-admin-user', () => ({
         userId: 'admin-id-123',
         name: 'Admin Name',
         email: 'admin@example.com',
-        role: 'admin',
+        role: 'platformAdmin',
     }),
 }));
 

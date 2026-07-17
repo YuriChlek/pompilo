@@ -73,6 +73,22 @@ class SyncJobRepository:
         await self.connection.execute(statement)
         return _row_to_sync_job(row)
 
+    async def mark_completed(self, *, idempotency_key: str, completed_at) -> None:
+        statement = (
+            update(sync_jobs)
+            .where(sync_jobs.c.idempotency_key == idempotency_key)
+            .values(status=SyncJobStatus.COMPLETE.value, completed_at=completed_at)
+        )
+        await self.connection.execute(statement)
+
+    async def mark_failed(self, *, idempotency_key: str, completed_at) -> None:
+        statement = (
+            update(sync_jobs)
+            .where(sync_jobs.c.idempotency_key == idempotency_key)
+            .values(status=SyncJobStatus.FAILED.value, completed_at=completed_at)
+        )
+        await self.connection.execute(statement)
+
 
 def _row_to_sync_job(row) -> MarketDataSyncJob:
     return MarketDataSyncJob(

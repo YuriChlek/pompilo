@@ -74,5 +74,51 @@ export interface ValidateBotConfigDto {
 
 export interface ValidateBotConfigResult {
     valid: boolean;
-    errors: string[];
+    errors: BotConfigValidationError[];
+}
+
+export interface BotConfigValidationError {
+    field_path: string;
+    code: string;
+    message: string;
+}
+
+export interface AdminBotInstanceSummary {
+    instance_id: string;
+    module_id: string;
+    tenant_id: string | null;
+    name: string;
+    mode: string;
+    status: string;
+    symbols: string[];
+    timeframes: string[];
+    config_schema_version: number;
+    config: Record<string, BotConfigValue>;
+}
+
+export interface CreateBotInstanceDto {
+    instanceId?: string;
+    moduleId: string;
+    name?: string;
+    mode: string;
+    symbols: string[];
+    timeframes: string[];
+    configSchemaVersion: number;
+    config: Record<string, BotConfigValue>;
+}
+
+export interface BotInstanceActionResult {
+    accepted: boolean;
+    instance_id: string;
+    status: string | null;
+    error_code: string | null;
+}
+
+export interface ManualBotRunResult {
+    accepted: boolean;
+    instance_id: string;
+    run_id: string | null;
+    status: string | null;
+    error_code: string | null;
+    duplicate: boolean;
 }

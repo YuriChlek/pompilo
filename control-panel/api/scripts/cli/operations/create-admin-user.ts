@@ -9,6 +9,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import pg from 'pg';
+import { UserRoles } from '../../../src/module-auth/enums/auth.enums';
 import { Argon2HashUtil } from '../../../src/common/utils/hash.util';
 
 function loadEnvFile(): void {
@@ -79,7 +80,7 @@ export async function createAdminUser(
         name = `${first} ${last}`.trim();
     }
 
-    const role = args.role || 'admin';
+    const role = args.role || UserRoles.PLATFORM_ADMIN;
 
     if (!email || !password || !name) {
         throw new Error(
@@ -87,8 +88,8 @@ export async function createAdminUser(
         );
     }
 
-    if (role !== 'admin' && role !== 'superAdmin') {
-        throw new Error('Invalid role. Role must be either "admin" or "superAdmin".');
+    if (role !== UserRoles.PLATFORM_ADMIN && role !== UserRoles.SUPER_ADMIN) {
+        throw new Error(`Invalid role. Role must be either "${UserRoles.PLATFORM_ADMIN}" or "${UserRoles.SUPER_ADMIN}".`);
     }
 
     const client = new pg.Client(dbConfig);

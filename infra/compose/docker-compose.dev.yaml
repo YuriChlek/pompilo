@@ -5,6 +5,12 @@ services:
   redis:
     ports:
       - "${REDIS_PORT:-6379}:6379"
+  market_data:
+    ports:
+      - "${MARKET_DATA_HTTP_HOST_PORT:-8010}:8010"
+  bot_platform:
+    ports:
+      - "${BOT_PLATFORM_HTTP_HOST_PORT:-8092}:8092"
   api:
     env_file:
       - ../../control-panel/.env
