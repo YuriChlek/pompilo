@@ -4,7 +4,7 @@ import argparse
 import asyncio
 import sys
 from collections.abc import Sequence
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.engine import make_url
 
@@ -14,6 +14,7 @@ from market_data_service.application.services.outbox_replay_service import Outbo
 from market_data_service.config.database_config import get_database_url
 from market_data_service.config.settings import load_backfill_settings, load_http_settings, load_settings
 from market_data_service.domain.enums import MarketDataSource
+from market_data_service.domain.scheduler import SUPPORTED_SCHEDULE_TIMEFRAMES
 from market_data_service.runtime.http_server import run_http_server
 from market_data_service.runtime.maintenance import (
     run_backfill,
@@ -39,6 +40,11 @@ _UNIMPLEMENTED_COMMANDS = {
 def main(argv: Sequence[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
+
+    if args.command == "collect":
+        return _run_collect_contract(args)
+    if args.command == "candles:get":
+        return _run_candles_get_contract(args)
 
     if args.command in _UNIMPLEMENTED_COMMANDS:
         print(f"Command '{args.command}' is not implemented yet.", file=sys.stderr)
@@ -78,37 +84,132 @@ def _build_parser() -> argparse.ArgumentParser:
         prog="python -m market_data_service.main",
         description="Market Data Service runtime and maintenance entrypoint.",
     )
-    parser.add_argument(
-        "command",
-        nargs="?",
-        choices=[
-            "serve",
-            "scheduler",
-            "outbox-publisher",
-            "backfill",
-            "healthcheck",
-            "db:check",
-            "db:revision",
-            "scheduler:run-once",
-            "sync:run-next",
-            "outbox:publish-once",
-            "symbols:sync",
-            "gaps:scan",
-            "outbox:replay",
-        ],
-        help="Command to execute.",
+    subparsers = parser.add_subparsers(dest="command", metavar="command")
+
+    subparsers.add_parser("serve", help="Start the HTTP health/readiness/metrics API.")
+    subparsers.add_parser("scheduler", help="Deprecated scheduler process command.")
+    subparsers.add_parser("outbox-publisher", help="Deprecated outbox publisher process command.")
+    collect_parser = subparsers.add_parser("collect", help="Collect configured closed candles.")
+    collect_parser.add_argument("--once", action="store_true", help="Execute a single collection tick and exit.")
+
+    candles_get_parser = subparsers.add_parser("candles:get", help="Fetch candles from a provider for a recent period.")
+    candles_get_parser.add_argument(
+        "--period",
+        required=True,
+        help="Lookback period from current UTC time, e.g. 12h, 1d, 100d, 2w, 3mo, 1y.",
     )
-    parser.add_argument("--symbol", dest="backfill_symbol", help="Provider symbol for the backfill command.")
-    parser.add_argument("--timeframe", dest="backfill_timeframe", help="Candle timeframe for the backfill command.")
-    parser.add_argument("--from", dest="backfill_from", help="Inclusive backfill range start in ISO-8601 format.")
-    parser.add_argument("--to", dest="backfill_to", help="Exclusive backfill range end in ISO-8601 format.")
-    parser.add_argument("--batch-size", dest="backfill_batch_size", type=int, help="Maximum candles per backfill chunk.")
-    parser.add_argument("--max-concurrency", dest="backfill_max_concurrency", type=int, help="Maximum backfill concurrency.")
-    parser.add_argument("--create-backfill", action="store_true", help="Create backfill requests for gaps found by gaps:scan.")
-    parser.add_argument("--from-id", dest="outbox_from_id", help="Inclusive outbox event id lower bound for outbox:replay.")
-    parser.add_argument("--to-id", dest="outbox_to_id", help="Inclusive outbox event id upper bound for outbox:replay.")
-    parser.add_argument("--dry-run", action="store_true", help="Report outbox replay candidates without publishing.")
+    candles_get_parser.add_argument(
+        "--symbols",
+        help="Comma-separated list of symbols. Defaults to MARKET_DATA_PROVIDER_SYMBOLS.",
+    )
+    candles_get_parser.add_argument(
+        "--timeframes",
+        help="Comma-separated list of timeframes. Defaults to MARKET_DATA_TIMEFRAMES.",
+    )
+    candles_get_parser.add_argument(
+        "--provider",
+        default="auto",
+        choices=["auto", "binance", "bybit"],
+        help="Provider to fetch from.",
+    )
+
+    backfill_parser = subparsers.add_parser("backfill", help="Create backfill requests for a provider symbol.")
+    backfill_parser.add_argument("--symbol", dest="backfill_symbol", help="Provider symbol for the backfill command.")
+    backfill_parser.add_argument("--timeframe", dest="backfill_timeframe", help="Candle timeframe for the backfill command.")
+    backfill_parser.add_argument("--from", dest="backfill_from", help="Inclusive backfill range start in ISO-8601 format.")
+    backfill_parser.add_argument("--to", dest="backfill_to", help="Exclusive backfill range end in ISO-8601 format.")
+    backfill_parser.add_argument("--batch-size", dest="backfill_batch_size", type=int, help="Maximum candles per backfill chunk.")
+    backfill_parser.add_argument("--max-concurrency", dest="backfill_max_concurrency", type=int, help="Maximum backfill concurrency.")
+
+    subparsers.add_parser("healthcheck", help="Check HTTP readiness.")
+    subparsers.add_parser("db:check", help="Validate database configuration.")
+    subparsers.add_parser("db:revision", help="Deprecated database revision helper.")
+    subparsers.add_parser("scheduler:run-once", help="Run one scheduler tick.")
+    subparsers.add_parser("sync:run-next", help="Run one pending sync job.")
+    subparsers.add_parser("outbox:publish-once", help="Publish one outbox batch.")
+    subparsers.add_parser("symbols:sync", help="Sync configured market symbols.")
+
+    gaps_scan_parser = subparsers.add_parser("gaps:scan", help="Scan candle gaps for a time range.")
+    gaps_scan_parser.add_argument("--symbol", dest="backfill_symbol", help="Comma-separated provider symbols.")
+    gaps_scan_parser.add_argument("--timeframe", dest="backfill_timeframe", help="Comma-separated timeframes.")
+    gaps_scan_parser.add_argument("--from", dest="backfill_from", help="Inclusive range start in ISO-8601 format.")
+    gaps_scan_parser.add_argument("--to", dest="backfill_to", help="Exclusive range end in ISO-8601 format.")
+    gaps_scan_parser.add_argument("--create-backfill", action="store_true", help="Create backfill requests for discovered gaps.")
+
+    outbox_replay_parser = subparsers.add_parser("outbox:replay", help="Replay outbox events by id range.")
+    outbox_replay_parser.add_argument("--from-id", dest="outbox_from_id", help="Inclusive outbox event id lower bound.")
+    outbox_replay_parser.add_argument("--to-id", dest="outbox_to_id", help="Inclusive outbox event id upper bound.")
+    outbox_replay_parser.add_argument("--dry-run", action="store_true", help="Report replay candidates without publishing.")
     return parser
+
+
+def _run_collect_contract(args: argparse.Namespace) -> int:
+    del args
+    print("Command 'collect' is not implemented yet.", file=sys.stderr)
+    return EXIT_UNSUPPORTED
+
+
+def _run_candles_get_contract(args: argparse.Namespace) -> int:
+    try:
+        _build_candles_get_contract(args)
+    except Exception as exc:
+        print(f"candles:get failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+        return EXIT_ERROR
+
+    print("Command 'candles:get' is not implemented yet.", file=sys.stderr)
+    return EXIT_UNSUPPORTED
+
+
+def _build_candles_get_contract(
+    args: argparse.Namespace,
+    *,
+    now_provider=None,
+) -> tuple[datetime, datetime, tuple[str, ...], tuple[str, ...], str]:
+    settings = load_settings()
+    now = (now_provider or (lambda: datetime.now(UTC)))().astimezone(UTC)
+    from_value, to_value = _calculate_period_range(args.period, now=now)
+    symbols = _parse_repeated_csv(args.symbols) or settings.scheduler.provider_symbols
+    timeframes = _parse_repeated_csv(args.timeframes, lowercase=True) or settings.scheduler.timeframes
+    unsupported = [timeframe for timeframe in timeframes if timeframe not in SUPPORTED_SCHEDULE_TIMEFRAMES]
+    if unsupported:
+        raise ValueError(f"Unsupported timeframe(s): {', '.join(unsupported)}")
+    return (from_value, to_value, symbols, timeframes, args.provider)
+
+
+def _calculate_period_range(period: str, *, now: datetime) -> tuple[datetime, datetime]:
+    duration = _parse_period_duration(period)
+    range_to = now.astimezone(UTC)
+    range_from = range_to - duration
+    return range_from, range_to
+
+
+def _parse_period_duration(period: str) -> timedelta:
+    normalized = period.strip().lower()
+    if not normalized:
+        raise ValueError("period must not be empty")
+
+    index = 0
+    while index < len(normalized) and normalized[index].isdigit():
+        index += 1
+    if index == 0:
+        raise ValueError("period must start with a positive integer")
+
+    amount = int(normalized[:index])
+    unit = normalized[index:]
+    if amount <= 0:
+        raise ValueError("period amount must be greater than zero")
+
+    if unit == "h":
+        return timedelta(hours=amount)
+    if unit == "d":
+        return timedelta(days=amount)
+    if unit == "w":
+        return timedelta(weeks=amount)
+    if unit == "mo":
+        return timedelta(days=amount * 30)
+    if unit == "y":
+        return timedelta(days=amount * 365)
+    raise ValueError("period unit must be one of: h, d, w, mo, y")
 
 
 def _run_db_check() -> int:
@@ -215,6 +316,10 @@ def _build_backfill_command(args: argparse.Namespace) -> BackfillCommand:
     if not symbol or not timeframe or not from_value or not to_value:
         raise ValueError("backfill requires --symbol, --timeframe, --from and --to")
 
+    normalized_timeframe = timeframe.strip().lower()
+    if normalized_timeframe not in SUPPORTED_SCHEDULE_TIMEFRAMES:
+        raise ValueError(f"Unsupported timeframe: {timeframe!r}")
+
     return BackfillCommand(
         source=MarketDataSource.BINANCE_SPOT,
         provider_symbol=symbol,
@@ -257,6 +362,10 @@ def _build_gaps_scan_command(args: argparse.Namespace) -> GapScanCommand:
 
     provider_symbols = _parse_repeated_csv(args.backfill_symbol) or settings.scheduler.provider_symbols
     timeframes = _parse_repeated_csv(args.backfill_timeframe, lowercase=True) or settings.scheduler.timeframes
+
+    unsupported = [t for t in timeframes if t not in SUPPORTED_SCHEDULE_TIMEFRAMES]
+    if unsupported:
+        raise ValueError(f"Unsupported timeframe(s): {', '.join(unsupported)}")
     return GapScanCommand(
         source=MarketDataSource.BINANCE_SPOT,
         provider_symbols=provider_symbols,

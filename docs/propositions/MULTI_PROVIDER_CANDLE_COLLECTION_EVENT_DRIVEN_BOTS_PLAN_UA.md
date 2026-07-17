@@ -4,24 +4,24 @@
 
 ```bash
 python -m market_data_service.main collect
-python -m market_data_service.main candles:get --from ... --to ... [--symbols BTCUSDT] [--timeframes h1,h4,d1] [--provider auto]
+python -m market_data_service.main candles:get --period 100d [--symbols BTCUSDT] [--timeframes 1h,4h,1d] [--provider auto]
 ```
 
 Перша команда запускає збір свічок з доступного provider-а і записує їх у БД. Під час першого bootstrap/backfill history sync події не створюються і боти не запускаються. Після завершеного bootstrap команда створює події тільки для live/incremental ranges; `bot-platform-service` підхоплює ці події і запускає enabled ботів для відповідного symbol/timeframe.
 
-Друга команда отримує свічки з біржі за вказаний період. За замовчуванням `--provider auto` використовує provider resolver: якщо symbol є на Binance, дані беруться з Binance; якщо symbol відсутній на Binance, але доступний на Bybit, дані беруться з Bybit. Команда потрібна для ручної перевірки provider-а, діагностики і точкового отримання даних.
+Друга команда отримує свічки з біржі за вказаний lookback period від поточного UTC часу назад. Наприклад, `--period 1d`, `--period 100d`, `--period 1y`. За замовчуванням `--provider auto` використовує provider resolver: якщо symbol є на Binance, дані беруться з Binance; якщо symbol відсутній на Binance, але доступний на Bybit, дані беруться з Bybit. Команда потрібна для ручної перевірки provider-а, діагностики і точкового отримання даних.
 
 Якщо для `candles:get` не передати символи або таймфрейми явно, команда використовує symbols/timeframes з конфігурації сервісу.
 
 Цільові таймфрейми збору:
 
 ```text
-h1
-h4
-d1
+1h
+4h
+1d
 ```
 
-Provider adapter-и мають мапити ці canonical timeframe-и на біржові interval-и. Наприклад: Binance `h1 -> 1h`, `h4 -> 4h`, `d1 -> 1d`; Bybit `h1 -> 60`, `h4 -> 240`, `d1 -> D`.
+Canonical timeframe-и в БД, config, CLI і bot-platform contracts мають залишатися у форматі `1h`, `4h`, `1d`. Це збігається з поточною схемою partitions і не потребує міграції існуючих candles. Provider adapter-и мають мапити ці canonical timeframe-и на біржові interval-и. Наприклад: Binance `1h -> 1h`, `4h -> 4h`, `1d -> 1d`; Bybit `1h -> 60`, `4h -> 240`, `1d -> D`.
 
 Важливий принцип: непотрібний код і команди не позначаються як legacy, а видаляються після появи нового production flow і міграції тестів/документації.
 
@@ -52,7 +52,7 @@ python -m market_data_service.main collect
 `collect` без `--once`:
 
 - запускає `market-data-service` як long-running service;
-- на кожній ітерації синхронізує closed candles для всіх symbols, заданих у `MARKET_DATA_PROVIDER_SYMBOLS`, і таймфреймів `h1`, `h4`, `d1` з `MARKET_DATA_TIMEFRAMES`;
+- на кожній ітерації синхронізує closed candles для всіх symbols, заданих у `MARKET_DATA_PROVIDER_SYMBOLS`, і таймфреймів `1h`, `4h`, `1d` з `MARKET_DATA_TIMEFRAMES`;
 - для кожного symbol визначає активний provider через provider resolver і priority list;
 - пише candles/snapshots/batches у БД;
 - не створює events під час першого bootstrap/backfill history sync;
@@ -65,7 +65,7 @@ python -m market_data_service.main collect
 
 - звертається до provider-а, визначеного через `--provider`;
 - у режимі `--provider auto` використовує provider resolver і priority list;
-- отримує candles за обовʼязковий період `from/to`;
+- отримує candles за обовʼязковий lookback period `--period`, який рахується назад від поточного UTC часу;
 - приймає опційні `--symbols` і `--timeframes`;
 - якщо `--symbols` не передано, використовує `MARKET_DATA_PROVIDER_SYMBOLS`;
 - якщо `--timeframes` не передано, використовує `MARKET_DATA_TIMEFRAMES`;
@@ -147,7 +147,8 @@ Bootstrap/backfill rule:
 - при першому запуску сервіс синхронізує candles за останні 2 роки до останньої безпечної closed candle на active provider;
 - 2-річний bootstrap range не обовʼязково має бути синхронізований за одну ітерацію: сервіс може зберігати progress і продовжувати з останнього успішного bootstrap chunk;
 - якщо active provider має історію для конкретного symbol/timeframe меншу за 2 роки, сервіс записує весь доступний provider range і не вважає відсутню старішу історію помилкою або gap-ом;
-- якщо candles уже є, сервіс синхронізує діапазон від останньої успішно збереженої closed candle до останньої безпечної closed candle на active provider;
+- якщо candles уже є, сервіс синхронізує діапазон після останньої успішно збереженої closed candle до останньої безпечної closed candle на active provider;
+- якщо для resilience потрібен inclusive refetch останньої збереженої candle, цей refetch не має входити в event range і має бути поглинутий idempotent upsert;
 - якщо сервіс був вимкнений або втрачав зʼєднання, наступна ітерація має добрати весь пропущений range, а не тільки останню candle;
 - повторний запис уже наявних candles має бути idempotent через unique constraints/upsert behavior.
 
@@ -209,6 +210,13 @@ MARKET_DATA_PROVIDER_AVAILABILITY_TTL_HOURS=24
 MARKET_DATA_UNSUPPORTED_SYMBOL_RECHECK_HOURS=24
 ```
 
+Термінологія provider/source:
+
+- CLI/config provider alias: `binance`, `bybit`;
+- persisted/event source: `BINANCE_SPOT`, `BYBIT_SPOT`;
+- `MARKET_DATA_PROVIDER_PRIORITY` містить provider aliases, а resolver мапить їх на source enum;
+- availability cache key використовує persisted source і requested symbol: `source/requested_symbol`.
+
 Resolution result має бути persisted. `collect` не має кожну ітерацію робити network request до Binance для symbol, про який уже відомо, що він `UNSUPPORTED` на Binance до `next_check_at`.
 
 ### 2.3. Bot Platform event-driven flow
@@ -220,11 +228,11 @@ Resolution result має бути persisted. `collect` не має кожну і
 3. Перевіряє event schema/version.
 4. Знаходить enabled bot instances, які підписані на `symbol/timeframe`.
 5. Для кожного instance створює idempotent bot run.
-6. Читає latest snapshot через formal market-data contract.
+6. Читає snapshot за `snapshot_id` з event через formal market-data contract.
 7. Запускає platform-native adapter.
 8. Пише `bot_runs`, `bot_run_events`, `bot_signals`, audit events.
 9. Публікує downstream signal events, якщо це увімкнено.
-10. ACK-ає market-data event тільки після успішної обробки або контрольованого terminal failure.
+10. ACK-ає Redis Stream delivery тільки після успішної обробки або контрольованого terminal failure.
 
 Одна market-data подія не повинна створювати неконтрольовані дублікати bot runs.
 
@@ -239,13 +247,13 @@ Resolution result має бути persisted. `collect` не має кожну і
   "source": "BINANCE_SPOT",
   "symbol": "BTCUSDT",
   "provider_symbol": "BTCUSDT",
-  "timeframe": "h1",
+  "timeframe": "1h",
   "from": "2026-07-16T00:00:00Z",
   "to": "2026-07-16T01:00:00Z",
   "batch_id": "batch_id",
   "snapshot_id": "snapshot_id",
   "closed_at": "2026-07-16T01:00:00Z",
-  "idempotency_key": "BINANCE_SPOT:BTCUSDT:h1:2026-07-16T01:00:00Z"
+  "idempotency_key": "BINANCE_SPOT:BTCUSDT:1h:2026-07-16T01:00:00Z"
 }
 ```
 
@@ -261,6 +269,7 @@ Resolution result має бути persisted. `collect` не має кожну і
 - `to`;
 - `batch_id`;
 - `snapshot_id`;
+- `closed_at`;
 - `idempotency_key`.
 
 `idempotency_key` має бути стабільним для одного source/symbol/timeframe/closed window.
@@ -278,12 +287,12 @@ Event-driven flow не має накопичувати службові поді
 
 Retention rules:
 
-- Redis Stream `market-data-events` зберігає delivery events не довше 2 днів;
-- Redis Stream має використовувати trimming через time-based cleanup або bounded `MAXLEN`, підібраний під 2-денне recovery window;
-- market-data outbox records у БД з terminal status `PUBLISHED`, `ACKED`, `SKIPPED` зберігаються не довше 5 днів;
+- Redis Stream `market-data-events` має 2-денне recovery window для delivery events;
+- Redis Stream має використовувати trimming через time-based cleanup або bounded `MAXLEN`, розрахований під 2-денне recovery window з documented throughput assumption і safety margin;
+- market-data outbox records у БД з terminal status `PUBLISHED` зберігаються не довше 5 днів;
 - bot-platform processed/idempotency records для market-data events зберігаються не довше 5 днів;
 - службові raw event/audit delivery records, які потрібні тільки для replay/debug market-data events, зберігаються не довше 5 днів;
-- `FAILED`/non-terminal records не видаляються автоматично як звичайні published events, доки не перейдуть у terminal archived/skipped state або не будуть оброблені окремою operational policy;
+- `PENDING` і retryable `FAILED` records не видаляються автоматично як звичайні published events, доки не будуть оброблені окремою operational policy;
 - історичні candles у `_market_data.market_candles` не підпадають під 5-денний cleanup, бо вони потрібні для 2-річного bootstrap, gap recovery, bot runs і подальшого аналізу.
 
 Рекомендовані env vars:
@@ -302,7 +311,8 @@ Cleanup має бути idempotent, batch-based і безпечний для п�
 Основні read paths мають бути покриті індексами до запуску event-driven bot flow:
 
 - candles range lookup: `source + canonical_symbol + timeframe + open_time range`;
-- latest complete snapshot lookup: `source + canonical_symbol + timeframe + completeness_status`, sort by `last_closed_candle_time DESC`, `snapshot_version DESC`, `created_at DESC`;
+- event snapshot lookup: `snapshot_id`;
+- latest complete snapshot lookup для readiness/manual diagnostics: `source + canonical_symbol + timeframe + completeness_status`, sort by `last_closed_candle_time DESC`, `snapshot_version DESC`, `created_at DESC`;
 - snapshot membership read: `snapshot_id -> ordered candles`.
 
 Для `_market_data.market_candles` потрібен unique/index:
@@ -331,7 +341,8 @@ ON _market_data.market_snapshots (
 Після реалізації треба перевірити `EXPLAIN ANALYZE` для:
 
 - отримання candles за period для одного `source/symbol/timeframe`;
-- `get_latest_complete_snapshot`;
+- snapshot lookup by event `snapshot_id`;
+- `get_latest_complete_snapshot` для readiness/manual diagnostics;
 - читання candles за `snapshot_id`.
 
 ## 3. Що видаляємо або замінюємо
@@ -409,12 +420,14 @@ Acceptance criteria:
 
 ### Етап 2. Зафіксувати CLI contract для `candles:get`
 
-Мета: додати public CLI entrypoint для ручного отримання candles за explicit range.
+Мета: додати public CLI entrypoint для ручного отримання candles за lookback period.
 
 Завдання:
 
 - додати parser/route для `candles:get`;
-- додати обовʼязкові аргументи `--from`, `--to`;
+- додати обовʼязковий аргумент `--period`;
+- підтримати period units `h`, `d`, `w`, `mo`, `y`, наприклад `12h`, `1d`, `100d`, `2w`, `3mo`, `1y`;
+- обчислювати range як `[now - period, now)`, де `now` - поточний UTC час запуску команди;
 - додати опційні аргументи `--symbols`, `--timeframes`, `--provider`;
 - якщо `--symbols` або `--timeframes` не передані, брати відповідні значення з config/env;
 - за замовчуванням `--provider=auto`;
@@ -423,7 +436,8 @@ Acceptance criteria:
 Acceptance criteria:
 
 - `python -m market_data_service.main candles:get --help` працює;
-- без `--from` або `--to` команда повертає non-zero exit code;
+- без `--period` команда повертає non-zero exit code;
+- invalid period format повертає non-zero exit code;
 - `--provider` приймає тільки `auto`, `binance`, `bybit`.
 
 ### Етап 3. Зафіксувати canonical timeframe-и
@@ -432,13 +446,13 @@ Acceptance criteria:
 
 Завдання:
 
-- зафіксувати canonical values `h1`, `h4`, `d1`;
+- зафіксувати canonical values `1h`, `4h`, `1d`;
 - додати validation для configured `MARKET_DATA_TIMEFRAMES`;
 - додати tests для valid/invalid timeframe values.
 
 Acceptance criteria:
 
-- вся application logic працює з `h1`, `h4`, `d1`;
+- вся application logic працює з `1h`, `4h`, `1d`;
 - біржові interval-и не протікають у public CLI/config.
 
 ### Етап 4. Виділити provider port для candles
@@ -463,13 +477,13 @@ Acceptance criteria:
 Завдання:
 
 - зробити Binance adapter implementation нового provider port;
-- замапити Binance intervals: `h1 -> 1h`, `h4 -> 4h`, `d1 -> 1d`;
+- замапити Binance intervals: `1h -> 1h`, `4h -> 4h`, `1d -> 1d`;
 - нормалізувати output у спільну candle model;
 - додати tests для mapping і normalized output.
 
 Acceptance criteria:
 
-- Binance adapter приймає `h1`, `h4`, `d1`;
+- Binance adapter приймає `1h`, `4h`, `1d`;
 - normalized output не залежить від raw Binance response format.
 
 ### Етап 6. Додати Bybit candles adapter
@@ -479,13 +493,13 @@ Acceptance criteria:
 Завдання:
 
 - додати Bybit public candles adapter;
-- замапити Bybit intervals: `h1 -> 60`, `h4 -> 240`, `d1 -> D`;
+- замапити Bybit intervals: `1h -> 60`, `4h -> 240`, `1d -> D`;
 - нормалізувати output у спільну candle model;
 - додати unit tests для response mapping і provider errors.
 
 Acceptance criteria:
 
-- Bybit adapter повертає normalized candles для `h1`, `h4`, `d1`;
+- Bybit adapter повертає normalized candles для `1h`, `4h`, `1d`;
 - Binance adapter і Bybit adapter реалізують один provider port.
 
 ### Етап 7. Додати pagination і timeout behavior для provider adapters
@@ -596,19 +610,19 @@ Acceptance criteria:
 
 ### Етап 13. Реалізувати `candles:get` fetch service
 
-Мета: виконувати manual fetch candles за explicit range без запису в БД.
+Мета: виконувати manual fetch candles за lookback period без запису в БД.
 
 Завдання:
 
-- додати service для fetch за `[from, to)`;
+- додати service для fetch за `[now - period, now)`;
 - підтримати explicit `--symbols` і `--timeframes`;
 - підтримати config mode, якщо symbols/timeframes не передані;
 - виводити результат у JSON;
-- додати tests для range validation і JSON output.
+- додати tests для period/range validation і JSON output.
 
 Acceptance criteria:
 
-- команда повертає candles за `from/to`;
+- команда повертає candles за period-derived range `[now - period, now)`;
 - команда без `--symbols` використовує configured symbols;
 - команда без `--timeframes` використовує configured timeframes;
 - команда не пише у БД.
@@ -670,8 +684,8 @@ Acceptance criteria:
 
 Завдання:
 
-- додати cleanup service для terminal statuses `PUBLISHED`, `ACKED`, `SKIPPED`;
-- не видаляти `PENDING`, `PROCESSING`, retryable `FAILED`;
+- додати cleanup service для terminal status `PUBLISHED`;
+- не видаляти `PENDING` і retryable `FAILED`;
 - виконувати cleanup batch-ами;
 - додати metrics/logs для кількості видалених записів;
 - додати tests для retention cutoff і non-terminal protection.
@@ -689,14 +703,14 @@ Acceptance criteria:
 Завдання:
 
 - додати trimming policy для `market-data-events`;
-- якщо Redis/time-based trimming недоступний у вибраному клієнті, використовувати bounded `MAXLEN`, розрахований під 2-денне recovery window;
+- якщо Redis/time-based trimming недоступний у вибраному клієнті, використовувати bounded `MAXLEN`, розрахований під 2-денне recovery window з documented throughput assumption і safety margin;
 - не trim-ити events раніше, ніж їх може прочитати consumer у межах recovery window;
 - додати tests або integration smoke для trimming configuration.
 
 Acceptance criteria:
 
 - Redis Stream не росте без обмеження;
-- event delivery recovery window становить 2 дні;
+- event delivery recovery window становить приблизно 2 дні за documented throughput assumption;
 - trimming не видаляє нові events.
 
 ### Етап 19. Створити `CandleCollectionService`
@@ -748,7 +762,7 @@ Acceptance criteria:
 Завдання:
 
 - визначати останню збережену closed candle;
-- будувати наступний range від останньої збереженої closed candle до останньої безпечної closed candle;
+- будувати наступний event range після останньої збереженої closed candle до останньої безпечної closed candle;
 - не запитувати open/incomplete candle;
 - додати tests для downtime gap recovery.
 
@@ -773,9 +787,9 @@ Acceptance criteria:
 - повторний collection tick не створює duplicate candles;
 - snapshot/batch metadata відповідають фактично записаному range.
 
-### Етап 23. Додати DB indexes для candles і latest snapshots
+### Етап 23. Додати DB indexes для candles і snapshots
 
-Мета: забезпечити швидке отримання candles і latest snapshot перед запуском bot-platform events.
+Мета: забезпечити швидке отримання candles, event snapshot by id і latest snapshot для readiness/manual diagnostics.
 
 Завдання:
 
@@ -848,7 +862,7 @@ MARKET_DATA_COLLECT_BOOTSTRAP_LOOKBACK_YEARS=2
 MARKET_DATA_COLLECT_BOOTSTRAP_MAX_CHUNKS_PER_TICK=20
 MARKET_DATA_PROVIDER_MAX_CONCURRENCY=3
 MARKET_DATA_PROVIDER_PRIORITY=binance,bybit
-MARKET_DATA_TIMEFRAMES=h1,h4,d1
+MARKET_DATA_TIMEFRAMES=1h,4h,1d
 ```
 
 - додати tests для one tick і repeated ticks.
@@ -880,16 +894,19 @@ Acceptance criteria:
 
 Завдання:
 
-- додати health/readiness або використати поточний HTTP server;
+- long-running `collect` має запускати поточний HTTP server у тому самому процесі або через той самий runtime container;
 - readiness має перевіряти DB/Redis;
 - metrics мають показувати collection success/failure counters;
-- визначити фінальний статус `serve`: видалити або залишити як короткий compatibility alias.
+- `healthcheck` має перевіряти HTTP readiness endpoint, який піднятий long-running `collect`;
+- `collect --once` не потребує HTTP health/readiness, бо це short-lived command;
+- `serve` після переходу не має бути production entrypoint; якщо staged rollout більше його не використовує, CLI route треба видалити разом зі старими ingest commands.
 
 Acceptance criteria:
 
 - readiness показує non-ready, якщо DB/Redis недоступні;
-- `collect` має production healthcheck path;
-- у фінальному стані основна команда - `collect`.
+- long-running `collect` має production healthcheck path;
+- Docker healthcheck через `python -m market_data_service.main healthcheck` працює проти HTTP readiness long-running `collect`;
+- у фінальному стані основна команда - `collect`, а `serve` не використовується в Docker/README.
 
 ### Етап 29. Bot Platform market-data event consumer skeleton
 
@@ -914,7 +931,7 @@ BOT_PLATFORM_MARKET_DATA_EVENTS_CONSUMER_GROUP=bot-platform
 Acceptance criteria:
 
 - consumer читає events і ACK-ає валідні no-op events;
-- invalid events не валять процес;
+- invalid events не валять процес і переводяться у контрольований terminal/no-op path без нескінченного retry loop;
 - Redis unavailable не ламає HTTP admin API.
 
 ### Етап 30. Додати event idempotency у Bot Platform consumer
@@ -980,7 +997,7 @@ Acceptance criteria:
 
 Acceptance criteria:
 
-- для event `BTCUSDT/h1` знаходяться тільки відповідні enabled instances;
+- для event `BTCUSDT/1h` знаходяться тільки відповідні enabled instances;
 - paused/disabled instances не запускаються;
 - unmatched event ACK-иться як no-op.
 
@@ -991,13 +1008,12 @@ Acceptance criteria:
 Завдання:
 
 - викликати існуючий manual run/orchestration service з event-derived command;
+- передавати у bot run snapshot з `snapshot_id` market-data event, а не latest snapshot lookup;
 - використати idempotency key:
 
 ```text
-market-data-event:{event_id}:{instance_id}
+market-data-event:{source}:{symbol}:{timeframe}:{closed_at}:{instance_id}
 ```
-
-або стабільний ключ на основі source/symbol/timeframe/closed_at/instance_id.
 
 - писати `bot_runs`, `bot_run_events`, `bot_signals`, audit events;
 - ACK event після успішної обробки всіх applicable instances або контрольованого terminal result;
@@ -1025,7 +1041,7 @@ Acceptance criteria:
 
 - `docker compose up market_data` запускає `collect`;
 - candles пишуться у БД;
-- market-data events публікуються.
+- market-data events публікуються для incremental/live ranges після завершеного bootstrap.
 
 ### Етап 36. Оновити Docker Compose для Bot Platform runner
 
@@ -1086,9 +1102,11 @@ Acceptance criteria:
 
 - підняти PostgreSQL/Redis;
 - застосувати migrations;
-- запустити `market_data collect --once` або long-running collect з коротким interval;
+- запустити `market_data collect --once` або long-running collect з коротким interval для bootstrap range;
 - перевірити candles/snapshots у БД;
-- перевірити Redis event;
+- перевірити, що bootstrap range не створив Redis event;
+- запустити наступний incremental/live collect range;
+- перевірити Redis event для incremental/live range;
 - перевірити, що cleanup не видаляє candles;
 - перевірити, що старі terminal outbox records видаляються за retention policy;
 - перевірити idempotent повторний запуск.
@@ -1096,7 +1114,8 @@ Acceptance criteria:
 Acceptance criteria:
 
 - candles і snapshots створюються;
-- Redis event публікується;
+- bootstrap range не публікує Redis event;
+- incremental/live range публікує Redis event;
 - повторний smoke не створює неконтрольовані дублікати.
 
 ### Етап 40. Full smoke Event-driven Bot Platform flow
@@ -1136,7 +1155,7 @@ python -m market_data_service.main collect
 За замовчуванням очікувані timeframe-и:
 
 ```bash
-export MARKET_DATA_TIMEFRAMES=h1,h4,d1
+export MARKET_DATA_TIMEFRAMES=1h,4h,1d
 ```
 
 Provider selection:
@@ -1164,10 +1183,9 @@ Fetch candles from active provider:
 
 ```bash
 python -m market_data_service.main candles:get \
-  --from 2026-07-01T00:00:00Z \
-  --to 2026-07-16T00:00:00Z \
+  --period 100d \
   --symbols HYPEUSDT \
-  --timeframes h1,h4,d1 \
+  --timeframes 1h,4h,1d \
   --provider auto
 ```
 
@@ -1175,12 +1193,11 @@ Fetch candles for configured symbols/timeframes:
 
 ```bash
 export MARKET_DATA_PROVIDER_SYMBOLS=BTCUSDT,ETHUSDT,HYPEUSDT
-export MARKET_DATA_TIMEFRAMES=h1,h4,d1
+export MARKET_DATA_TIMEFRAMES=1h,4h,1d
 export MARKET_DATA_PROVIDER_PRIORITY=binance,bybit
 
 python -m market_data_service.main candles:get \
-  --from 2026-07-01T00:00:00Z \
-  --to 2026-07-16T00:00:00Z \
+  --period 1y \
   --provider auto
 ```
 
@@ -1229,8 +1246,8 @@ python -m bot_platform_service.main bot:modules:sync
 - Provider availability cache може застаріти: symbol міг зʼявитися на Binance після `UNSUPPORTED`, тому потрібен TTL і `next_check_at`.
 - Якщо один symbol доступний на кількох provider-ах, priority list має однозначно визначати active provider.
 - Видалення старих команд може зламати smoke/README/compose, якщо не перенести всі сценарії на `collect`.
-- Bot runner не повинен запускати боти на stale snapshots.
-- Latest snapshot lookup без спеціального індексу може стати bottleneck для event-driven запуску ботів.
+- Bot runner не повинен запускати боти на stale snapshots або на snapshot, який не відповідає `snapshot_id` event.
+- Latest snapshot lookup без спеціального індексу може стати bottleneck для readiness/manual diagnostics.
 - Зайві дублюючі indexes на candles можуть сповільнювати insert/upsert під час bootstrap, тому їх треба перевіряти через `EXPLAIN ANALYZE`, а не додавати без потреби.
 - Redis Stream без trimming буде накопичувати старі market-data events у памʼяті, тому retention 2 дні має бути обовʼязковим.
 - Outbox/idempotency/audit event records без cleanup будуть рости в БД, тому terminal службові records мають видалятися після 5 днів.
@@ -1247,7 +1264,7 @@ python -m bot_platform_service.main bot:modules:sync
 - bootstrap може виконуватися поступово кількома ітераціями без перевищення provider rate limits;
 - bootstrap progress зберігається і дозволяє продовжити синхронізацію після restart;
 - market-data events створюються тільки для live/incremental ranges після завершеного bootstrap;
-- collect синхронізує timeframe-и `h1`, `h4`, `d1`;
+- collect синхронізує timeframe-и `1h`, `4h`, `1d`;
 - якщо active provider має менше ніж 2 роки історії для symbol/timeframe, сервіс записує весь доступний provider range без помилки;
 - наступні ітерації `collect` добирають усі candles, пропущені після останньої успішно збереженої closed candle;
 - provider resolver вибирає Binance для symbols, які є на Binance;
@@ -1259,9 +1276,10 @@ python -m bot_platform_service.main bot:modules:sync
 - `candles:get` отримує candles за період для explicit або configured symbols/timeframes;
 - `candles:get --provider auto` використовує той самий provider resolver, що й `collect`;
 - `bot-platform-service` споживає market-data events і запускає matching enabled bots;
+- bot runs використовують `snapshot_id` з market-data event, а не випадковий latest snapshot;
 - `bot_runs` і `bot_signals` створюються автоматично після market-data event;
 - повторний запуск не створює неконтрольовані дублікати;
-- Redis Stream market-data events не зберігаються довше 2 днів;
+- Redis Stream market-data events мають 2-денне recovery window через time-based cleanup або bounded `MAXLEN`, розрахований за documented throughput assumption;
 - terminal market-data outbox records видаляються з БД після 5 днів;
 - bot-platform processed/idempotency і службові event audit records видаляються з БД після 5 днів;
 - `_market_data.market_candles` не видаляються retention cleanup-ом для службових event records;

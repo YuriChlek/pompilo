@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 from market_data_service import main as cli_main
@@ -21,8 +22,167 @@ class CliMainTests(unittest.TestCase):
 
         self.assertEqual(raised.exception.code, 0)
 
+    def test_collect_help_exits_successfully(self) -> None:
+        with self.assertRaises(SystemExit) as raised:
+            cli_main.main(["collect", "--help"])
+
+        self.assertEqual(raised.exception.code, 0)
+
+    def test_invalid_cli_arguments_exit_with_error(self) -> None:
+        with self.assertRaises(SystemExit) as raised:
+            cli_main.main(["collect", "--invalid-argument-foo-bar"])
+
+        self.assertNotEqual(raised.exception.code, 0)
+
+    def test_candles_get_help_exits_successfully(self) -> None:
+        with self.assertRaises(SystemExit) as raised:
+            cli_main.main(["candles:get", "--help"])
+
+        self.assertEqual(raised.exception.code, 0)
+
+    def test_candles_get_requires_period(self) -> None:
+        for args in (
+            ["candles:get"],
+        ):
+            with self.subTest(args=args):
+                with self.assertRaises(SystemExit) as raised:
+                    cli_main.main(args)
+                self.assertNotEqual(raised.exception.code, 0)
+
+    def test_candles_get_accepts_valid_providers(self) -> None:
+        for provider in ("auto", "binance", "bybit"):
+            with self.subTest(provider=provider):
+                exit_code = cli_main.main(
+                    [
+                        "candles:get",
+                        "--period",
+                        "1d",
+                        "--provider",
+                        provider,
+                    ]
+                )
+                self.assertEqual(exit_code, cli_main.EXIT_UNSUPPORTED)
+
+    def test_candles_get_rejects_invalid_provider(self) -> None:
+        with self.assertRaises(SystemExit) as raised:
+            cli_main.main(
+                [
+                    "candles:get",
+                    "--period",
+                    "1d",
+                    "--provider",
+                    "invalid-provider",
+                ]
+            )
+        self.assertNotEqual(raised.exception.code, 0)
+
+    def test_candles_get_accepts_optional_symbols_and_timeframes(self) -> None:
+        exit_code = cli_main.main(
+            [
+                "candles:get",
+                "--period",
+                "100d",
+                "--symbols",
+                "BTCUSDT,ETHUSDT",
+                "--timeframes",
+                "1h,4h",
+            ]
+        )
+        self.assertEqual(exit_code, cli_main.EXIT_UNSUPPORTED)
+
+    def test_candles_get_rejects_invalid_timeframe(self) -> None:
+        exit_code = cli_main.main(
+            [
+                "candles:get",
+                "--period",
+                "1y",
+                "--timeframes",
+                "15m",
+            ]
+        )
+        self.assertEqual(exit_code, cli_main.EXIT_ERROR)
+
+    def test_candles_get_rejects_invalid_period(self) -> None:
+        for period in ("", "0d", "d", "1q", "-1d"):
+            with self.subTest(period=period):
+                try:
+                    exit_code = cli_main.main(
+                        [
+                            "candles:get",
+                            "--period",
+                            period,
+                        ]
+                    )
+                except SystemExit as exc:
+                    exit_code = exc.code
+                self.assertNotEqual(exit_code, cli_main.EXIT_SUCCESS)
+
+    def test_candles_get_period_builds_range_back_from_now(self) -> None:
+        now = datetime(2026, 7, 16, 12, 30, tzinfo=UTC)
+        args = cli_main._build_parser().parse_args(
+            [
+                "candles:get",
+                "--period",
+                "100d",
+                "--symbols",
+                "btcusdt,ethusdt",
+                "--timeframes",
+                "1h,4h",
+                "--provider",
+                "binance",
+            ]
+        )
+
+        range_from, range_to, symbols, timeframes, provider = cli_main._build_candles_get_contract(
+            args,
+            now_provider=lambda: now,
+        )
+
+        self.assertEqual(range_from, now - timedelta(days=100))
+        self.assertEqual(range_to, now)
+        self.assertEqual(symbols, ("BTCUSDT", "ETHUSDT"))
+        self.assertEqual(timeframes, ("1h", "4h"))
+        self.assertEqual(provider, "binance")
+
+    def test_candles_get_period_units(self) -> None:
+        self.assertEqual(cli_main._parse_period_duration("12h"), timedelta(hours=12))
+        self.assertEqual(cli_main._parse_period_duration("1d"), timedelta(days=1))
+        self.assertEqual(cli_main._parse_period_duration("2w"), timedelta(weeks=2))
+        self.assertEqual(cli_main._parse_period_duration("3mo"), timedelta(days=90))
+        self.assertEqual(cli_main._parse_period_duration("1y"), timedelta(days=365))
+
+    def test_backfill_rejects_invalid_timeframe(self) -> None:
+        exit_code = cli_main.main(
+            [
+                "backfill",
+                "--symbol",
+                "ETHUSDT",
+                "--timeframe",
+                "15m",
+                "--from",
+                "2026-07-14T00:00:00Z",
+                "--to",
+                "2026-07-14T02:00:00Z",
+            ]
+        )
+        self.assertEqual(exit_code, cli_main.EXIT_ERROR)
+
+    def test_gaps_scan_rejects_invalid_timeframe(self) -> None:
+        exit_code = cli_main.main(
+            [
+                "gaps:scan",
+                "--timeframe",
+                "15m",
+                "--from",
+                "2026-07-14T00:00:00Z",
+                "--to",
+                "2026-07-14T03:00:00Z",
+            ]
+        )
+        self.assertEqual(exit_code, cli_main.EXIT_ERROR)
+
     def test_unimplemented_runtime_commands_return_explicit_exit_code(self) -> None:
-        for command in ("scheduler", "outbox-publisher", "db:revision"):
+        for command in ("scheduler", "outbox-publisher", "collect", "db:revision"):
             with self.subTest(command=command):
                 self.assertEqual(cli_main.main([command]), cli_main.EXIT_UNSUPPORTED)
 
