@@ -2,31 +2,31 @@ from __future__ import annotations
 
 import unittest
 
-from market_data_service.domain.scheduler_models import SchedulerTickResult
+from market_data_service.application.services.candle_collection_service import CollectionResult
 from market_data_service.workers.market_data_scheduler_worker import MarketDataSchedulerWorker
 
 
-class FakeSchedulerService:
+class FakeCandleCollectionService:
     def __init__(self) -> None:
         self.calls = 0
 
-    async def tick(self) -> SchedulerTickResult:
+    async def collect(self) -> CollectionResult:
         self.calls += 1
-        return SchedulerTickResult(created_count=1, skipped_count=0)
+        return CollectionResult(scheduled_count=1, processed_count=0, failed_count=0, published_count=0)
 
 
 class MarketDataSchedulerWorkerTests(unittest.IsolatedAsyncioTestCase):
     async def test_run_once_delegates_to_service(self) -> None:
-        service = FakeSchedulerService()
+        service = FakeCandleCollectionService()
         worker = MarketDataSchedulerWorker(service, poll_interval_seconds=0)
 
         result = await worker.run_once()
 
-        self.assertEqual(result.created_count, 1)
+        self.assertEqual(result.scheduled_count, 1)
         self.assertEqual(service.calls, 1)
 
     async def test_run_forever_stops_when_stop_hook_is_true(self) -> None:
-        service = FakeSchedulerService()
+        service = FakeCandleCollectionService()
         checks = 0
 
         def should_stop() -> bool:

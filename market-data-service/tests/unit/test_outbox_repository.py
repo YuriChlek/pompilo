@@ -53,6 +53,39 @@ class OutboxRepositoryTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(created)
         self.assertEqual(len(connection.statements), 1)
 
+    async def test_delete_old_published_events_runs_in_batches_until_empty(self) -> None:
+        connection = FakeConnectionForCleanup(select_results=[[("id-1",), ("id-2",)]])
+        repository = OutboxRepository(connection)
+
+        cutoff = datetime(2026, 7, 11, 12, 0, 0, tzinfo=UTC)
+        deleted = await repository.delete_old_published_events(cutoff=cutoff, batch_size=2)
+
+        self.assertEqual(deleted, 2)
+        self.assertEqual(len(connection.statements), 3)
+
+
+class FakeCleanupExecuteResult:
+    def __init__(self, rows: list[tuple[str]]) -> None:
+        self.rows = rows
+
+    def all(self) -> list[tuple[str]]:
+        return self.rows
+
+
+class FakeConnectionForCleanup:
+    def __init__(self, select_results: list[list[tuple[str]]]) -> None:
+        self.select_results = select_results
+        self.statements: list[object] = []
+
+    async def execute(self, statement):
+        self.statements.append(statement)
+        stmt_str = str(statement).lower()
+        if "select" in stmt_str:
+            if self.select_results:
+                return FakeCleanupExecuteResult(self.select_results.pop(0))
+            return FakeCleanupExecuteResult([])
+        return FakeExecuteResult(1)
+
 
 def _snapshot() -> MarketSnapshot:
     return MarketSnapshot(

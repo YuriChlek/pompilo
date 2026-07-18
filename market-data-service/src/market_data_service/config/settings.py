@@ -8,8 +8,8 @@ from urllib.parse import quote_plus
 
 from sqlalchemy.engine import make_url
 
-from market_data_service.config.provider_config import BinanceSpotProviderConfig
-from market_data_service.config.queue_config import RedisStreamBrokerConfig
+from market_data_service.config.provider_config import BinanceSpotProviderConfig, BybitSpotProviderConfig
+from market_data_service.config.queue_config import RedisStreamBrokerConfig, calculate_redis_stream_maxlen
 from market_data_service.config.scheduler_config import SchedulerConfig
 from market_data_service.domain.enums import MarketDataSource
 from market_data_service.domain.scheduler import SUPPORTED_SCHEDULE_TIMEFRAMES
@@ -47,16 +47,41 @@ class BackfillSettings:
 
 
 @dataclass(frozen=True, slots=True)
+class AvailabilitySettings:
+    availability_ttl_hours: float
+    unsupported_recheck_hours: float
+    temporary_error_recheck_minutes: float
+
+
+@dataclass(frozen=True, slots=True)
+class RetentionSettings:
+    redis_event_retention_days: int
+    outbox_retention_days: int
+
+
+@dataclass(frozen=True, slots=True)
+class BootstrapSettings:
+    bootstrap_lookback_years: int
+    bootstrap_max_chunks_per_tick: int
+    provider_max_concurrency: int
+
+
+@dataclass(frozen=True, slots=True)
 class MarketDataServiceSettings:
     database: DatabaseSettings
     redis: RedisStreamBrokerConfig
     provider: BinanceSpotProviderConfig
+    bybit_provider: BybitSpotProviderConfig
     provider_mode: str
     scheduler: SchedulerConfig
     http: HttpSettings
     logging: LoggingSettings
     shutdown: ShutdownSettings
     backfill: BackfillSettings
+    availability: AvailabilitySettings
+    retention: RetentionSettings
+    bootstrap: BootstrapSettings
+    provider_priority: tuple[str, ...]
     scheduler_enabled: bool
     outbox_publisher_enabled: bool
 
@@ -67,12 +92,17 @@ def load_settings(env: Mapping[str, str] | None = None) -> MarketDataServiceSett
         database=load_database_settings(source),
         redis=load_redis_settings(source),
         provider=load_provider_settings(source),
+        bybit_provider=load_bybit_provider_settings(source),
         provider_mode=load_provider_mode(source),
         scheduler=load_scheduler_settings(source),
         http=load_http_settings(source),
         logging=load_logging_settings(source),
         shutdown=load_shutdown_settings(source),
         backfill=load_backfill_settings(source),
+        availability=load_availability_settings(source),
+        retention=load_retention_settings(source),
+        bootstrap=load_bootstrap_settings(source),
+        provider_priority=load_provider_priority(source),
         scheduler_enabled=_parse_bool(source, "MARKET_DATA_SCHEDULER_ENABLED", default=True),
         outbox_publisher_enabled=_parse_bool(source, "MARKET_DATA_OUTBOX_PUBLISHER_ENABLED", default=True),
     )
@@ -109,10 +139,15 @@ def load_redis_settings(env: Mapping[str, str] | None = None) -> RedisStreamBrok
     if not stream_name:
         raise SettingsError("MARKET_DATA_OUTBOX_STREAM must not be empty")
 
+    maxlen = _parse_optional_positive_int(raw_maxlen, "MARKET_DATA_OUTBOX_STREAM_MAXLEN")
+    if maxlen is None:
+        redis_event_retention_days = _parse_positive_int(source, "MARKET_DATA_REDIS_EVENT_RETENTION_DAYS", default="2")
+        maxlen = calculate_redis_stream_maxlen(redis_event_retention_days)
+
     return RedisStreamBrokerConfig(
         redis_url=redis_url,
         stream_name=stream_name,
-        maxlen=_parse_optional_positive_int(raw_maxlen, "MARKET_DATA_OUTBOX_STREAM_MAXLEN"),
+        maxlen=maxlen,
     )
 
 
@@ -141,12 +176,53 @@ def load_provider_settings(env: Mapping[str, str] | None = None) -> BinanceSpotP
     )
 
 
+def load_bybit_provider_settings(env: Mapping[str, str] | None = None) -> BybitSpotProviderConfig:
+    source = env or os.environ
+    rest_endpoint = (_optional(source, "BYBIT_REST_ENDPOINT") or "https://api.bybit.com").rstrip("/")
+    if not rest_endpoint.startswith(("http://", "https://")):
+        raise SettingsError("BYBIT_REST_ENDPOINT must start with http:// or https://")
+
+    return BybitSpotProviderConfig(
+        rest_endpoint=rest_endpoint,
+        request_timeout_seconds=_parse_positive_float(source, "BYBIT_REQUEST_TIMEOUT_SECONDS", default="30"),
+        max_limit=_parse_positive_int(source, "BYBIT_KLINE_LIMIT", default="1000"),
+        safety_delay_by_timeframe=_load_safety_delays(source),
+        max_concurrent_requests=_parse_positive_int(source, "BYBIT_MAX_CONCURRENT_REQUESTS", default="8"),
+        circuit_breaker_failure_threshold=_parse_positive_int(
+            source,
+            "BYBIT_CIRCUIT_BREAKER_FAILURE_THRESHOLD",
+            default="5",
+        ),
+        circuit_breaker_recovery_timeout_seconds=_parse_positive_float(
+            source,
+            "BYBIT_CIRCUIT_BREAKER_RECOVERY_TIMEOUT_SECONDS",
+            default="60",
+        ),
+    )
+
+
 def load_provider_mode(env: Mapping[str, str] | None = None) -> str:
     source = env or os.environ
     provider_mode = (_optional(source, "MARKET_DATA_PROVIDER_MODE") or "binance").lower()
     if provider_mode not in {"binance", "fixture"}:
         raise SettingsError("MARKET_DATA_PROVIDER_MODE must be one of: binance, fixture")
     return provider_mode
+
+
+def load_provider_priority(env: Mapping[str, str] | None = None) -> tuple[str, ...]:
+    source = env or os.environ
+    raw_priority = _optional(source, "MARKET_DATA_PROVIDER_PRIORITY")
+    if raw_priority is None:
+        return ("binance", "bybit")
+
+    providers = _parse_csv(raw_priority, lowercase=True)
+    allowed = {"binance", "bybit"}
+    unsupported = sorted(set(providers).difference(allowed))
+    if unsupported:
+        raise SettingsError(f"Unsupported provider in priority: {', '.join(unsupported)}")
+    if len(providers) != len(set(providers)):
+        raise SettingsError("Duplicate providers in priority list")
+    return providers
 
 
 def load_scheduler_settings(env: Mapping[str, str] | None = None) -> SchedulerConfig:
@@ -177,6 +253,21 @@ def load_http_settings(env: Mapping[str, str] | None = None) -> HttpSettings:
     return HttpSettings(host=host, port=port)
 
 
+def load_availability_settings(env: Mapping[str, str] | None = None) -> AvailabilitySettings:
+    source = env or os.environ
+    return AvailabilitySettings(
+        availability_ttl_hours=_parse_positive_float(
+            source, "MARKET_DATA_PROVIDER_AVAILABILITY_TTL_HOURS", default="24.0"
+        ),
+        unsupported_recheck_hours=_parse_positive_float(
+            source, "MARKET_DATA_UNSUPPORTED_SYMBOL_RECHECK_HOURS", default="24.0"
+        ),
+        temporary_error_recheck_minutes=_parse_positive_float(
+            source, "MARKET_DATA_TEMPORARY_ERROR_RECHECK_MINUTES", default="5.0"
+        ),
+    )
+
+
 def load_logging_settings(env: Mapping[str, str] | None = None) -> LoggingSettings:
     source = env or os.environ
     level = (_optional(source, "MARKET_DATA_LOG_LEVEL") or "INFO").upper()
@@ -198,6 +289,23 @@ def load_backfill_settings(env: Mapping[str, str] | None = None) -> BackfillSett
     return BackfillSettings(
         batch_size_candles=_parse_positive_int(source, "MARKET_DATA_BACKFILL_BATCH_CANDLES", default="500"),
         max_concurrency=_parse_positive_int(source, "MARKET_DATA_BACKFILL_MAX_CONCURRENCY", default="1"),
+    )
+
+
+def load_retention_settings(env: Mapping[str, str] | None = None) -> RetentionSettings:
+    source = env or os.environ
+    return RetentionSettings(
+        redis_event_retention_days=_parse_positive_int(source, "MARKET_DATA_REDIS_EVENT_RETENTION_DAYS", default="2"),
+        outbox_retention_days=_parse_positive_int(source, "MARKET_DATA_OUTBOX_RETENTION_DAYS", default="5"),
+    )
+
+
+def load_bootstrap_settings(env: Mapping[str, str] | None = None) -> BootstrapSettings:
+    source = env or os.environ
+    return BootstrapSettings(
+        bootstrap_lookback_years=_parse_positive_int(source, "MARKET_DATA_COLLECT_BOOTSTRAP_LOOKBACK_YEARS", default="2"),
+        bootstrap_max_chunks_per_tick=_parse_positive_int(source, "MARKET_DATA_COLLECT_BOOTSTRAP_MAX_CHUNKS_PER_TICK", default="10"),
+        provider_max_concurrency=_parse_positive_int(source, "MARKET_DATA_PROVIDER_MAX_CONCURRENCY", default="8"),
     )
 
 
@@ -246,21 +354,30 @@ def _parse_optional_positive_int(value: str | None, name: str) -> int | None:
 
 
 def _parse_non_negative_int(env: Mapping[str, str], name: str, *, default: str) -> int:
-    value = int(_optional(env, name) or default)
+    try:
+        value = int(_optional(env, name) or default)
+    except ValueError as exc:
+        raise SettingsError(f"{name} must be a valid integer") from exc
     if value < 0:
         raise SettingsError(f"{name} must be non-negative")
     return value
 
 
 def _parse_positive_int(env: Mapping[str, str], name: str, *, default: str) -> int:
-    value = int(_optional(env, name) or default)
+    try:
+        value = int(_optional(env, name) or default)
+    except ValueError as exc:
+        raise SettingsError(f"{name} must be a valid integer") from exc
     if value <= 0:
         raise SettingsError(f"{name} must be positive")
     return value
 
 
 def _parse_positive_float(env: Mapping[str, str], name: str, *, default: str) -> float:
-    value = float(_optional(env, name) or default)
+    try:
+        value = float(_optional(env, name) or default)
+    except ValueError as exc:
+        raise SettingsError(f"{name} must be a valid float") from exc
     if value <= 0:
         raise SettingsError(f"{name} must be positive")
     return value

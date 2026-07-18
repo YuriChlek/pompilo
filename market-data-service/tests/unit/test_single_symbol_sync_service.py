@@ -207,6 +207,7 @@ class FakeSyncCompletion:
         batch_status: MarketDataBatchStatus,
         rows_fetched: int,
         dry_run: bool,
+        create_events: bool,
         gap_count: int,
         first_open_time: datetime | None,
         last_close_time: datetime | None,
@@ -221,6 +222,7 @@ class FakeSyncCompletion:
                 "batch_status": batch_status,
                 "rows_fetched": rows_fetched,
                 "dry_run": dry_run,
+                "create_events": create_events,
                 "gap_count": gap_count,
                 "first_open_time": first_open_time,
                 "last_close_time": last_close_time,
@@ -422,6 +424,22 @@ class SingleSymbolSyncServiceTests(unittest.IsolatedAsyncioTestCase):
             await service.sync_closed_candles(_command())
         self.assertEqual(batch_tracker.created, [])
 
+    async def test_sync_allows_collection_resolved_mapping(self) -> None:
+        candles = [_candle(datetime(2026, 7, 14, 8, tzinfo=UTC))]
+        batch_tracker = FakeBatchTracker()
+        service = SingleSymbolSyncService(
+            symbol_registry=FakeRegistry(None),
+            candle_provider=FakeProvider(candles),
+            candle_writer=FakeWriter(inserted_count=1),
+            advisory_lock=FakeLock(),
+            batch_tracker=batch_tracker,
+        )
+
+        result = await service.sync_closed_candles(_command(canonical_symbol="ETHUSDT"))
+
+        self.assertEqual(result.canonical_symbol, "ETHUSDT")
+        self.assertEqual(batch_tracker.created[0].canonical_symbol, "ETHUSDT")
+
     async def test_sync_blocks_parallel_duplicate_lock(self) -> None:
         batch_tracker = FakeBatchTracker()
         service = SingleSymbolSyncService(
@@ -525,13 +543,19 @@ class SingleSymbolSyncServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(logs.events[0].fields["correlation_id"], "corr-sync")
 
 
-def _command(*, dry_run: bool = False, correlation_id: str | None = None) -> SyncClosedCandlesCommand:
+def _command(
+    *,
+    dry_run: bool = False,
+    correlation_id: str | None = None,
+    canonical_symbol: str | None = None,
+) -> SyncClosedCandlesCommand:
     return SyncClosedCandlesCommand(
         source=MarketDataSource.BINANCE_SPOT,
         provider_symbol="ethusdt",
         timeframe="1H",
         from_time=datetime(2026, 7, 14, 8, tzinfo=UTC),
         to_time=datetime(2026, 7, 14, 9, tzinfo=UTC),
+        canonical_symbol=canonical_symbol,
         dry_run=dry_run,
         correlation_id=correlation_id,
     )

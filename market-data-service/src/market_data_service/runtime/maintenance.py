@@ -3,15 +3,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+from market_data_service.application.services.candle_collection_service import CollectionResult
 from market_data_service.application.services.backfill_command_service import (
     BackfillCommand,
     BackfillCommandResult,
 )
 from market_data_service.application.services.gap_scan_service import GapScanCommand, GapScanResult
 from market_data_service.application.services.outbox_replay_service import OutboxReplayCommand, OutboxReplayResult
+from market_data_service.application.services.candles_get_fetch_service import CandlesGetCommand, CandlesGetResult
 from market_data_service.application.services.symbol_registry_sync_service import SymbolRegistrySyncResult
 from market_data_service.application.sync_models import SyncClosedCandlesCommand, SyncClosedCandlesResult
-from market_data_service.domain.scheduler_models import SchedulerTickResult
 from market_data_service.domain.timeframe_rules import get_timeframe_duration
 from market_data_service.runtime.container import build_runtime_container
 
@@ -32,12 +33,26 @@ async def run_symbols_sync() -> SymbolRegistrySyncResult:
         await container.close()
 
 
-async def run_scheduler_once() -> SchedulerTickResult:
+async def run_scheduler_once() -> CollectionResult:
+    return await run_collect_once()
+
+
+async def run_collect_once() -> CollectionResult:
     container = await build_runtime_container()
     try:
         result = await container.workers.market_data_scheduler.run_once()
         await _commit_if_open(container.connection)
-        return result
+        publish_result = await container.workers.outbox_publisher.run_once()
+        await _commit_if_open(container.connection)
+        return CollectionResult(
+            scheduled_count=result.scheduled_count,
+            processed_count=result.processed_count,
+            failed_count=result.failed_count,
+            published_count=publish_result.published_count,
+        )
+    except Exception:
+        await _rollback_if_open(container.connection)
+        raise
     finally:
         await container.close()
 
@@ -131,3 +146,35 @@ async def _commit_if_open(connection) -> None:
 async def _rollback_if_open(connection) -> None:
     if connection.in_transaction():
         await connection.rollback()
+
+
+async def run_candles_get(command: CandlesGetCommand) -> CandlesGetResult:
+    container = await build_runtime_container()
+    try:
+        result = await container.services.candles_get_fetch.fetch_candles(
+            symbols=command.symbols,
+            timeframes=command.timeframes,
+            provider=command.provider,
+            from_time=command.from_time,
+            to_time=command.to_time,
+        )
+        await _commit_if_open(container.connection)
+        return result
+    except Exception:
+        await _rollback_if_open(container.connection)
+        raise
+    finally:
+        await container.close()
+
+
+async def run_outbox_cleanup(*, batch_size: int = 1000) -> int:
+    container = await build_runtime_container()
+    try:
+        deleted_count = await container.services.outbox_cleanup.cleanup(batch_size=batch_size)
+        await _commit_if_open(container.connection)
+        return deleted_count
+    except Exception:
+        await _rollback_if_open(container.connection)
+        raise
+    finally:
+        await container.close()

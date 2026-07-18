@@ -1,17 +1,21 @@
 from __future__ import annotations
 
+import io
+import json
 import unittest
 from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 from market_data_service import main as cli_main
+from market_data_service.application.services.candles_get_fetch_service import CandlesGetItemResult, CandlesGetResult
 from market_data_service.application.services.backfill_command_service import BackfillCommandResult
 from market_data_service.application.services.gap_scan_service import GapScanResult
 from market_data_service.application.services.outbox_replay_service import OutboxReplayResult
 from market_data_service.application.services.outbox_publisher_service import OutboxPublishBatchResult
 from market_data_service.config.settings import HttpSettings
 from market_data_service.application.services.symbol_registry_sync_service import SymbolRegistrySyncResult
-from market_data_service.domain.scheduler_models import SchedulerTickResult
+from market_data_service.domain.enums import MarketDataSource
+from market_data_service.application.services.candle_collection_service import CollectionResult
 from market_data_service.runtime.maintenance import SyncNextJobResult
 
 
@@ -50,18 +54,23 @@ class CliMainTests(unittest.TestCase):
                 self.assertNotEqual(raised.exception.code, 0)
 
     def test_candles_get_accepts_valid_providers(self) -> None:
+        async def mock_run(command):
+            return _result(provider=command.provider, symbols=command.symbols, timeframes=command.timeframes)
+
         for provider in ("auto", "binance", "bybit"):
             with self.subTest(provider=provider):
-                exit_code = cli_main.main(
-                    [
-                        "candles:get",
-                        "--period",
-                        "1d",
-                        "--provider",
-                        provider,
-                    ]
-                )
-                self.assertEqual(exit_code, cli_main.EXIT_UNSUPPORTED)
+                with patch("market_data_service.runtime.maintenance.run_candles_get", side_effect=mock_run) as run:
+                    exit_code = cli_main.main(
+                        [
+                            "candles:get",
+                            "--period",
+                            "1d",
+                            "--provider",
+                            provider,
+                        ]
+                    )
+                self.assertEqual(exit_code, cli_main.EXIT_SUCCESS)
+                run.assert_called_once()
 
     def test_candles_get_rejects_invalid_provider(self) -> None:
         with self.assertRaises(SystemExit) as raised:
@@ -77,18 +86,57 @@ class CliMainTests(unittest.TestCase):
         self.assertNotEqual(raised.exception.code, 0)
 
     def test_candles_get_accepts_optional_symbols_and_timeframes(self) -> None:
-        exit_code = cli_main.main(
-            [
-                "candles:get",
-                "--period",
-                "100d",
-                "--symbols",
-                "BTCUSDT,ETHUSDT",
-                "--timeframes",
-                "1h,4h",
-            ]
-        )
-        self.assertEqual(exit_code, cli_main.EXIT_UNSUPPORTED)
+        async def mock_run(command):
+            return _result(provider=command.provider, symbols=command.symbols, timeframes=command.timeframes)
+
+        with patch("market_data_service.runtime.maintenance.run_candles_get", side_effect=mock_run) as run:
+            exit_code = cli_main.main(
+                [
+                    "candles:get",
+                    "--period",
+                    "100d",
+                    "--symbols",
+                    "BTCUSDT,ETHUSDT",
+                    "--timeframes",
+                    "1h,4h",
+                ]
+            )
+        self.assertEqual(exit_code, cli_main.EXIT_SUCCESS)
+        run.assert_called_once()
+
+    def test_candles_get_prints_json_output(self) -> None:
+        async def mock_run(command):
+            return _result(provider=command.provider, symbols=command.symbols, timeframes=command.timeframes)
+
+        with patch("market_data_service.runtime.maintenance.run_candles_get", side_effect=mock_run):
+            with patch("sys.stdout", new_callable=io.StringIO) as stdout:
+                exit_code = cli_main.main(
+                    [
+                        "candles:get",
+                        "--period",
+                        "1d",
+                        "--symbols",
+                        "BTCUSDT",
+                        "--timeframes",
+                        "1h",
+                        "--provider",
+                        "binance",
+                    ]
+                )
+
+        self.assertEqual(exit_code, cli_main.EXIT_SUCCESS)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["provider"], "binance")
+        self.assertEqual(payload["symbols"], ["BTCUSDT"])
+        self.assertEqual(payload["timeframes"], ["1h"])
+        self.assertEqual(payload["fetched_count"], 3)
+        self.assertEqual(payload["inserted_count"], 2)
+        self.assertEqual(payload["skipped_duplicate_count"], 1)
+        self.assertEqual(payload["unresolved_symbols"], [])
+        self.assertEqual(payload["items"][0]["source"], "BINANCE_SPOT")
+        self.assertEqual(payload["items"][0]["fetched_count"], 3)
+        self.assertEqual(payload["items"][0]["inserted_count"], 2)
+        self.assertEqual(payload["items"][0]["skipped_duplicate_count"], 1)
 
     def test_candles_get_rejects_invalid_timeframe(self) -> None:
         exit_code = cli_main.main(
@@ -151,6 +199,23 @@ class CliMainTests(unittest.TestCase):
         self.assertEqual(cli_main._parse_period_duration("3mo"), timedelta(days=90))
         self.assertEqual(cli_main._parse_period_duration("1y"), timedelta(days=365))
 
+    def test_candles_get_uses_configured_symbols_and_timeframes_when_omitted(self) -> None:
+        async def mock_run(command):
+            self.assertEqual(command.symbols, ("ADAUSDT", "SOLUSDT"))
+            self.assertEqual(command.timeframes, ("1h", "1d"))
+            return _result(provider=command.provider, symbols=command.symbols, timeframes=command.timeframes)
+
+        env = {
+            "MARKET_DATA_PROVIDER_SYMBOLS": "adausdt, solusdt",
+            "MARKET_DATA_TIMEFRAMES": "1h,1d",
+        }
+        with patch.dict("os.environ", env, clear=False):
+            with patch("market_data_service.runtime.maintenance.run_candles_get", side_effect=mock_run) as run:
+                exit_code = cli_main.main(["candles:get", "--period", "1d"])
+
+        self.assertEqual(exit_code, cli_main.EXIT_SUCCESS)
+        run.assert_called_once()
+
     def test_backfill_rejects_invalid_timeframe(self) -> None:
         exit_code = cli_main.main(
             [
@@ -182,7 +247,7 @@ class CliMainTests(unittest.TestCase):
         self.assertEqual(exit_code, cli_main.EXIT_ERROR)
 
     def test_unimplemented_runtime_commands_return_explicit_exit_code(self) -> None:
-        for command in ("scheduler", "outbox-publisher", "collect", "db:revision"):
+        for command in ("scheduler", "outbox-publisher", "db:revision"):
             with self.subTest(command=command):
                 self.assertEqual(cli_main.main([command]), cli_main.EXIT_UNSUPPORTED)
 
@@ -235,13 +300,23 @@ class CliMainTests(unittest.TestCase):
 
     def test_scheduler_run_once_runs_maintenance_command(self) -> None:
         async def run_once():
-            return SchedulerTickResult(created_count=1, skipped_count=0)
+            return CollectionResult(scheduled_count=1, processed_count=0, failed_count=0, published_count=0)
 
         with patch.object(cli_main, "run_scheduler_once", side_effect=run_once) as scheduler:
             exit_code = cli_main.main(["scheduler:run-once"])
 
         self.assertEqual(exit_code, cli_main.EXIT_SUCCESS)
         scheduler.assert_called_once_with()
+
+    def test_collect_once_runs_collect_maintenance_command(self) -> None:
+        async def mock_run_once():
+            return CollectionResult(scheduled_count=5, processed_count=3, failed_count=0, published_count=3)
+
+        with patch.object(cli_main, "run_collect_once", side_effect=mock_run_once) as collect_once:
+            exit_code = cli_main.main(["collect", "--once"])
+
+        self.assertEqual(exit_code, cli_main.EXIT_SUCCESS)
+        collect_once.assert_called_once_with()
 
     def test_sync_run_next_runs_one_pending_sync_job(self) -> None:
         async def run_next():
@@ -388,3 +463,33 @@ class CliMainTests(unittest.TestCase):
             exit_code = cli_main.main(["outbox:replay"])
 
         self.assertEqual(exit_code, cli_main.EXIT_ERROR)
+
+
+def _result(
+    *,
+    provider: str = "binance",
+    symbols: tuple[str, ...] = ("BTCUSDT",),
+    timeframes: tuple[str, ...] = ("1h",),
+) -> CandlesGetResult:
+    return CandlesGetResult(
+        from_time=datetime(2026, 7, 13, 8, tzinfo=UTC),
+        to_time=datetime(2026, 7, 14, 8, tzinfo=UTC),
+        symbols=symbols,
+        timeframes=timeframes,
+        provider=provider,
+        total_fetched_count=3,
+        total_inserted_count=2,
+        total_skipped_duplicate_count=1,
+        unresolved_symbols=(),
+        items=(
+            CandlesGetItemResult(
+                source=MarketDataSource.BINANCE_SPOT,
+                canonical_symbol=symbols[0],
+                provider_symbol=symbols[0].replace("/", "").upper(),
+                timeframe=timeframes[0],
+                fetched_count=3,
+                inserted_count=2,
+                skipped_duplicate_count=1,
+            ),
+        ),
+    )

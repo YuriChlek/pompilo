@@ -41,6 +41,6 @@ class Stage12MarketDataSchedulerSmokeTests(unittest.TestCase):
 
         self.assertIn("class MarketDataSchedulerWorker", worker)
         self.assertIn("run_forever", worker)
-        self.assertIn("scheduler_service.tick", worker)
+        self.assertIn("candle_collection.collect", worker)
         self.assertNotIn("sqlalchemy", worker.lower())
         self.assertNotIn("select(", worker)

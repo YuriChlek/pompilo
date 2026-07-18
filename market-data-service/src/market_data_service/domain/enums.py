@@ -17,6 +17,7 @@ class ProviderSymbolStatus(StrEnum):
 
 class MarketDataSource(StrEnum):
     BINANCE_SPOT = "BINANCE_SPOT"
+    BYBIT_SPOT = "BYBIT_SPOT"
 
 
 class CandleRangeStatus(StrEnum):
@@ -50,3 +51,9 @@ class SyncJobStatus(StrEnum):
 class SyncJobKind(StrEnum):
     FRESH = "FRESH"
     BACKFILL = "BACKFILL"
+
+
+class ProviderSymbolAvailabilityStatus(StrEnum):
+    SUPPORTED = "SUPPORTED"
+    UNSUPPORTED = "UNSUPPORTED"
+    TEMPORARY_ERROR = "TEMPORARY_ERROR"

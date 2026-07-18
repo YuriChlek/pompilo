@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import and_, or_, select, update
+from sqlalchemy import and_, delete, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from market_data_service.domain.enums import OutboxStatus
 from market_data_service.domain.events.candle_batch_ready import CandleBatchReady
 from market_data_service.domain.events.market_data_backfill_requested import MarketDataBackfillRequested
+from market_data_service.domain.events.market_data_candles_collected import MarketDataCandlesCollectedEvent
 from market_data_service.domain.outbox_models import OutboxEvent
 from market_data_service.persistence.tables import outbox_events
 
@@ -16,6 +17,24 @@ from market_data_service.persistence.tables import outbox_events
 class OutboxRepository:
     def __init__(self, connection: AsyncConnection) -> None:
         self.connection = connection
+
+    async def create_pending_market_data_candles_collected(self, event: MarketDataCandlesCollectedEvent) -> bool:
+        statement = (
+            insert(outbox_events)
+            .values(
+                id=event.event_id,
+                event_type=event.event_type,
+                aggregate_type="market_snapshot",
+                aggregate_id=event.snapshot_id,
+                payload_json=event.payload_json(),
+                idempotency_key=event.idempotency_key,
+                status=OutboxStatus.PENDING.value,
+                attempts=0,
+            )
+            .on_conflict_do_nothing(index_elements=["event_type", "idempotency_key"])
+        )
+        result = await self.connection.execute(statement)
+        return int(result.rowcount or 0) > 0
 
     async def create_pending_candle_batch_ready(self, event: CandleBatchReady) -> bool:
         statement = (
@@ -114,6 +133,33 @@ class OutboxRepository:
             )
         )
         await self.connection.execute(statement)
+
+    async def delete_old_published_events(self, *, cutoff: datetime, batch_size: int = 1000) -> int:
+        total_deleted = 0
+        while True:
+            select_stmt = (
+                select(outbox_events.c.id)
+                .where(
+                    outbox_events.c.status == OutboxStatus.PUBLISHED.value,
+                    outbox_events.c.published_at < cutoff,
+                )
+                .limit(batch_size)
+            )
+            result = await self.connection.execute(select_stmt)
+            ids = [row[0] for row in result.all()]
+
+            if not ids:
+                break
+
+            delete_stmt = delete(outbox_events).where(outbox_events.c.id.in_(ids))
+            await self.connection.execute(delete_stmt)
+            total_deleted += len(ids)
+
+            if len(ids) < batch_size:
+                break
+
+        return total_deleted
+
 
 
 def _row_to_outbox_event(row) -> OutboxEvent:

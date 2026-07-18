@@ -15,7 +15,8 @@ from market_data_service.application.symbol_registry_ports import ProviderSymbol
 from market_data_service.application.sync_models import SyncClosedCandlesCommand, SyncClosedCandlesResult
 from market_data_service.domain.candle_gap_detector import detect_candle_range_status
 from market_data_service.domain.candle_models import CanonicalCandle
-from market_data_service.domain.enums import CandleRangeStatus, MarketDataBatchStatus
+from market_data_service.domain.enums import CandleRangeStatus, MarketDataBatchStatus, ProviderSymbolStatus
+from market_data_service.domain.symbol_registry_models import ProviderSymbol
 from market_data_service.observability.metrics import MetricsRecorder, record_provider_error, record_sync_metrics
 from market_data_service.observability.structured_logging import (
     StructuredLogger,
@@ -59,12 +60,7 @@ class SingleSymbolSyncService:
         provider_symbol = command.provider_symbol.strip().upper()
         timeframe = command.timeframe.strip().lower()
         batch_id: str | None = None
-        mapping = await assert_sync_mapping_active(
-            self.symbol_registry,
-            source=command.source,
-            provider_symbol=provider_symbol,
-            required_timeframe=timeframe,
-        )
+        mapping = await self._resolve_sync_mapping(command, provider_symbol=provider_symbol, timeframe=timeframe)
 
         lock_acquired = await self.advisory_lock.acquire_sync_lock(
             source=command.source.value,
@@ -142,6 +138,7 @@ class SingleSymbolSyncService:
                     batch_status=batch_status,
                     rows_fetched=len(candles),
                     dry_run=command.dry_run,
+                    create_events=command.create_events,
                     gap_count=range_validation.gap_count,
                     first_open_time=first_open_time,
                     last_close_time=last_close_time,
@@ -196,6 +193,31 @@ class SingleSymbolSyncService:
                     )
                 )
             raise
+
+    async def _resolve_sync_mapping(
+        self,
+        command: SyncClosedCandlesCommand,
+        *,
+        provider_symbol: str,
+        timeframe: str,
+    ) -> ProviderSymbol:
+        try:
+            return await assert_sync_mapping_active(
+                self.symbol_registry,
+                source=command.source,
+                provider_symbol=provider_symbol,
+                required_timeframe=timeframe,
+            )
+        except Exception:
+            if command.canonical_symbol is None:
+                raise
+            return ProviderSymbol(
+                source=command.source,
+                canonical_symbol=command.canonical_symbol,
+                provider_symbol=provider_symbol,
+                status=ProviderSymbolStatus.TRADING,
+                supported_timeframes=(timeframe,),
+            )
 
 
 def _batch_status_for_range_status(range_status: CandleRangeStatus) -> MarketDataBatchStatus:

@@ -7,6 +7,7 @@ from market_data_service.domain.enums import CandleRangeStatus, MarketDataSource
 from market_data_service.domain.snapshot_models import MarketSnapshot
 from market_data_service.observability.metrics import (
     MARKET_DATA_GAP_COUNT,
+    MARKET_DATA_OUTBOX_EVENTS_DELETED_TOTAL,
     MARKET_DATA_OUTBOX_LAG_SECONDS,
     MARKET_DATA_PROVIDER_ERRORS_TOTAL,
     MARKET_DATA_PROVIDER_RATE_LIMITED_TOTAL,
@@ -15,6 +16,7 @@ from market_data_service.observability.metrics import (
     MARKET_DATA_SYNC_DURATION_SECONDS,
     STABLE_METRIC_NAMES,
     InMemoryMetricsRecorder,
+    record_outbox_cleanup,
     record_outbox_lag,
     record_provider_error,
     record_queue_lag,
@@ -32,6 +34,7 @@ class ObservabilityMetricsTests(unittest.TestCase):
         self.assertIn(MARKET_DATA_PROVIDER_RATE_LIMITED_TOTAL, STABLE_METRIC_NAMES)
         self.assertIn(MARKET_DATA_QUEUE_LAG_SECONDS, STABLE_METRIC_NAMES)
         self.assertIn(MARKET_DATA_OUTBOX_LAG_SECONDS, STABLE_METRIC_NAMES)
+        self.assertIn(MARKET_DATA_OUTBOX_EVENTS_DELETED_TOTAL, STABLE_METRIC_NAMES)
 
     def test_record_sync_metrics_emits_rows_gap_status_and_duration(self) -> None:
         recorder = InMemoryMetricsRecorder()
@@ -84,6 +87,14 @@ class ObservabilityMetricsTests(unittest.TestCase):
         self.assertEqual(recorder.samples[0].value, 3600.0)
         self.assertEqual(recorder.samples[1].name, MARKET_DATA_OUTBOX_LAG_SECONDS)
         self.assertEqual(recorder.samples[1].value, 42.0)
+
+    def test_record_outbox_cleanup_emits_deleted_counter(self) -> None:
+        recorder = InMemoryMetricsRecorder()
+
+        record_outbox_cleanup(recorder, deleted_count=7)
+
+        self.assertEqual(recorder.samples[0].name, MARKET_DATA_OUTBOX_EVENTS_DELETED_TOTAL)
+        self.assertEqual(recorder.samples[0].value, 7.0)
 
     def test_record_queue_lag_emits_queue_label(self) -> None:
         recorder = InMemoryMetricsRecorder()

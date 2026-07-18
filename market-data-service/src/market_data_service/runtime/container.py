@@ -3,6 +3,7 @@ from __future__ import annotations
 import inspect
 from dataclasses import dataclass
 from datetime import timedelta
+from collections.abc import Mapping
 from typing import Any, Callable
 
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, create_async_engine
@@ -19,9 +20,17 @@ from market_data_service.application.services.outbox_replay_service import Outbo
 from market_data_service.application.services.snapshot_read_service import SnapshotReadService
 from market_data_service.application.services.single_symbol_sync_service import SingleSymbolSyncService
 from market_data_service.application.services.symbol_registry_sync_service import SymbolRegistrySyncService
+from market_data_service.application.services.multi_provider_symbol_resolver import MultiProviderSymbolResolver
+from market_data_service.application.services.candles_get_fetch_service import CandlesGetFetchService
+from market_data_service.application.services.outbox_cleanup_service import OutboxCleanupService
+from market_data_service.application.services.candle_collection_service import CandleCollectionService
+from market_data_service.infrastructure.providers.routing_candle_provider import RoutingCandleProvider
+from market_data_service.application.market_data_ports import CandleProviderPort
+from market_data_service.domain.enums import MarketDataSource
 from market_data_service.config.settings import MarketDataServiceSettings, load_settings
 from market_data_service.infrastructure.concurrency_limiter import AsyncConcurrencyLimiter
 from market_data_service.infrastructure.providers.binance_spot_adapter import BinanceSpotAdapter
+from market_data_service.infrastructure.providers.bybit_spot_adapter import BybitSpotAdapter
 from market_data_service.infrastructure.providers.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 from market_data_service.infrastructure.providers.fixture_candle_provider import FixtureCandleProvider
 from market_data_service.infrastructure.queues.redis_stream_broker import RedisStreamEventBroker
@@ -29,13 +38,18 @@ from market_data_service.persistence.repositories.advisory_lock_repository impor
 from market_data_service.persistence.repositories.backfill_request_repository import BackfillRequestRepository
 from market_data_service.persistence.repositories.batch_repository import BatchRepository
 from market_data_service.persistence.repositories.candle_repository import CandleRepository
+from market_data_service.persistence.repositories.collection_state_repository import CollectionStateRepository
 from market_data_service.persistence.repositories.gap_scan_repository import GapScanRepository
 from market_data_service.persistence.repositories.outbox_repository import OutboxRepository
 from market_data_service.persistence.repositories.provider_symbol_repository import ProviderSymbolRepository
+from market_data_service.persistence.repositories.provider_symbol_availability_repository import (
+    ProviderSymbolAvailabilityRepository,
+)
 from market_data_service.persistence.repositories.snapshot_repository import SnapshotRepository
 from market_data_service.persistence.repositories.symbol_registry_repository import SymbolRegistryRepository
 from market_data_service.persistence.repositories.sync_completion_repository import SyncCompletionRepository
 from market_data_service.persistence.repositories.sync_job_repository import SyncJobRepository
+from market_data_service.domain.availability_rules import AvailabilityCachePolicy
 from market_data_service.workers.market_data_scheduler_worker import MarketDataSchedulerWorker
 from market_data_service.workers.outbox_publisher_lifecycle import OutboxPublisherLifecycle
 from market_data_service.workers.outbox_publisher_worker import OutboxPublisherWorker
@@ -51,9 +65,11 @@ class RuntimeRepositories:
     backfill_request: BackfillRequestRepository
     batch: BatchRepository
     candle: CandleRepository
+    collection_state: CollectionStateRepository
     gap_scan: GapScanRepository
     outbox: OutboxRepository
     provider_symbol: ProviderSymbolRepository
+    provider_symbol_availability: ProviderSymbolAvailabilityRepository
     snapshot: SnapshotRepository
     symbol_registry: SymbolRegistryRepository
     sync_completion: SyncCompletionRepository
@@ -71,6 +87,10 @@ class RuntimeServices:
     single_symbol_sync: SingleSymbolSyncService
     snapshot_read: SnapshotReadService
     symbol_registry_sync: SymbolRegistrySyncService
+    symbol_resolver: MultiProviderSymbolResolver
+    candles_get_fetch: CandlesGetFetchService
+    outbox_cleanup: OutboxCleanupService
+    candle_collection: CandleCollectionService
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,7 +105,8 @@ class MarketDataRuntimeContainer:
     engine: AsyncEngine
     connection: AsyncConnection
     redis_client: Any
-    provider_adapter: BinanceSpotAdapter | FixtureCandleProvider
+    provider_adapter: CandleProviderPort
+    adapters: Mapping[MarketDataSource, CandleProviderPort]
     event_broker: RedisStreamEventBroker
     repositories: RuntimeRepositories
     services: RuntimeServices
@@ -120,12 +141,14 @@ async def build_runtime_container(
         stream_name=runtime_settings.redis.stream_name,
         maxlen=runtime_settings.redis.maxlen,
     )
-    provider_adapter = _build_provider_adapter(runtime_settings)
+    adapters = _build_adapters(runtime_settings)
+    provider_adapter = adapters[MarketDataSource.BINANCE_SPOT]
     services = _build_services(
         settings=runtime_settings,
         repositories=repositories,
         event_broker=event_broker,
         provider_adapter=provider_adapter,
+        adapters=adapters,
     )
     workers = _build_workers(settings=runtime_settings, services=services)
     scheduler_lifecycle = MarketDataSchedulerLifecycle(workers.market_data_scheduler)
@@ -137,6 +160,7 @@ async def build_runtime_container(
         connection=connection,
         redis_client=redis_client,
         provider_adapter=provider_adapter,
+        adapters=adapters,
         event_broker=event_broker,
         repositories=repositories,
         services=services,
@@ -152,9 +176,11 @@ def _build_repositories(connection: AsyncConnection) -> RuntimeRepositories:
         backfill_request=BackfillRequestRepository(connection),
         batch=BatchRepository(connection),
         candle=CandleRepository(connection),
+        collection_state=CollectionStateRepository(connection),
         gap_scan=GapScanRepository(connection),
         outbox=OutboxRepository(connection),
         provider_symbol=ProviderSymbolRepository(connection),
+        provider_symbol_availability=ProviderSymbolAvailabilityRepository(connection),
         snapshot=SnapshotRepository(connection),
         symbol_registry=SymbolRegistryRepository(connection),
         sync_completion=SyncCompletionRepository(connection),
@@ -162,10 +188,14 @@ def _build_repositories(connection: AsyncConnection) -> RuntimeRepositories:
     )
 
 
-def _build_provider_adapter(settings: MarketDataServiceSettings) -> BinanceSpotAdapter | FixtureCandleProvider:
+def _build_adapters(settings: MarketDataServiceSettings) -> Mapping[MarketDataSource, CandleProviderPort]:
     if settings.provider_mode == "fixture":
-        return FixtureCandleProvider()
-    return BinanceSpotAdapter(
+        fixture = FixtureCandleProvider()
+        return {
+            MarketDataSource.BINANCE_SPOT: fixture,
+            MarketDataSource.BYBIT_SPOT: fixture,
+        }
+    binance = BinanceSpotAdapter(
         settings.provider,
         concurrency_limiter=AsyncConcurrencyLimiter(settings.provider.max_concurrent_requests),
         circuit_breaker=CircuitBreaker(
@@ -175,6 +205,20 @@ def _build_provider_adapter(settings: MarketDataServiceSettings) -> BinanceSpotA
             ),
         ),
     )
+    bybit = BybitSpotAdapter(
+        settings.bybit_provider,
+        concurrency_limiter=AsyncConcurrencyLimiter(settings.bybit_provider.max_concurrent_requests),
+        circuit_breaker=CircuitBreaker(
+            CircuitBreakerConfig(
+                failure_threshold=settings.bybit_provider.circuit_breaker_failure_threshold,
+                recovery_timeout=timedelta(seconds=settings.bybit_provider.circuit_breaker_recovery_timeout_seconds),
+            ),
+        ),
+    )
+    return {
+        MarketDataSource.BINANCE_SPOT: binance,
+        MarketDataSource.BYBIT_SPOT: bybit,
+    }
 
 
 def _build_services(
@@ -182,7 +226,8 @@ def _build_services(
     settings: MarketDataServiceSettings,
     repositories: RuntimeRepositories,
     event_broker: RedisStreamEventBroker,
-    provider_adapter: BinanceSpotAdapter,
+    provider_adapter: CandleProviderPort,
+    adapters: Mapping[MarketDataSource, CandleProviderPort],
 ) -> RuntimeServices:
     backfill_planning = BackfillPlanningService(repositories.backfill_request)
     backfill_command = BackfillCommandService(
@@ -218,9 +263,11 @@ def _build_services(
         snapshot_reader=repositories.snapshot,
         now_provider=_utc_now,
     )
+    routing_provider = RoutingCandleProvider(adapters)
+
     single_symbol_sync = SingleSymbolSyncService(
         symbol_registry=repositories.provider_symbol,
-        candle_provider=provider_adapter,
+        candle_provider=routing_provider,
         candle_writer=repositories.candle,
         advisory_lock=repositories.advisory_lock,
         batch_tracker=repositories.batch,
@@ -228,6 +275,43 @@ def _build_services(
         backfill_planning=backfill_planning,
     )
     symbol_registry_sync = SymbolRegistrySyncService(repositories.symbol_registry)
+
+    cache_policy = AvailabilityCachePolicy(
+        availability_ttl_hours=settings.availability.availability_ttl_hours,
+        unsupported_recheck_hours=settings.availability.unsupported_recheck_hours,
+        temporary_error_recheck_minutes=settings.availability.temporary_error_recheck_minutes,
+    )
+    symbol_resolver = MultiProviderSymbolResolver(
+        availability_repository=repositories.provider_symbol_availability,
+        adapters=adapters,
+        priority=settings.provider_priority,
+        cache_policy=cache_policy,
+    )
+    candles_get_fetch = CandlesGetFetchService(
+        resolver=symbol_resolver,
+        candle_provider=routing_provider,
+        candle_writer=repositories.candle,
+    )
+    outbox_cleanup = OutboxCleanupService(
+        outbox_repository=repositories.outbox,
+        retention_days=settings.retention.outbox_retention_days,
+    )
+    collection_concurrency_limiter = AsyncConcurrencyLimiter(settings.bootstrap.provider_max_concurrency)
+    candle_collection = CandleCollectionService(
+        resolver=symbol_resolver,
+        single_symbol_sync=single_symbol_sync,
+        sync_job_queue=repositories.sync_job,
+        candle_history=repositories.candle,
+        collection_state=repositories.collection_state,
+        provider_symbols=settings.scheduler.provider_symbols,
+        timeframes=settings.scheduler.timeframes,
+        safety_delay_by_timeframe=settings.scheduler.safety_delay_by_timeframe,
+        jitter_seconds=settings.scheduler.jitter_seconds,
+        bootstrap_lookback_years=settings.bootstrap.bootstrap_lookback_years,
+        bootstrap_max_chunks_per_tick=settings.bootstrap.bootstrap_max_chunks_per_tick,
+        concurrency_limiter=collection_concurrency_limiter,
+    )
+
     return RuntimeServices(
         backfill_command=backfill_command,
         backfill_planning=backfill_planning,
@@ -238,13 +322,17 @@ def _build_services(
         single_symbol_sync=single_symbol_sync,
         snapshot_read=snapshot_read,
         symbol_registry_sync=symbol_registry_sync,
+        symbol_resolver=symbol_resolver,
+        candles_get_fetch=candles_get_fetch,
+        outbox_cleanup=outbox_cleanup,
+        candle_collection=candle_collection,
     )
 
 
 def _build_workers(*, settings: MarketDataServiceSettings, services: RuntimeServices) -> RuntimeWorkers:
     return RuntimeWorkers(
         market_data_scheduler=MarketDataSchedulerWorker(
-            services.market_data_scheduler,
+            services.candle_collection,
             poll_interval_seconds=settings.scheduler.poll_interval_seconds,
         ),
         outbox_publisher=OutboxPublisherWorker(services.outbox_publisher),

@@ -13,7 +13,9 @@ class SyncClosedCandlesCommand:
     timeframe: str
     from_time: datetime
     to_time: datetime
+    canonical_symbol: str | None = None
     dry_run: bool = False
+    create_events: bool = False
     correlation_id: str | None = None
 
 

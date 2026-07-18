@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import sys
 from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
@@ -18,9 +19,11 @@ from market_data_service.domain.scheduler import SUPPORTED_SCHEDULE_TIMEFRAMES
 from market_data_service.runtime.http_server import run_http_server
 from market_data_service.runtime.maintenance import (
     run_backfill,
+    run_collect_once,
     run_gaps_scan,
     run_outbox_publish_once,
     run_outbox_replay,
+    run_outbox_cleanup,
     run_scheduler_once,
     run_sync_next_job,
     run_symbols_sync,
@@ -69,6 +72,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return asyncio.run(_run_gaps_scan(args))
     if args.command == "outbox:replay":
         return asyncio.run(_run_outbox_replay(args))
+    if args.command == "outbox:cleanup":
+        return asyncio.run(_run_outbox_cleanup(args))
 
     parser.print_help()
     return EXIT_SUCCESS
@@ -140,24 +145,76 @@ def _build_parser() -> argparse.ArgumentParser:
     outbox_replay_parser.add_argument("--from-id", dest="outbox_from_id", help="Inclusive outbox event id lower bound.")
     outbox_replay_parser.add_argument("--to-id", dest="outbox_to_id", help="Inclusive outbox event id upper bound.")
     outbox_replay_parser.add_argument("--dry-run", action="store_true", help="Report replay candidates without publishing.")
+
+    outbox_cleanup_parser = subparsers.add_parser("outbox:cleanup", help="Clean up old published outbox events.")
+    outbox_cleanup_parser.add_argument("--batch-size", type=int, default=1000, help="Batch size for cleanup operations.")
     return parser
 
 
 def _run_collect_contract(args: argparse.Namespace) -> int:
-    del args
-    print("Command 'collect' is not implemented yet.", file=sys.stderr)
-    return EXIT_UNSUPPORTED
+    try:
+        return asyncio.run(_run_collect(args.once))
+    except Exception as exc:
+        print(f"collect command failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+        return EXIT_ERROR
+
+
+async def _run_collect(once: bool) -> int:
+    if once:
+        result = await run_collect_once()
+        print(
+            "Collection completed: "
+            f"scheduled={result.scheduled_count} processed={result.processed_count} "
+            f"failed={result.failed_count} published={result.published_count}"
+        )
+        return EXIT_SUCCESS
+
+    from market_data_service.runtime.container import build_runtime_container
+    container = await build_runtime_container()
+    try:
+        print("Starting collection loop...")
+        await container.workers.market_data_scheduler.run_forever()
+        return EXIT_SUCCESS
+    finally:
+        await container.close()
+
+
+async def _run_outbox_cleanup(args: argparse.Namespace) -> int:
+    try:
+        deleted_count = await run_outbox_cleanup(batch_size=args.batch_size)
+        print(f"Outbox cleanup completed. Deleted {deleted_count} events.")
+        return EXIT_SUCCESS
+    except Exception as exc:
+        print(f"outbox:cleanup failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+        return EXIT_ERROR
 
 
 def _run_candles_get_contract(args: argparse.Namespace) -> int:
     try:
-        _build_candles_get_contract(args)
+        from_value, to_value, symbols, timeframes, provider = _build_candles_get_contract(args)
     except Exception as exc:
         print(f"candles:get failed: {type(exc).__name__}: {exc}", file=sys.stderr)
         return EXIT_ERROR
 
-    print("Command 'candles:get' is not implemented yet.", file=sys.stderr)
-    return EXIT_UNSUPPORTED
+    from market_data_service.application.services.candles_get_fetch_service import CandlesGetCommand
+    from market_data_service.runtime.maintenance import run_candles_get
+
+    command = CandlesGetCommand(
+        from_time=from_value,
+        to_time=to_value,
+        symbols=symbols,
+        timeframes=timeframes,
+        provider=provider,
+    )
+
+    try:
+        result = asyncio.run(run_candles_get(command))
+    except Exception as exc:
+        print(f"candles:get failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+        return EXIT_ERROR
+
+    print(json.dumps(_build_candles_get_json(result), sort_keys=True, separators=(",", ":")))
+    return EXIT_SUCCESS
 
 
 def _build_candles_get_contract(
@@ -212,6 +269,37 @@ def _parse_period_duration(period: str) -> timedelta:
     raise ValueError("period unit must be one of: h, d, w, mo, y")
 
 
+def _build_candles_get_json(result) -> dict[str, object]:
+    return {
+        "from_time": _datetime_to_json(result.from_time),
+        "to_time": _datetime_to_json(result.to_time),
+        "symbols": list(result.symbols),
+        "timeframes": list(result.timeframes),
+        "provider": result.provider,
+        "fetched_count": result.total_fetched_count,
+        "inserted_count": result.total_inserted_count,
+        "skipped_duplicate_count": result.total_skipped_duplicate_count,
+        "unresolved_symbols": list(result.unresolved_symbols),
+        "items": [_candles_get_item_to_json(item) for item in result.items],
+    }
+
+
+def _candles_get_item_to_json(item) -> dict[str, object]:
+    return {
+        "source": item.source.value,
+        "canonical_symbol": item.canonical_symbol,
+        "provider_symbol": item.provider_symbol,
+        "timeframe": item.timeframe,
+        "fetched_count": item.fetched_count,
+        "inserted_count": item.inserted_count,
+        "skipped_duplicate_count": item.skipped_duplicate_count,
+    }
+
+
+def _datetime_to_json(value: datetime) -> str:
+    return value.astimezone(UTC).isoformat()
+
+
 def _run_db_check() -> int:
     try:
         url = make_url(get_database_url())
@@ -249,7 +337,8 @@ async def _run_scheduler_once() -> int:
 
     print(
         "Scheduler run-once completed: "
-        f"created={result.created_count} skipped={result.skipped_count}"
+        f"scheduled={result.scheduled_count} processed={result.processed_count} "
+        f"failed={result.failed_count} published={result.published_count}"
     )
     return EXIT_SUCCESS
 

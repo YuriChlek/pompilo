@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import datetime
 
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from market_data_service.domain.candle_models import CanonicalCandle
+from market_data_service.domain.enums import MarketDataSource
 from market_data_service.persistence.tables import market_candles
 
 
@@ -26,6 +29,28 @@ class CandleRepository:
         )
         result = await self.connection.execute(statement)
         return int(result.rowcount or 0)
+
+    async def get_latest_closed_candle_time(
+        self,
+        *,
+        source: MarketDataSource,
+        canonical_symbol: str,
+        timeframe: str,
+    ) -> datetime | None:
+        query = (
+            select(market_candles.c.open_time)
+            .where(
+                market_candles.c.source == source.value,
+                market_candles.c.canonical_symbol == canonical_symbol,
+                market_candles.c.timeframe == timeframe,
+                market_candles.c.is_closed.is_(True),
+            )
+            .order_by(market_candles.c.open_time.desc())
+            .limit(1)
+        )
+        result = await self.connection.execute(query)
+        row = result.fetchone()
+        return row[0] if row else None
 
 
 def _candle_to_row(candle: CanonicalCandle) -> dict[str, object]:

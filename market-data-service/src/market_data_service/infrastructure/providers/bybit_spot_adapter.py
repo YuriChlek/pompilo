@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
-from market_data_service.config.provider_config import BinanceSpotProviderConfig
+from market_data_service.config.provider_config import BybitSpotProviderConfig
 from market_data_service.domain.candle_models import CanonicalCandle
 from market_data_service.domain.candle_normalizer import normalize_closed_candle
 from market_data_service.domain.candle_validation import validate_closed_candle
@@ -18,13 +18,13 @@ from market_data_service.infrastructure.providers.provider_errors import (
 from market_data_service.infrastructure.providers.circuit_breaker import CircuitBreaker, CircuitBreakerOpenError
 from market_data_service.observability.metrics import MetricsRecorder, record_provider_error
 
-BINANCE_KLINES_PATH = "/api/v3/klines"
+BYBIT_KLINES_PATH = "/v5/market/kline"
 RETRYABLE_HTTP_STATUSES = {408, 425, 429, 500, 502, 503, 504}
 
-_TIMEFRAME_TO_BINANCE_INTERVAL = {
-    "1h": "1h",
-    "4h": "4h",
-    "1d": "1d",
+_TIMEFRAME_TO_BYBIT_INTERVAL = {
+    "1h": "60",
+    "4h": "240",
+    "1d": "D",
 }
 
 
@@ -48,16 +48,16 @@ class HttpxJsonTransport:
         except httpx.HTTPStatusError as exc:
             status_code = exc.response.status_code
             if status_code in RETRYABLE_HTTP_STATUSES:
-                raise RetryableProviderError(f"Binance retryable HTTP status: {status_code}") from exc
-            raise NonRetryableProviderError(f"Binance non-retryable HTTP status: {status_code}") from exc
+                raise RetryableProviderError(f"Bybit retryable HTTP status: {status_code}") from exc
+            raise NonRetryableProviderError(f"Bybit non-retryable HTTP status: {status_code}") from exc
         except (httpx.TimeoutException, httpx.TransportError) as exc:
-            raise RetryableProviderError("Binance request failed with retryable transport error") from exc
+            raise RetryableProviderError("Bybit request failed with retryable transport error") from exc
 
 
-class BinanceSpotAdapter:
+class BybitSpotAdapter:
     def __init__(
         self,
-        config: BinanceSpotProviderConfig,
+        config: BybitSpotProviderConfig,
         *,
         transport: JsonTransport | None = None,
         now_provider=None,
@@ -112,8 +112,8 @@ class BinanceSpotAdapter:
                 self.circuit_breaker.record_failure()
             record_provider_error(
                 self.metrics_recorder,
-                source=MarketDataSource.BINANCE_SPOT,
-                provider="BINANCE_SPOT",
+                source=MarketDataSource.BYBIT_SPOT,
+                provider="BYBIT_SPOT",
                 error_code=type(exc).__name__,
                 rate_limited="429" in str(exc),
             )
@@ -128,18 +128,18 @@ class BinanceSpotAdapter:
         return sorted(candles, key=lambda candle: candle.open_time)
 
     async def get_server_time(self) -> datetime:
-        payload = await self.transport.get_json("/api/v3/time", {})
-        if not isinstance(payload, dict) or "serverTime" not in payload:
-            raise RetryableProviderError("Binance server time response is malformed")
-        return _datetime_from_millis(payload["serverTime"])
+        payload = await self.transport.get_json("/v5/market/time", {})
+        if not isinstance(payload, dict) or "time" not in payload:
+            raise RetryableProviderError("Bybit server time response is malformed")
+        return _datetime_from_millis(payload["time"])
 
     def _validate_provider_symbol(self, provider_symbol: ProviderSymbol, timeframe: str) -> None:
-        if provider_symbol.source != MarketDataSource.BINANCE_SPOT:
-            raise NonRetryableProviderError(f"Unsupported source for Binance adapter: {provider_symbol.source}")
+        if provider_symbol.source != MarketDataSource.BYBIT_SPOT:
+            raise NonRetryableProviderError(f"Unsupported source for Bybit adapter: {provider_symbol.source}")
         if not provider_symbol.is_trading:
             raise NonRetryableProviderError(f"Provider symbol is not trading: {provider_symbol.provider_symbol}")
-        if timeframe not in _TIMEFRAME_TO_BINANCE_INTERVAL:
-            raise NonRetryableProviderError(f"Unsupported Binance timeframe: {timeframe}")
+        if timeframe not in _TIMEFRAME_TO_BYBIT_INTERVAL:
+            raise NonRetryableProviderError(f"Unsupported Bybit timeframe: {timeframe}")
         if not provider_symbol.supports_all_timeframes((timeframe,)):
             raise NonRetryableProviderError(f"Provider symbol does not support timeframe: {timeframe}")
 
@@ -152,16 +152,19 @@ class BinanceSpotAdapter:
         to_time: datetime,
     ) -> list[Sequence[object]]:
         rows: list[Sequence[object]] = []
-        current_start = from_time
-        interval = _TIMEFRAME_TO_BINANCE_INTERVAL[timeframe]
-        while current_start < to_time:
+        interval = _TIMEFRAME_TO_BYBIT_INTERVAL[timeframe]
+        current_end_ms = _millis_from_datetime(to_time) - 1
+        start_ms = _millis_from_datetime(from_time)
+
+        while current_end_ms >= start_ms:
             payload = await self.transport.get_json(
-                BINANCE_KLINES_PATH,
+                BYBIT_KLINES_PATH,
                 {
+                    "category": "spot",
                     "symbol": symbol,
                     "interval": interval,
-                    "startTime": _millis_from_datetime(current_start),
-                    "endTime": _millis_from_datetime(to_time),
+                    "start": start_ms,
+                    "end": current_end_ms,
                     "limit": self.config.max_limit,
                 },
             )
@@ -170,22 +173,36 @@ class BinanceSpotAdapter:
                 break
             rows.extend(page)
 
-            last_open_time = _datetime_from_millis(page[-1][0])
-            next_start = last_open_time + get_timeframe_duration(timeframe)
-            if next_start <= current_start:
-                raise RetryableProviderError("Binance kline pagination did not advance")
-            current_start = next_start
+            # page is sorted descending (newest first), so page[-1] is the oldest candle in the page
+            oldest_open_ms = int(page[-1][0])
+            next_end_ms = oldest_open_ms - 1
+            if next_end_ms >= current_end_ms:
+                raise RetryableProviderError("Bybit kline pagination did not advance")
+            current_end_ms = next_end_ms
             if len(page) < self.config.max_limit:
                 break
         return rows
 
     def _coerce_kline_payload(self, payload: object) -> list[Sequence[object]]:
-        if not isinstance(payload, list):
-            raise RetryableProviderError("Binance kline response is malformed")
+        if not isinstance(payload, dict):
+            raise RetryableProviderError("Bybit kline response is malformed")
+        ret_code = payload.get("retCode")
+        if ret_code is not None and ret_code != 0:
+            msg = payload.get("retMsg") or "unknown error"
+            # Rate limit/IP limit/server busy/internal error/timeout codes
+            if ret_code in {10001, 10002, 10006, 10010, 10016, 10018}:
+                raise RetryableProviderError(f"Bybit API retryable error: {msg} (code: {ret_code})")
+            raise NonRetryableProviderError(f"Bybit API non-retryable error: {msg} (code: {ret_code})")
+        result = payload.get("result")
+        if not isinstance(result, dict) or "list" not in result:
+            raise RetryableProviderError("Bybit kline response is malformed")
+        klist = result["list"]
+        if not isinstance(klist, list):
+            raise RetryableProviderError("Bybit kline response is malformed")
         rows: list[Sequence[object]] = []
-        for row in payload:
-            if not isinstance(row, Sequence) or isinstance(row, (str, bytes)) or len(row) < 11:
-                raise RetryableProviderError("Binance kline row is malformed")
+        for row in klist:
+            if not isinstance(row, Sequence) or isinstance(row, (str, bytes)) or len(row) < 7:
+                raise RetryableProviderError("Bybit kline row is malformed")
             rows.append(row)
         return rows
 
@@ -196,11 +213,6 @@ class BinanceSpotAdapter:
         row: Sequence[object],
     ) -> CanonicalCandle:
         open_time = _datetime_from_millis(row[0])
-        expected_close_time = open_time + get_timeframe_duration(timeframe)
-        provider_close_time = _datetime_from_millis(row[6] + 1 if isinstance(row[6], int) else int(str(row[6])) + 1)
-        if provider_close_time != expected_close_time:
-            raise RetryableProviderError("Binance kline close_time does not match timeframe duration")
-
         candle = normalize_closed_candle(
             {
                 "open_time": open_time,
@@ -209,12 +221,12 @@ class BinanceSpotAdapter:
                 "low": row[3],
                 "close": row[4],
                 "volume": row[5],
-                "quote_volume": row[7],
-                "trades_count": row[8],
-                "taker_buy_base_volume": row[9],
-                "taker_buy_quote_volume": row[10],
+                "quote_volume": row[6],
+                "trades_count": None,
+                "taker_buy_base_volume": None,
+                "taker_buy_quote_volume": None,
             },
-            source=MarketDataSource.BINANCE_SPOT,
+            source=MarketDataSource.BYBIT_SPOT,
             canonical_symbol=provider_symbol.canonical_symbol,
             provider_symbol=provider_symbol.provider_symbol,
             timeframe=timeframe,

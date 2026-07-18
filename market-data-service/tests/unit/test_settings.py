@@ -19,6 +19,7 @@ class MarketDataServiceSettingsTests(unittest.TestCase):
         self.assertEqual(settings.redis.redis_url, "redis://localhost:6379/0")
         self.assertEqual(settings.redis.stream_name, "market-data-events")
         self.assertEqual(settings.provider.rest_endpoint, "https://api.binance.com")
+        self.assertEqual(settings.bybit_provider.rest_endpoint, "https://api.bybit.com")
         self.assertEqual(settings.provider_mode, "binance")
         self.assertEqual(settings.scheduler.provider_symbols, ("ETHUSDT",))
         self.assertEqual(settings.scheduler.timeframes, ("1h", "4h", "1d"))
@@ -28,6 +29,15 @@ class MarketDataServiceSettingsTests(unittest.TestCase):
         self.assertEqual(settings.shutdown.timeout_seconds, 30.0)
         self.assertEqual(settings.backfill.batch_size_candles, 500)
         self.assertEqual(settings.backfill.max_concurrency, 1)
+        self.assertEqual(settings.provider_priority, ("binance", "bybit"))
+        self.assertEqual(settings.availability.availability_ttl_hours, 24.0)
+        self.assertEqual(settings.availability.unsupported_recheck_hours, 24.0)
+        self.assertEqual(settings.availability.temporary_error_recheck_minutes, 5.0)
+        self.assertEqual(settings.retention.redis_event_retention_days, 2)
+        self.assertEqual(settings.retention.outbox_retention_days, 5)
+        self.assertEqual(settings.bootstrap.bootstrap_lookback_years, 2)
+        self.assertEqual(settings.bootstrap.bootstrap_max_chunks_per_tick, 10)
+        self.assertEqual(settings.bootstrap.provider_max_concurrency, 8)
         self.assertTrue(settings.scheduler_enabled)
         self.assertTrue(settings.outbox_publisher_enabled)
 
@@ -51,6 +61,11 @@ class MarketDataServiceSettingsTests(unittest.TestCase):
                 "MARKET_DATA_PROVIDER_MODE": "fixture",
                 "MARKET_DATA_SCHEDULER_ENABLED": "false",
                 "MARKET_DATA_OUTBOX_PUBLISHER_ENABLED": "false",
+                "MARKET_DATA_REDIS_EVENT_RETENTION_DAYS": "3",
+                "MARKET_DATA_OUTBOX_RETENTION_DAYS": "7",
+                "MARKET_DATA_COLLECT_BOOTSTRAP_LOOKBACK_YEARS": "3",
+                "MARKET_DATA_COLLECT_BOOTSTRAP_MAX_CHUNKS_PER_TICK": "15",
+                "MARKET_DATA_PROVIDER_MAX_CONCURRENCY": "12",
             }
         )
 
@@ -68,6 +83,11 @@ class MarketDataServiceSettingsTests(unittest.TestCase):
         self.assertEqual(settings.shutdown.timeout_seconds, 15.0)
         self.assertEqual(settings.backfill.batch_size_candles, 250)
         self.assertEqual(settings.backfill.max_concurrency, 2)
+        self.assertEqual(settings.retention.redis_event_retention_days, 3)
+        self.assertEqual(settings.retention.outbox_retention_days, 7)
+        self.assertEqual(settings.bootstrap.bootstrap_lookback_years, 3)
+        self.assertEqual(settings.bootstrap.bootstrap_max_chunks_per_tick, 15)
+        self.assertEqual(settings.bootstrap.provider_max_concurrency, 12)
         self.assertFalse(settings.scheduler_enabled)
         self.assertFalse(settings.outbox_publisher_enabled)
 
@@ -98,6 +118,23 @@ class MarketDataServiceSettingsTests(unittest.TestCase):
 
         self.assertEqual(database_url, "postgresql+asyncpg://admin:admin_pass@postgres:5432/pampilo_db")
 
+    def test_settings_custom_provider_priority(self) -> None:
+        settings = load_settings({"MARKET_DATA_PROVIDER_PRIORITY": "bybit,binance"})
+        self.assertEqual(settings.provider_priority, ("bybit", "binance"))
+
+        settings = load_settings({"MARKET_DATA_PROVIDER_PRIORITY": "bybit"})
+        self.assertEqual(settings.provider_priority, ("bybit",))
+
+    def test_settings_redis_maxlen_derivation(self) -> None:
+        settings = load_settings({})
+        self.assertEqual(settings.redis.maxlen, 100000)
+
+        settings = load_settings({"MARKET_DATA_REDIS_EVENT_RETENTION_DAYS": "3"})
+        self.assertEqual(settings.redis.maxlen, 150000)
+
+        settings = load_settings({"MARKET_DATA_OUTBOX_STREAM_MAXLEN": "5000"})
+        self.assertEqual(settings.redis.maxlen, 5000)
+
     def test_invalid_env_values_raise_clear_settings_errors(self) -> None:
         invalid_env_cases = (
             ({"MARKET_DATA_REDIS_URL": "http://redis:6379"}, "MARKET_DATA_REDIS_URL"),
@@ -111,6 +148,14 @@ class MarketDataServiceSettingsTests(unittest.TestCase):
             ({"MARKET_DATA_BACKFILL_BATCH_CANDLES": "0"}, "MARKET_DATA_BACKFILL_BATCH_CANDLES"),
             ({"MARKET_DATA_BACKFILL_MAX_CONCURRENCY": "0"}, "MARKET_DATA_BACKFILL_MAX_CONCURRENCY"),
             ({"MARKET_DATA_PROVIDER_MODE": "paper"}, "MARKET_DATA_PROVIDER_MODE"),
+            ({"MARKET_DATA_PROVIDER_PRIORITY": "invalid-provider"}, "Unsupported provider in priority"),
+            ({"MARKET_DATA_PROVIDER_PRIORITY": "binance,bybit,binance"}, "Duplicate providers in priority list"),
+            ({"MARKET_DATA_PROVIDER_AVAILABILITY_TTL_HOURS": "0"}, "MARKET_DATA_PROVIDER_AVAILABILITY_TTL_HOURS"),
+            ({"MARKET_DATA_UNSUPPORTED_SYMBOL_RECHECK_HOURS": "-1"}, "MARKET_DATA_UNSUPPORTED_SYMBOL_RECHECK_HOURS"),
+            ({"MARKET_DATA_TEMPORARY_ERROR_RECHECK_MINUTES": "abc"}, "MARKET_DATA_TEMPORARY_ERROR_RECHECK_MINUTES"),
+            ({"MARKET_DATA_REDIS_EVENT_RETENTION_DAYS": "0"}, "MARKET_DATA_REDIS_EVENT_RETENTION_DAYS"),
+            ({"MARKET_DATA_REDIS_EVENT_RETENTION_DAYS": "abc"}, "MARKET_DATA_REDIS_EVENT_RETENTION_DAYS"),
+            ({"MARKET_DATA_OUTBOX_RETENTION_DAYS": "-5"}, "MARKET_DATA_OUTBOX_RETENTION_DAYS"),
         )
 
         for env, expected_message in invalid_env_cases:

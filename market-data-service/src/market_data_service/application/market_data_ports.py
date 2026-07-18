@@ -76,6 +76,7 @@ class SyncCompletionPort(Protocol):
         batch_status: MarketDataBatchStatus,
         rows_fetched: int,
         dry_run: bool,
+        create_events: bool,
         gap_count: int,
         first_open_time: datetime | None,
         last_close_time: datetime | None,

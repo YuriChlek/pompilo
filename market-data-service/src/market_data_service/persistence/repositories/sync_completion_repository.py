@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from market_data_service.domain.candle_models import CanonicalCandle
 from market_data_service.domain.enums import CandleRangeStatus, MarketDataBatchStatus, MarketDataSource
 from market_data_service.domain.events.candle_batch_ready import CandleBatchReady
+from market_data_service.domain.events.market_data_candles_collected import MarketDataCandlesCollectedEvent
 from market_data_service.domain.snapshot_models import SnapshotCreationResult
 from market_data_service.persistence.repositories.batch_repository import BatchRepository
 from market_data_service.persistence.repositories.candle_repository import CandleRepository
@@ -34,6 +35,7 @@ class SyncCompletionRepository:
         batch_status: MarketDataBatchStatus,
         rows_fetched: int,
         dry_run: bool,
+        create_events: bool = False,
         gap_count: int,
         first_open_time: datetime | None,
         last_close_time: datetime | None,
@@ -64,9 +66,14 @@ class SyncCompletionRepository:
                     batch_id=batch_id,
                     completeness_status=CandleRangeStatus.COMPLETE,
                 )
-                await self.outbox_repository.create_pending_candle_batch_ready(
-                    CandleBatchReady.from_snapshot(snapshot_result.snapshot)
-                )
+                if create_events:
+                    await self.outbox_repository.create_pending_candle_batch_ready(
+                        CandleBatchReady.from_snapshot(snapshot_result.snapshot)
+                    )
+                    provider_symbol = candles[0].provider_symbol if candles else canonical_symbol.replace("/", "")
+                    await self.outbox_repository.create_pending_market_data_candles_collected(
+                        MarketDataCandlesCollectedEvent.from_snapshot(snapshot_result.snapshot, provider_symbol)
+                    )
 
             return inserted_count, skipped_duplicate_count, snapshot_result
 

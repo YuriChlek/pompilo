@@ -9,7 +9,7 @@ python -m market_data_service.main candles:get --period 100d [--symbols BTCUSDT]
 
 Перша команда запускає збір свічок з доступного provider-а і записує їх у БД. Під час першого bootstrap/backfill history sync події не створюються і боти не запускаються. Після завершеного bootstrap команда створює події тільки для live/incremental ranges; `bot-platform-service` підхоплює ці події і запускає enabled ботів для відповідного symbol/timeframe.
 
-Друга команда отримує свічки з біржі за вказаний lookback period від поточного UTC часу назад. Наприклад, `--period 1d`, `--period 100d`, `--period 1y`. За замовчуванням `--provider auto` використовує provider resolver: якщо symbol є на Binance, дані беруться з Binance; якщо symbol відсутній на Binance, але доступний на Bybit, дані беруться з Bybit. Команда потрібна для ручної перевірки provider-а, діагностики і точкового отримання даних.
+Друга команда отримує свічки з біржі за вказаний lookback period від поточного UTC часу назад і записує отримані candles у БД як ручне завантаження тестових/історичних даних. Наприклад, `--period 1d`, `--period 100d`, `--period 1y`. За замовчуванням `--provider auto` використовує provider resolver: якщо symbol є на Binance, дані беруться з Binance; якщо symbol відсутній на Binance, але доступний на Bybit, дані беруться з Bybit. Команда потрібна для ручного завантаження тестових даних, перевірки provider-а, діагностики і точкового поповнення candles. `candles:get` не створює market-data events, не публікує Redis events і не запускає торгових ботів.
 
 Якщо для `candles:get` не передати символи або таймфрейми явно, команда використовує symbols/timeframes з конфігурації сервісу.
 
@@ -66,15 +66,17 @@ python -m market_data_service.main collect
 - звертається до provider-а, визначеного через `--provider`;
 - у режимі `--provider auto` використовує provider resolver і priority list;
 - отримує candles за обовʼязковий lookback period `--period`, який рахується назад від поточного UTC часу;
+- записує отримані candles у БД через idempotent upsert;
 - приймає опційні `--symbols` і `--timeframes`;
 - якщо `--symbols` не передано, використовує `MARKET_DATA_PROVIDER_SYMBOLS`;
 - якщо `--timeframes` не передано, використовує `MARKET_DATA_TIMEFRAMES`;
 - підтримує batch fetch для всіх configured symbol/timeframe pairs;
-- за замовчуванням виводить результат у stdout у JSON Lines або JSON array;
-- не змінює БД без явного прапора;
-- може отримати прапор `--persist` тільки якщо буде ухвалено, що ця команда також потрібна як ручний backfill path.
+- виводить у stdout JSON summary із range, provider/source, кількістю fetched/inserted/skipped candles і помилками;
+- не створює market-data outbox events;
+- не публікує Redis events;
+- не запускає торгових ботів.
 
-Рекомендований варіант для першої реалізації: `candles:get` тільки читає з provider-а і не пише у БД.
+`candles:get` є manual test-data/backfill load path. Він має бути безпечним для повторного запуску: duplicate candles не мають створювати дублікати і не мають запускати event-driven bot flow.
 
 ### 1.2. Internal commands
 
@@ -610,22 +612,29 @@ Acceptance criteria:
 
 ### Етап 13. Реалізувати `candles:get` fetch service
 
-Мета: виконувати manual fetch candles за lookback period без запису в БД.
+Мета: виконувати manual fetch candles за lookback period і записувати отримані candles у БД як тестові/історичні дані без запуску event-driven bot flow.
 
 Завдання:
 
 - додати service для fetch за `[now - period, now)`;
 - підтримати explicit `--symbols` і `--timeframes`;
 - підтримати config mode, якщо symbols/timeframes не передані;
-- виводити результат у JSON;
-- додати tests для period/range validation і JSON output.
+- записувати отримані candles у БД через idempotent upsert;
+- не створювати market-data outbox events для цього manual load path;
+- не публікувати Redis events;
+- не запускати торгових ботів;
+- виводити результат у JSON summary;
+- додати tests для period/range validation, DB write/upsert, JSON output і відсутності event/outbox side effects.
 
 Acceptance criteria:
 
-- команда повертає candles за period-derived range `[now - period, now)`;
+- команда отримує candles за period-derived range `[now - period, now)`;
+- команда записує отримані candles у БД;
 - команда без `--symbols` використовує configured symbols;
 - команда без `--timeframes` використовує configured timeframes;
-- команда не пише у БД.
+- повторний запуск не створює duplicate candles;
+- команда не створює outbox/Redis events;
+- команда не запускає ботів.
 
 ### Етап 14. Формалізувати market-data event model
 
@@ -1179,7 +1188,7 @@ One-shot collect:
 python -m market_data_service.main collect --once
 ```
 
-Fetch candles from active provider:
+Load test candles from active provider into DB without bot events:
 
 ```bash
 python -m market_data_service.main candles:get \
@@ -1189,7 +1198,7 @@ python -m market_data_service.main candles:get \
   --provider auto
 ```
 
-Fetch candles for configured symbols/timeframes:
+Load test candles for configured symbols/timeframes into DB without bot events:
 
 ```bash
 export MARKET_DATA_PROVIDER_SYMBOLS=BTCUSDT,ETHUSDT,HYPEUSDT
@@ -1273,7 +1282,7 @@ python -m bot_platform_service.main bot:modules:sync
 - candles range lookup покритий індексом `source/canonical_symbol/timeframe/open_time`;
 - latest complete snapshot lookup покритий індексом `market_snapshots_latest_complete_idx`;
 - representative `EXPLAIN ANALYZE` для candles range і latest snapshot lookup не показує sequential scan на великих таблицях;
-- `candles:get` отримує candles за період для explicit або configured symbols/timeframes;
+- `candles:get` отримує candles за період для explicit або configured symbols/timeframes, записує їх у БД і не створює bot-triggering events;
 - `candles:get --provider auto` використовує той самий provider resolver, що й `collect`;
 - `bot-platform-service` споживає market-data events і запускає matching enabled bots;
 - bot runs використовують `snapshot_id` з market-data event, а не випадковий latest snapshot;

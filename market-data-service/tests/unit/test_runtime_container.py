@@ -7,6 +7,7 @@ from market_data_service.infrastructure.providers.binance_spot_adapter import Bi
 from market_data_service.infrastructure.providers.fixture_candle_provider import FixtureCandleProvider
 from market_data_service.infrastructure.queues.redis_stream_broker import RedisStreamEventBroker
 from market_data_service.persistence.repositories.outbox_repository import OutboxRepository
+from market_data_service.persistence.repositories.collection_state_repository import CollectionStateRepository
 from market_data_service.persistence.repositories.symbol_registry_repository import SymbolRegistryRepository
 from market_data_service.persistence.repositories.sync_job_repository import SyncJobRepository
 from market_data_service.runtime.container import build_runtime_container
@@ -43,6 +44,7 @@ class RuntimeContainerTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(container.event_broker, RedisStreamEventBroker)
         self.assertIsInstance(container.repositories.sync_job, SyncJobRepository)
         self.assertIsInstance(container.repositories.outbox, OutboxRepository)
+        self.assertIsInstance(container.repositories.collection_state, CollectionStateRepository)
         self.assertIsInstance(container.repositories.symbol_registry, SymbolRegistryRepository)
         self.assertIsInstance(container.workers.market_data_scheduler, MarketDataSchedulerWorker)
         self.assertIsInstance(container.workers.outbox_publisher, OutboxPublisherWorker)
@@ -57,6 +59,11 @@ class RuntimeContainerTests(unittest.IsolatedAsyncioTestCase):
         self.assertIs(container.services.outbox_replay.outbox_store, container.repositories.outbox)
         self.assertIs(container.services.snapshot_read.snapshot_reader, container.repositories.snapshot)
         self.assertIs(container.services.symbol_registry_sync.repository, container.repositories.symbol_registry)
+        self.assertIsNotNone(container.services.symbol_resolver)
+        self.assertIsNotNone(container.services.candles_get_fetch)
+        self.assertIsNotNone(container.services.outbox_cleanup)
+        self.assertIsNotNone(container.services.candle_collection)
+        self.assertEqual(len(container.adapters), 2)
         self.assertEqual(container.workers.market_data_scheduler.poll_interval_seconds, 30.0)
 
         await container.close()

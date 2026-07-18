@@ -1,9 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Mapping
 
-from market_data_service.domain.enums import MarketDataSource, MarketSymbolStatus, ProviderSymbolStatus
+from market_data_service.domain.enums import (
+    MarketDataSource,
+    MarketSymbolStatus,
+    ProviderSymbolStatus,
+    ProviderSymbolAvailabilityStatus,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,3 +37,16 @@ class ProviderSymbol:
     @property
     def is_trading(self) -> bool:
         return self.status == ProviderSymbolStatus.TRADING
+
+
+@dataclass(frozen=True, slots=True)
+class ProviderSymbolAvailability:
+    source: MarketDataSource
+    requested_symbol: str
+    status: ProviderSymbolAvailabilityStatus
+    next_check_at: datetime
+    provider_symbol: str | None = None
+    first_seen_at: datetime | None = None
+    last_checked_at: datetime | None = None
+    failure_reason: str | None = None
+    metadata: Mapping[str, object] | None = None

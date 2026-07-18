@@ -23,6 +23,7 @@ MARKET_DATA_SCHEDULER_TICKS_TOTAL = "market_data_scheduler_ticks_total"
 MARKET_DATA_OUTBOX_EVENTS_FETCHED_TOTAL = "market_data_outbox_events_fetched_total"
 MARKET_DATA_OUTBOX_EVENTS_PUBLISHED_TOTAL = "market_data_outbox_events_published_total"
 MARKET_DATA_OUTBOX_EVENTS_FAILED_TOTAL = "market_data_outbox_events_failed_total"
+MARKET_DATA_OUTBOX_EVENTS_DELETED_TOTAL = "market_data_outbox_events_deleted_total"
 
 STABLE_METRIC_NAMES = (
     MARKET_DATA_SYNC_DURATION_SECONDS,
@@ -41,6 +42,7 @@ STABLE_METRIC_NAMES = (
     MARKET_DATA_OUTBOX_EVENTS_FETCHED_TOTAL,
     MARKET_DATA_OUTBOX_EVENTS_PUBLISHED_TOTAL,
     MARKET_DATA_OUTBOX_EVENTS_FAILED_TOTAL,
+    MARKET_DATA_OUTBOX_EVENTS_DELETED_TOTAL,
 )
 
 
@@ -162,3 +164,9 @@ def record_outbox_publish_batch(
     recorder.record(MetricSample(MARKET_DATA_OUTBOX_EVENTS_FETCHED_TOTAL, float(fetched_count), labels, "counter"))
     recorder.record(MetricSample(MARKET_DATA_OUTBOX_EVENTS_PUBLISHED_TOTAL, float(published_count), labels, "counter"))
     recorder.record(MetricSample(MARKET_DATA_OUTBOX_EVENTS_FAILED_TOTAL, float(failed_count), labels, "counter"))
+
+
+def record_outbox_cleanup(recorder: MetricsRecorder | None, *, deleted_count: int) -> None:
+    if recorder is None:
+        return
+    recorder.record(MetricSample(MARKET_DATA_OUTBOX_EVENTS_DELETED_TOTAL, float(deleted_count), {}, "counter"))

@@ -3,24 +3,26 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 
-from market_data_service.application.services.market_data_scheduler_service import MarketDataSchedulerService
-from market_data_service.domain.scheduler_models import SchedulerTickResult
+from market_data_service.application.services.candle_collection_service import (
+    CandleCollectionService,
+    CollectionResult,
+)
 
 
 class MarketDataSchedulerWorker:
     def __init__(
         self,
-        scheduler_service: MarketDataSchedulerService,
+        candle_collection: CandleCollectionService,
         *,
         poll_interval_seconds: float,
         should_stop: Callable[[], bool] | None = None,
     ) -> None:
-        self.scheduler_service = scheduler_service
+        self.candle_collection = candle_collection
         self.poll_interval_seconds = poll_interval_seconds
         self.should_stop = should_stop or (lambda: False)
 
-    async def run_once(self) -> SchedulerTickResult:
-        return await self.scheduler_service.tick()
+    async def run_once(self) -> CollectionResult:
+        return await self.candle_collection.collect()
 
     async def run_forever(self) -> None:
         while not self.should_stop():
