@@ -16,6 +16,7 @@ class PersistentBackendStage14SnapshotContractSmokeTests(unittest.TestCase):
 
         self.assertIn('SNAPSHOT_CONTRACT_VERSION = "market-snapshot.v1"', service)
         self.assertIn("GET /snapshots/latest", document)
+        self.assertIn("GET /snapshots/{snapshot_id}", document)
         self.assertIn("market-snapshot.v1", document)
         self.assertIn("Breaking response changes require a new endpoint or contract version", document)
         self.assertIn("Bot Platform must not read internal", document)
@@ -27,6 +28,9 @@ class PersistentBackendStage14SnapshotContractSmokeTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
 
         self.assertIn("/snapshots/latest", http_server)
+        self.assertIn("/snapshots/", http_server)
         self.assertIn("max_age_seconds", http_server)
+        self.assertIn("snapshot_by_id", http_server)
         self.assertIn("get_latest_complete_snapshot", repository)
+        self.assertIn("get_snapshot", repository)
         self.assertIn("CandleRangeStatus.COMPLETE", repository)

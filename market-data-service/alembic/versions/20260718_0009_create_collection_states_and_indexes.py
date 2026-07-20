@@ -29,12 +29,6 @@ def upgrade() -> None:
         schema=MARKET_DATA_SCHEMA,
     )
     op.create_index(
-        "market_candles_source_symbol_timeframe_open_time_idx",
-        "market_candles",
-        ["source", "canonical_symbol", "timeframe", "open_time"],
-        schema=MARKET_DATA_SCHEMA,
-    )
-    op.create_index(
         "market_snapshots_latest_complete_idx",
         "market_snapshots",
         [
@@ -52,9 +46,4 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_index("market_snapshots_latest_complete_idx", table_name="market_snapshots", schema=MARKET_DATA_SCHEMA)
-    op.drop_index(
-        "market_candles_source_symbol_timeframe_open_time_idx",
-        table_name="market_candles",
-        schema=MARKET_DATA_SCHEMA,
-    )
     op.drop_table("collection_states", schema=MARKET_DATA_SCHEMA)

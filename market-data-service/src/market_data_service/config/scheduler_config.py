@@ -22,7 +22,10 @@ def get_scheduler_config() -> SchedulerConfig:
     timeframes = _parse_csv(os.getenv("MARKET_DATA_TIMEFRAMES", "1h,4h,1d"), lowercase=True)
     _validate_supported_timeframes(timeframes)
     jitter_seconds = _parse_non_negative_int("MARKET_DATA_SCHEDULER_JITTER_SECONDS", default="30")
-    poll_interval_seconds = _parse_positive_float("MARKET_DATA_SCHEDULER_POLL_INTERVAL_SECONDS", default="30")
+    poll_interval_seconds = _parse_positive_float(
+        "MARKET_DATA_COLLECT_POLL_INTERVAL_SECONDS",
+        default=os.getenv("MARKET_DATA_SCHEDULER_POLL_INTERVAL_SECONDS", "30"),
+    )
 
     return SchedulerConfig(
         source=MarketDataSource(os.getenv("MARKET_DATA_SOURCE", MarketDataSource.BINANCE_SPOT.value)),

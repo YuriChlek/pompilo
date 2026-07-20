@@ -10,12 +10,17 @@ from urllib.request import urlopen
 from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
 
 from bot_platform_service.application import BotPlatformRunnerService
+from bot_platform_service.application.market_data_event_consumer_service import MarketDataEventConsumerService
+from bot_platform_service.application.market_data_event_run_dispatcher_service import MarketDataEventRunDispatcherService
 from bot_platform_service.config.database_config import get_database_url
 from bot_platform_service.config.settings import BotPlatformSettings
+from bot_platform_service.infrastructure.market_data import build_redis_market_data_event_consumer
 from bot_platform_service.infrastructure.market_data.http_snapshot_client import MarketDataHttpSnapshotClient
 from bot_platform_service.persistence.repositories.bot_module_repository import BotModuleRepository
 from bot_platform_service.registry import BotModuleRegistry, discover_and_register_trading_bots
 from bot_platform_service.runtime import BotPlatformHttpServer, build_runtime_container
+from bot_platform_service.observability.structured_logging import JsonStructuredLogger
+from bot_platform_service.workers import MarketDataEventConsumerWorker
 from bot_platform_service.workers.bot_platform_runner import BotPlatformRunner
 
 
@@ -69,19 +74,61 @@ async def run_runner(settings: BotPlatformSettings | None = None) -> None:
         service=service,
         poll_interval_seconds=resolved_settings.runtime.runner_poll_interval_seconds,
     )
+    event_consumer_worker = _build_market_data_event_consumer_worker(
+        resolved_settings,
+        idempotency_store=container.repositories.market_data_events,
+        instance_repository=container.repositories.bot_instances,
+        event_run_service=container.manual_run_service,
+    )
     stop_event = asyncio.Event()
     loop = asyncio.get_running_loop()
     for stop_signal in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(stop_signal, stop_event.set)
 
     runner_task = asyncio.create_task(runner.run_forever())
+    event_consumer_task = (
+        asyncio.create_task(event_consumer_worker.run_forever()) if event_consumer_worker is not None else None
+    )
     try:
         print("Bot Platform runner started.")
         await stop_event.wait()
     finally:
         runner.stop()
+        if event_consumer_worker is not None:
+            event_consumer_worker.stop()
         await runner_task
+        if event_consumer_task is not None:
+            await event_consumer_task
         await container.close()
+
+
+def _build_market_data_event_consumer_worker(
+    settings: BotPlatformSettings,
+    *,
+    idempotency_store,
+    instance_repository,
+    event_run_service,
+) -> MarketDataEventConsumerWorker | None:
+    if not settings.market_data_events.enabled:
+        return None
+    stream_consumer = build_redis_market_data_event_consumer(
+        redis_url=settings.market_data_events.redis_url,
+        stream_name=settings.market_data_events.stream_name,
+        consumer_group=settings.market_data_events.consumer_group,
+        consumer_name=settings.market_data_events.consumer_name,
+        read_count=settings.market_data_events.read_count,
+        block_milliseconds=settings.market_data_events.block_milliseconds,
+    )
+    return MarketDataEventConsumerWorker(
+        stream_consumer=stream_consumer,
+        service=MarketDataEventConsumerService(
+            logger=JsonStructuredLogger(),
+            idempotency_store=idempotency_store,
+            instance_repository=instance_repository,
+            run_dispatcher=MarketDataEventRunDispatcherService(event_run_service=event_run_service),
+        ),
+        retry_backoff_seconds=settings.market_data_events.retry_backoff_seconds,
+    )
 
 
 def run_healthcheck(url: str, *, timeout_seconds: float) -> int:

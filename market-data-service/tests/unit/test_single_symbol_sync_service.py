@@ -367,6 +367,72 @@ class SingleSymbolSyncServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(backfill_planning.calls[0]["parent_batch_id"], "batch-1")
         self.assertEqual(backfill_planning.calls[0]["missing_intervals"][0].open_time, datetime(2026, 7, 14, 9, tzinfo=UTC))
 
+    async def test_provider_limited_bootstrap_prefix_gap_is_accepted_without_backfill(self) -> None:
+        backfill_planning = FakeBackfillPlanning()
+        batch_tracker = FakeBatchTracker()
+        service = SingleSymbolSyncService(
+            symbol_registry=FakeRegistry(_provider_symbol()),
+            candle_provider=FakeProvider(
+                [
+                    _candle(datetime(2026, 7, 14, 10, tzinfo=UTC)),
+                    _candle(datetime(2026, 7, 14, 11, tzinfo=UTC)),
+                ]
+            ),
+            candle_writer=FakeWriter(inserted_count=2),
+            advisory_lock=FakeLock(),
+            batch_tracker=batch_tracker,
+            backfill_planning=backfill_planning,
+        )
+
+        result = await service.sync_closed_candles(
+            SyncClosedCandlesCommand(
+                source=MarketDataSource.BINANCE_SPOT,
+                provider_symbol="ETHUSDT",
+                timeframe="1h",
+                from_time=datetime(2026, 7, 14, 8, tzinfo=UTC),
+                to_time=datetime(2026, 7, 14, 12, tzinfo=UTC),
+                allow_provider_limited_history=True,
+            )
+        )
+
+        self.assertEqual(result.range_status, CandleRangeStatus.COMPLETE)
+        self.assertEqual(result.batch_status, MarketDataBatchStatus.COMPLETE)
+        self.assertEqual(result.gap_count, 0)
+        self.assertEqual(backfill_planning.calls, [])
+        self.assertEqual(batch_tracker.completed[0]["status"], MarketDataBatchStatus.COMPLETE)
+        self.assertEqual(batch_tracker.completed[0]["gap_count"], 0)
+
+    async def test_provider_limited_bootstrap_does_not_mask_internal_gap(self) -> None:
+        backfill_planning = FakeBackfillPlanning()
+        service = SingleSymbolSyncService(
+            symbol_registry=FakeRegistry(_provider_symbol()),
+            candle_provider=FakeProvider(
+                [
+                    _candle(datetime(2026, 7, 14, 8, tzinfo=UTC)),
+                    _candle(datetime(2026, 7, 14, 10, tzinfo=UTC)),
+                ]
+            ),
+            candle_writer=FakeWriter(inserted_count=2),
+            advisory_lock=FakeLock(),
+            batch_tracker=FakeBatchTracker(),
+            backfill_planning=backfill_planning,
+        )
+
+        result = await service.sync_closed_candles(
+            SyncClosedCandlesCommand(
+                source=MarketDataSource.BINANCE_SPOT,
+                provider_symbol="ETHUSDT",
+                timeframe="1h",
+                from_time=datetime(2026, 7, 14, 8, tzinfo=UTC),
+                to_time=datetime(2026, 7, 14, 11, tzinfo=UTC),
+                allow_provider_limited_history=True,
+            )
+        )
+
+        self.assertEqual(result.range_status, CandleRangeStatus.GAP_DETECTED)
+        self.assertEqual(len(backfill_planning.calls), 1)
+        self.assertEqual(backfill_planning.calls[0]["missing_intervals"][0].open_time, datetime(2026, 7, 14, 9, tzinfo=UTC))
+
     async def test_sync_does_not_request_backfill_for_latest_incomplete_range(self) -> None:
         backfill_planning = FakeBackfillPlanning()
         service = SingleSymbolSyncService(

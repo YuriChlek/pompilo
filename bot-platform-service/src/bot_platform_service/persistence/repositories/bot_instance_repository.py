@@ -337,6 +337,7 @@ class BotInstanceRepository:
                 )
             )
             .where(bot_instances.c.status == BotInstanceStatus.ENABLED.value)
+            .where(bot_instances.c.mode == BotMode.SIGNAL_ONLY.value)
             .where(bot_instance_configs.c.is_active.is_(True))
         )
         result = await self.connection.execute(statement)

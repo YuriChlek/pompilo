@@ -59,6 +59,35 @@ class SnapshotReadServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.status, "stale")
         self.assertEqual(result.candles, ())
 
+    async def test_snapshot_by_id_returns_ready_contract_without_latest_lookup(self) -> None:
+        snapshot = _snapshot(last_closed_candle_time=datetime(2026, 7, 14, 11, tzinfo=UTC))
+        reader = FakeSnapshotReader(snapshot=snapshot, candles=(_candle(),))
+        service = SnapshotReadService(
+            symbol_registry=FakeSymbolRegistry(),
+            snapshot_reader=reader,
+            now_provider=lambda: datetime(2026, 7, 14, 12, tzinfo=UTC),
+        )
+
+        result = await service.snapshot_by_id("snapshot-1")
+
+        self.assertEqual(result.status, "ready")
+        self.assertEqual(result.snapshot.id, "snapshot-1")
+        self.assertEqual(result.candles[0].candle_id, "candle-1")
+        self.assertEqual(reader.snapshot_ids, ["snapshot-1"])
+        self.assertEqual(reader.latest_calls, 0)
+
+    async def test_snapshot_by_id_returns_not_ready_for_missing_snapshot(self) -> None:
+        service = SnapshotReadService(
+            symbol_registry=FakeSymbolRegistry(),
+            snapshot_reader=FakeSnapshotReader(snapshot=None, candles=()),
+            now_provider=lambda: datetime(2026, 7, 14, 12, tzinfo=UTC),
+        )
+
+        result = await service.snapshot_by_id("missing-snapshot")
+
+        self.assertEqual(result.status, "not_ready")
+        self.assertEqual(result.reason, "snapshot is not available")
+
 
 def _query(*, max_age_seconds: int | None) -> LatestSnapshotQuery:
     return LatestSnapshotQuery(
@@ -127,8 +156,15 @@ class FakeSnapshotReader:
     def __init__(self, *, snapshot: MarketSnapshot | None, candles: tuple[CanonicalCandle, ...]) -> None:
         self.snapshot = snapshot
         self.candles = candles
+        self.snapshot_ids: list[str] = []
+        self.latest_calls = 0
+
+    async def get_snapshot(self, snapshot_id: str) -> MarketSnapshot | None:
+        self.snapshot_ids.append(snapshot_id)
+        return self.snapshot
 
     async def get_latest_complete_snapshot(self, **kwargs) -> MarketSnapshot | None:
+        self.latest_calls += 1
         return self.snapshot
 
     async def read_snapshot_candles(self, snapshot_id: str) -> list[CanonicalCandle]:

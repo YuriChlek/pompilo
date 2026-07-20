@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from bot_platform_service.application.runtime_context_service import RuntimeCapabilities, RuntimeContextFactory, RuntimeContextRequest
 from bot_platform_service.domain import (
+    BotMarketDataContext,
     BotInstanceConfig,
     BotInstanceStatus,
     BotMode,
@@ -136,6 +137,20 @@ class ManualRunCommand:
 
     instance_id: str
     idempotency_key: str | None = None
+    correlation_id: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class EventRunCommand:
+    """Market-data event triggered run request."""
+
+    instance_id: str
+    source: str
+    canonical_symbol: str
+    timeframe: str
+    snapshot_id: str
+    event_id: str
+    idempotency_key: str
     correlation_id: str | None = None
 
 
@@ -335,7 +350,181 @@ class ManualBotRunService:
             )
             return ManualRunResult(False, command.instance_id, run_id=run_id, status=BotRunStatus.FAILED, error_code="INSTANCE_RUN_FAILED")
 
-    async def _persist_signal(self, *, run_id: str, signal: BotSignal, correlation_id: str | None) -> str:
+    async def run_event_instance(self, command: EventRunCommand) -> ManualRunResult:
+        """Create and execute one signal-only run triggered by a market-data event."""
+
+        config = await self.instance_repository.get_instance_config(command.instance_id)
+        if config is None:
+            return ManualRunResult(False, command.instance_id, error_code="INSTANCE_NOT_FOUND")
+        if config.mode is not BotMode.SIGNAL_ONLY:
+            return ManualRunResult(False, command.instance_id, error_code="INSTANCE_MODE_NOT_SIGNAL_ONLY")
+        status = await self.instance_repository.get_instance_status(command.instance_id)
+        if status is not BotInstanceStatus.ENABLED:
+            return ManualRunResult(False, command.instance_id, status=None, error_code="INSTANCE_NOT_ENABLED")
+        locked = await self.run_repository.acquire_instance_run_lock(instance_id=command.instance_id)
+        if not locked:
+            return ManualRunResult(False, command.instance_id, error_code="INSTANCE_RUN_LOCKED", duplicate=True)
+
+        run_id = _manual_run_id(instance_id=command.instance_id, idempotency_key=command.idempotency_key)
+        try:
+            market_data = await _build_event_market_data_context(
+                self.runtime_capabilities.market_data,
+                source=command.source,
+                canonical_symbol=command.canonical_symbol,
+                primary_timeframe=command.timeframe,
+                snapshot_id=command.snapshot_id,
+                supporting_timeframes=tuple(timeframe for timeframe in config.timeframes if timeframe != command.timeframe),
+            )
+        except Exception as exc:
+            error_code = getattr(exc, "error_code", "MARKET_DATA_SNAPSHOT_ERROR")
+            return ManualRunResult(False, command.instance_id, run_id=run_id, error_code=str(error_code))
+
+        created = await self.run_repository.create_run(
+            run_id=run_id,
+            instance_id=config.instance_id,
+            module_id=config.module_id,
+            trigger_type=BotTriggerType.EVENT,
+            trigger_event_id=command.event_id,
+            snapshot_id=command.snapshot_id,
+            idempotency_key=command.idempotency_key,
+            correlation_id=command.correlation_id,
+        )
+        if not created:
+            return ManualRunResult(False, command.instance_id, run_id=run_id, error_code="DUPLICATE_RUN", duplicate=True)
+        await self.run_repository.append_run_event(
+            event_id=f"{run_id}:STARTED",
+            run_id=run_id,
+            instance_id=config.instance_id,
+            module_id=config.module_id,
+            event_type="STARTED",
+            payload_json={"trigger_type": BotTriggerType.EVENT.value, "snapshot_id": command.snapshot_id},
+            correlation_id=command.correlation_id,
+        )
+
+        module = await self.module_resolver.resolve(config.module_id)
+        if module is None:
+            await self.run_repository.complete_run(
+                run_id=run_id,
+                status=BotRunStatus.FAILED,
+                error_code="MODULE_NOT_FOUND",
+                error_message_redacted="module not found",
+            )
+            await self._append_failed_event(
+                run_id=run_id,
+                config=config,
+                error_code="MODULE_NOT_FOUND",
+                correlation_id=command.correlation_id,
+            )
+            return ManualRunResult(False, command.instance_id, run_id=run_id, status=BotRunStatus.FAILED, error_code="MODULE_NOT_FOUND")
+
+        try:
+            await module.initialize(
+                self.runtime_context_factory.build(
+                    RuntimeContextRequest(
+                        instance_id=config.instance_id,
+                        permissions=_permissions_for_mode(config.mode),
+                        capabilities=self.runtime_capabilities,
+                    )
+                )
+            )
+            result = await module.run_once(
+                BotRunRequest(
+                    run_id=run_id,
+                    instance_id=config.instance_id,
+                    module_id=config.module_id,
+                    mode=config.mode,
+                    trigger_type=BotTriggerType.EVENT,
+                    market_data=market_data,
+                    correlation_id=command.correlation_id,
+                )
+            )
+            invalid_signal = _first_invalid_signal(result.signals, config=config, snapshot_id=command.snapshot_id)
+            if invalid_signal is not None:
+                await self.run_repository.complete_run(
+                    run_id=run_id,
+                    status=BotRunStatus.FAILED,
+                    error_code="INVALID_SIGNAL_CONTRACT",
+                    error_message_redacted=invalid_signal,
+                )
+                await self.run_repository.append_run_event(
+                    event_id=f"{run_id}:INVALID_SIGNAL",
+                    run_id=run_id,
+                    instance_id=config.instance_id,
+                    module_id=config.module_id,
+                    event_type="INVALID_SIGNAL_REJECTED",
+                    payload_json={"error_code": "INVALID_SIGNAL_CONTRACT", "reason": invalid_signal},
+                    correlation_id=command.correlation_id,
+                )
+                await self.audit_repository.append_audit_event(
+                    event_id=f"{run_id}:INVALID_SIGNAL_CONTRACT",
+                    event_type="INVALID_SIGNAL_REJECTED",
+                    actor_type="bot_platform",
+                    actor_id="event_run",
+                    instance_id=config.instance_id,
+                    module_id=config.module_id,
+                    payload_json={"run_id": run_id, "reason": invalid_signal},
+                    correlation_id=command.correlation_id,
+                )
+                return ManualRunResult(
+                    False,
+                    command.instance_id,
+                    run_id=run_id,
+                    status=BotRunStatus.FAILED,
+                    error_code="INVALID_SIGNAL_CONTRACT",
+                )
+            persisted_signal_count = 0
+            for signal in result.signals:
+                await self._persist_signal(
+                    run_id=run_id,
+                    signal=signal,
+                    correlation_id=command.correlation_id,
+                    actor_id="event_run",
+                )
+                persisted_signal_count += 1
+            await self.run_repository.complete_run(
+                run_id=run_id,
+                status=result.status,
+                error_code=result.error_code,
+                error_message_redacted=result.error_message_redacted,
+            )
+            await self.run_repository.append_run_event(
+                event_id=f"{run_id}:COMPLETED",
+                run_id=run_id,
+                instance_id=config.instance_id,
+                module_id=config.module_id,
+                event_type="COMPLETED",
+                payload_json={
+                    "status": result.status.value,
+                    "signal_count": len(result.signals),
+                    "persisted_signal_count": persisted_signal_count,
+                    "diagnostics": dict(result.diagnostics),
+                },
+                correlation_id=command.correlation_id,
+            )
+            return ManualRunResult(True, command.instance_id, run_id=run_id, status=result.status, error_code=result.error_code)
+        except Exception as exc:
+            await self.run_repository.complete_run(
+                run_id=run_id,
+                status=BotRunStatus.FAILED,
+                error_code="INSTANCE_RUN_FAILED",
+                error_message_redacted=type(exc).__name__,
+            )
+            await self._append_failed_event(
+                run_id=run_id,
+                config=config,
+                error_code="INSTANCE_RUN_FAILED",
+                correlation_id=command.correlation_id,
+            )
+            return ManualRunResult(False, command.instance_id, run_id=run_id, status=BotRunStatus.FAILED, error_code="INSTANCE_RUN_FAILED")
+
+    async def _persist_signal(
+        self,
+        *,
+        run_id: str,
+        signal: BotSignal,
+        correlation_id: str | None,
+        actor_id: str = "manual_run",
+    ) -> str:
         signal_id = _signal_id(signal)
         persisted_signal_id = await self.signal_repository.publish_signal(
             signal_id=signal_id,
@@ -348,7 +537,7 @@ class ManualBotRunService:
             event_id=f"signal_persisted:{persisted_signal_id}",
             event_type="SIGNAL_PERSISTED",
             actor_type="bot_platform",
-            actor_id="manual_run",
+            actor_id=actor_id,
             instance_id=signal.instance_id,
             module_id=signal.module_id,
             payload_json={
@@ -418,6 +607,38 @@ class ManualBotRunService:
 
 def _manual_run_id(*, instance_id: str, idempotency_key: str) -> str:
     return f"run_{build_payload_hash({'instance_id': instance_id, 'idempotency_key': idempotency_key})[:32]}"
+
+
+async def _build_event_market_data_context(
+    snapshot_provider,
+    *,
+    source: str,
+    canonical_symbol: str,
+    primary_timeframe: str,
+    snapshot_id: str,
+    supporting_timeframes: tuple[str, ...],
+) -> BotMarketDataContext:
+    if hasattr(snapshot_provider, "get_snapshot"):
+        primary_snapshot = await snapshot_provider.get_snapshot(snapshot_id=snapshot_id)
+    else:
+        primary_snapshot = await snapshot_provider.get_latest_complete_snapshot(
+            source=source,
+            canonical_symbol=canonical_symbol,
+            timeframe=primary_timeframe,
+        )
+    if primary_snapshot.snapshot_id != snapshot_id:
+        raise ValueError("event snapshot_id does not match loaded market snapshot")
+    supporting_snapshots = tuple(
+        [
+            await snapshot_provider.get_latest_complete_snapshot(
+                source=source,
+                canonical_symbol=canonical_symbol,
+                timeframe=timeframe,
+            )
+            for timeframe in supporting_timeframes
+        ]
+    )
+    return BotMarketDataContext(primary_snapshot=primary_snapshot, supporting_snapshots=supporting_snapshots)
 
 
 def _signal_id(signal: BotSignal) -> str:

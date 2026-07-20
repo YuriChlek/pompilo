@@ -38,12 +38,25 @@ from bot_platform_service.application.bot_platform_runner_service import (
     RunnerTickResult,
 )
 from bot_platform_service.application.manual_bot_run_service import (
+    EventRunCommand,
     ManualBotRunService,
     ManualRunCommand,
     ManualRunInstanceRepository,
     ManualRunModuleResolver,
     ManualRunRepository,
     ManualRunResult,
+)
+from bot_platform_service.application.market_data_event_consumer_service import (
+    MarketDataEventIdempotencyStore,
+    MarketDataEventInstanceRepository,
+    MarketDataEventRunDispatcher,
+    MarketDataEventConsumerResult,
+    MarketDataEventConsumerService,
+)
+from bot_platform_service.application.market_data_event_run_dispatcher_service import (
+    MarketDataEventRunDispatcherService,
+    MarketDataEventRunDispatchResult,
+    build_market_data_event_run_idempotency_key,
 )
 from bot_platform_service.application.bot_run_orchestration_service import (
     BotRunDispatchResult,
@@ -80,6 +93,11 @@ from bot_platform_service.application.state_change_applier_service import (
     StateChangeApplierService,
     state_change_key,
 )
+from bot_platform_service.application.event_data_cleanup_service import (
+    EventDataCleanupRepository,
+    EventDataCleanupResult,
+    EventDataCleanupService,
+)
 
 __all__ = [
     "AdminMetadataAccessPolicy",
@@ -110,6 +128,10 @@ __all__ = [
     "BotRuntimeRecoveryService",
     "CandleBatchReadyEvent",
     "ConfigValidationMetadataRepository",
+    "EventDataCleanupRepository",
+    "EventDataCleanupResult",
+    "EventDataCleanupService",
+    "EventRunCommand",
     "LifecycleActor",
     "LifecycleCommandResult",
     "ManualBotRunService",
@@ -119,6 +141,13 @@ __all__ = [
     "ManualRunRepository",
     "ManualRunResult",
     "MarketDataSnapshotReadinessPort",
+    "MarketDataEventConsumerResult",
+    "MarketDataEventConsumerService",
+    "MarketDataEventIdempotencyStore",
+    "MarketDataEventInstanceRepository",
+    "MarketDataEventRunDispatcher",
+    "MarketDataEventRunDispatcherService",
+    "MarketDataEventRunDispatchResult",
     "MigrationRolloutDecision",
     "MigrationRolloutService",
     "MigrationRolloutStep",
@@ -135,6 +164,7 @@ __all__ = [
     "StateChangeApplicationResult",
     "StateChangeApplierService",
     "build_run_id",
+    "build_market_data_event_run_idempotency_key",
     "build_trigger_idempotency_key",
     "config_from_payload",
     "default_migration_rollout_steps",

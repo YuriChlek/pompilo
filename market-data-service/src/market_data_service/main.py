@@ -169,14 +169,9 @@ async def _run_collect(once: bool) -> int:
         )
         return EXIT_SUCCESS
 
-    from market_data_service.runtime.container import build_runtime_container
-    container = await build_runtime_container()
-    try:
-        print("Starting collection loop...")
-        await container.workers.market_data_scheduler.run_forever()
-        return EXIT_SUCCESS
-    finally:
-        await container.close()
+    from market_data_service.runtime.http_server import run_http_server
+    await run_http_server()
+    return EXIT_SUCCESS
 
 
 async def _run_outbox_cleanup(args: argparse.Namespace) -> int:

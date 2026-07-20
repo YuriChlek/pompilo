@@ -11,7 +11,7 @@
 Основний production режим - long-running process:
 
 ```bash
-python -m market_data_service.main serve
+python -m market_data_service.main collect
 ```
 
 Міграції не запускаються автоматично всередині long-running контейнера. Для них використовується окремий Alembic job `market_data_migrate`.
@@ -114,13 +114,19 @@ export MARKET_DATA_SCHEDULER_JITTER_SECONDS=0
 export MARKET_DATA_1H_SAFETY_DELAY_SECONDS=0
 ```
 
-Scheduler config:
+Collect config:
 
 ```bash
 export MARKET_DATA_SOURCE=binance_spot
 export MARKET_DATA_PROVIDER_SYMBOLS=ETHUSDT,SOLUSDT
 export MARKET_DATA_TIMEFRAMES=1h,4h,1d
-export MARKET_DATA_SCHEDULER_POLL_INTERVAL_SECONDS=30
+export MARKET_DATA_COLLECT_POLL_INTERVAL_SECONDS=30
+export MARKET_DATA_COLLECT_ON_START=true
+export MARKET_DATA_COLLECT_MAX_JOBS_PER_TICK=100
+export MARKET_DATA_COLLECT_BOOTSTRAP_LOOKBACK_YEARS=2
+export MARKET_DATA_COLLECT_BOOTSTRAP_MAX_CHUNKS_PER_TICK=20
+export MARKET_DATA_PROVIDER_MAX_CONCURRENCY=3
+export MARKET_DATA_PROVIDER_PRIORITY=binance,bybit
 export MARKET_DATA_SCHEDULER_JITTER_SECONDS=30
 ```
 
@@ -200,12 +206,12 @@ alembic revision --autogenerate -m "describe_change"
 
 Перед запуском переконайся, що PostgreSQL і Redis доступні, env vars експортовані, а Alembic migrations застосовані.
 
-Запустити long-running backend service:
+Запустити long-running candle collection service:
 
 ```bash
 cd market-data-service
 source .venv/bin/activate
-python -m market_data_service.main serve
+python -m market_data_service.main collect
 ```
 
 Після старту доступні endpoints:
@@ -249,10 +255,10 @@ python -m market_data_service.main --help
 python -m market_data_service.main db:check
 ```
 
-Запустити HTTP runtime:
+Запустити long-running collect runtime:
 
 ```bash
-python -m market_data_service.main serve
+python -m market_data_service.main collect
 ```
 
 Синхронізувати registry symbols:
@@ -261,7 +267,7 @@ python -m market_data_service.main serve
 python -m market_data_service.main symbols:sync
 ```
 
-Створити due sync jobs одним контрольованим scheduler tick:
+Запустити один collection tick:
 
 ```bash
 python -m market_data_service.main scheduler:run-once
@@ -332,10 +338,8 @@ export MARKET_DATA_1H_SAFETY_DELAY_SECONDS=0
 
 alembic upgrade head
 python -m market_data_service.main symbols:sync
-python -m market_data_service.main scheduler:run-once
-python -m market_data_service.main sync:run-next
-python -m market_data_service.main outbox:publish-once
-python -m market_data_service.main serve
+python -m market_data_service.main collect --once
+python -m market_data_service.main collect
 ```
 
 ## Тести

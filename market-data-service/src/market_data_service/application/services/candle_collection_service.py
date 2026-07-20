@@ -111,6 +111,7 @@ class CandleCollectionService:
         jitter_seconds: int,
         bootstrap_lookback_years: int = 2,
         bootstrap_max_chunks_per_tick: int = 10,
+        max_jobs_per_tick: int = 100,
         chunk_limit: int = 1000,
         concurrency_limiter: AsyncConcurrencyLimiter | None = None,
         now_provider=None,
@@ -126,6 +127,7 @@ class CandleCollectionService:
         self.jitter_seconds = jitter_seconds
         self.bootstrap_lookback_years = bootstrap_lookback_years
         self.bootstrap_max_chunks_per_tick = bootstrap_max_chunks_per_tick
+        self.max_jobs_per_tick = max_jobs_per_tick
         self.chunk_limit = chunk_limit
         self.concurrency_limiter = concurrency_limiter or AsyncConcurrencyLimiter(8)
         self.now_provider = now_provider or (lambda: datetime.now(UTC))
@@ -188,7 +190,7 @@ class CandleCollectionService:
         processed_count = 0
         failed_count = 0
 
-        while True:
+        while processed_count + failed_count < self.max_jobs_per_tick:
             job = await self.sync_job_queue.claim_next_pending_job(now=now)
             if job is None:
                 break
@@ -209,6 +211,7 @@ class CandleCollectionService:
                             canonical_symbol=self._job_canonical_symbols.get(job.idempotency_key, job.provider_symbol),
                             dry_run=False,
                             create_events=create_events,
+                            allow_provider_limited_history=(job.job_kind == SyncJobKind.BACKFILL),
                             correlation_id=f"sync-job:{job.idempotency_key}",
                         )
                     )

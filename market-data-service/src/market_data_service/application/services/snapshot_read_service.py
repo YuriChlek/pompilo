@@ -42,6 +42,8 @@ class LatestSnapshotContract:
 
 
 class SnapshotReadRepositoryPort(Protocol):
+    async def get_snapshot(self, snapshot_id: str) -> MarketSnapshot | None: ...
+
     async def get_latest_complete_snapshot(
         self,
         *,
@@ -96,6 +98,36 @@ class SnapshotReadService:
                 candles=(),
             )
 
+        candles = tuple(await self.snapshot_reader.read_snapshot_candles(snapshot.id))
+        return LatestSnapshotContract(
+            contract_version=SNAPSHOT_CONTRACT_VERSION,
+            status="ready",
+            reason=None,
+            snapshot=snapshot,
+            candles=candles,
+        )
+
+    async def snapshot_by_id(self, snapshot_id: str) -> LatestSnapshotContract:
+        normalized_snapshot_id = snapshot_id.strip()
+        if not normalized_snapshot_id:
+            raise ValueError("snapshot_id must not be empty")
+        snapshot = await self.snapshot_reader.get_snapshot(normalized_snapshot_id)
+        if snapshot is None:
+            return LatestSnapshotContract(
+                contract_version=SNAPSHOT_CONTRACT_VERSION,
+                status="not_ready",
+                reason="snapshot is not available",
+                snapshot=None,
+                candles=(),
+            )
+        if snapshot.completeness_status != CandleRangeStatus.COMPLETE:
+            return LatestSnapshotContract(
+                contract_version=SNAPSHOT_CONTRACT_VERSION,
+                status="not_ready",
+                reason="snapshot is not complete",
+                snapshot=snapshot,
+                candles=(),
+            )
         candles = tuple(await self.snapshot_reader.read_snapshot_candles(snapshot.id))
         return LatestSnapshotContract(
             contract_version=SNAPSHOT_CONTRACT_VERSION,

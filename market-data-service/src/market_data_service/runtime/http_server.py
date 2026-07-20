@@ -4,7 +4,7 @@ import asyncio
 import json
 from contextlib import suppress
 from typing import Awaitable, Callable
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 from market_data_service.application.services.snapshot_read_service import LatestSnapshotQuery, SnapshotReadService
 from market_data_service.domain.enums import MarketDataSource
@@ -74,10 +74,20 @@ class MarketDataHttpServer:
             readiness = await self.health_service.readiness()
             return (200 if readiness.ok else 503), "application/json", readiness.as_payload()
         if target.path == "/metrics":
-            return 200, "text/plain; version=0.0.4", "market_data_service_up 1\n"
+            return 200, "text/plain; version=0.0.4", self._metrics_payload()
         if target.path == "/snapshots/latest":
             return await self._latest_snapshot_response(target.query)
+        if target.path.startswith("/snapshots/"):
+            return await self._snapshot_by_id_response(target.path)
         return 404, "application/json", {"status": "not_found"}
+
+    def _metrics_payload(self) -> str:
+        recorder = getattr(self.health_service.container, "metrics_recorder", None)
+        rendered = recorder.render() if recorder is not None and hasattr(recorder, "render") else ""
+        lines = ["market_data_service_up 1"]
+        if rendered:
+            lines.append(rendered)
+        return "\n".join(lines) + "\n"
 
     async def _latest_snapshot_response(self, query_string: str) -> tuple[int, str, dict[str, object]]:
         if self.snapshot_read_service is None:
@@ -111,6 +121,24 @@ class MarketDataHttpServer:
             return 503, "application/json", result.as_payload()
         return 404, "application/json", result.as_payload()
 
+    async def _snapshot_by_id_response(self, path: str) -> tuple[int, str, dict[str, object]]:
+        if self.snapshot_read_service is None:
+            return 503, "application/json", {"contract_version": "market-snapshot.v1", "status": "not_ready"}
+        snapshot_id = unquote(path.removeprefix("/snapshots/")).strip()
+        if not snapshot_id or "/" in snapshot_id:
+            return 400, "application/json", {"contract_version": "market-snapshot.v1", "status": "bad_request"}
+        try:
+            result = await self.snapshot_read_service.snapshot_by_id(snapshot_id)
+        except Exception as exc:
+            return 400, "application/json", {
+                "contract_version": "market-snapshot.v1",
+                "status": "bad_request",
+                "reason": f"{type(exc).__name__}: {exc}",
+            }
+        if result.status == "ready":
+            return 200, "application/json", result.as_payload()
+        return 404, "application/json", result.as_payload()
+
 
 async def run_http_server(container_factory: ContainerFactory = build_runtime_container) -> None:
     container = await container_factory()
@@ -120,7 +148,8 @@ async def run_http_server(container_factory: ContainerFactory = build_runtime_co
             container,
             lifecycle,
             scheduler_enabled=container.settings.scheduler_enabled,
-            outbox_publisher_enabled=container.settings.outbox_publisher_enabled,
+            outbox_publisher_enabled=container.settings.outbox_publisher_enabled
+            and not container.settings.scheduler_enabled,
         ),
         lifecycle=lifecycle,
         host=container.settings.http.host,
@@ -132,7 +161,7 @@ async def run_http_server(container_factory: ContainerFactory = build_runtime_co
         await server.start()
         if container.settings.scheduler_enabled:
             container.scheduler_lifecycle.start()
-        if container.settings.outbox_publisher_enabled:
+        if container.settings.outbox_publisher_enabled and not container.settings.scheduler_enabled:
             container.outbox_publisher_lifecycle.start()
         lifecycle.mark_ready()
         await lifecycle.wait_for_shutdown()

@@ -22,6 +22,9 @@ from bot_platform_service.domain.models import (
 class MarketDataSnapshotProvider(Protocol):
     """Port for reading complete immutable market-data snapshots."""
 
+    async def get_snapshot(self, *, snapshot_id: str) -> BotMarketSnapshot:
+        """Return one immutable snapshot by id."""
+
     async def get_latest_complete_snapshot(
         self,
         *,

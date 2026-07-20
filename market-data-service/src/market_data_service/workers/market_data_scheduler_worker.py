@@ -27,4 +27,9 @@ class MarketDataSchedulerWorker:
     async def run_forever(self) -> None:
         while not self.should_stop():
             await self.run_once()
-            await asyncio.sleep(self.poll_interval_seconds)
+
+            sleep_remaining = self.poll_interval_seconds
+            while sleep_remaining > 0 and not self.should_stop():
+                sleep_chunk = min(0.1, sleep_remaining)
+                await asyncio.sleep(sleep_chunk)
+                sleep_remaining -= sleep_chunk

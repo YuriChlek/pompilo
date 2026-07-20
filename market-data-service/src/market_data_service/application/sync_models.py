@@ -16,6 +16,7 @@ class SyncClosedCandlesCommand:
     canonical_symbol: str | None = None
     dry_run: bool = False
     create_events: bool = False
+    allow_provider_limited_history: bool = False
     correlation_id: str | None = None
 
 

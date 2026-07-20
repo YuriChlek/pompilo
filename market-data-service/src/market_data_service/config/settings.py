@@ -67,6 +67,13 @@ class BootstrapSettings:
 
 
 @dataclass(frozen=True, slots=True)
+class CollectSettings:
+    poll_interval_seconds: float
+    on_start: bool
+    max_jobs_per_tick: int
+
+
+@dataclass(frozen=True, slots=True)
 class MarketDataServiceSettings:
     database: DatabaseSettings
     redis: RedisStreamBrokerConfig
@@ -81,6 +88,7 @@ class MarketDataServiceSettings:
     availability: AvailabilitySettings
     retention: RetentionSettings
     bootstrap: BootstrapSettings
+    collect: CollectSettings
     provider_priority: tuple[str, ...]
     scheduler_enabled: bool
     outbox_publisher_enabled: bool
@@ -102,6 +110,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> MarketDataServiceSett
         availability=load_availability_settings(source),
         retention=load_retention_settings(source),
         bootstrap=load_bootstrap_settings(source),
+        collect=load_collect_settings(source),
         provider_priority=load_provider_priority(source),
         scheduler_enabled=_parse_bool(source, "MARKET_DATA_SCHEDULER_ENABLED", default=True),
         outbox_publisher_enabled=_parse_bool(source, "MARKET_DATA_OUTBOX_PUBLISHER_ENABLED", default=True),
@@ -240,8 +249,8 @@ def load_scheduler_settings(env: Mapping[str, str] | None = None) -> SchedulerCo
         jitter_seconds=_parse_non_negative_int(source, "MARKET_DATA_SCHEDULER_JITTER_SECONDS", default="30"),
         poll_interval_seconds=_parse_positive_float(
             source,
-            "MARKET_DATA_SCHEDULER_POLL_INTERVAL_SECONDS",
-            default="30",
+            "MARKET_DATA_COLLECT_POLL_INTERVAL_SECONDS",
+            default=_optional(source, "MARKET_DATA_SCHEDULER_POLL_INTERVAL_SECONDS") or "30",
         ),
     )
 
@@ -306,6 +315,19 @@ def load_bootstrap_settings(env: Mapping[str, str] | None = None) -> BootstrapSe
         bootstrap_lookback_years=_parse_positive_int(source, "MARKET_DATA_COLLECT_BOOTSTRAP_LOOKBACK_YEARS", default="2"),
         bootstrap_max_chunks_per_tick=_parse_positive_int(source, "MARKET_DATA_COLLECT_BOOTSTRAP_MAX_CHUNKS_PER_TICK", default="10"),
         provider_max_concurrency=_parse_positive_int(source, "MARKET_DATA_PROVIDER_MAX_CONCURRENCY", default="8"),
+    )
+
+
+def load_collect_settings(env: Mapping[str, str] | None = None) -> CollectSettings:
+    source = env or os.environ
+    return CollectSettings(
+        poll_interval_seconds=_parse_positive_float(
+            source,
+            "MARKET_DATA_COLLECT_POLL_INTERVAL_SECONDS",
+            default=_optional(source, "MARKET_DATA_SCHEDULER_POLL_INTERVAL_SECONDS") or "30",
+        ),
+        on_start=_parse_bool(source, "MARKET_DATA_COLLECT_ON_START", default=True),
+        max_jobs_per_tick=_parse_positive_int(source, "MARKET_DATA_COLLECT_MAX_JOBS_PER_TICK", default="100"),
     )
 
 

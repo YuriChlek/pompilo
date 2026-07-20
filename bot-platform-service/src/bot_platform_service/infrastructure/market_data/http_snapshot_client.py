@@ -82,6 +82,11 @@ class MarketDataHttpSnapshotClient:
             timeframe,
         )
 
+    async def get_snapshot(self, *, snapshot_id: str) -> BotMarketSnapshot:
+        """Return one snapshot by id through the formal HTTP snapshot contract."""
+
+        return await asyncio.to_thread(self._get_snapshot_sync, snapshot_id)
+
     async def build_context(
         self,
         *,
@@ -111,19 +116,26 @@ class MarketDataHttpSnapshotClient:
 
     def _get_latest_complete_snapshot_sync(self, source: str, canonical_symbol: str, timeframe: str) -> BotMarketSnapshot:
         payload = self._read_latest_snapshot_payload(source=source, canonical_symbol=canonical_symbol, timeframe=timeframe)
-        contract_version = payload.get("contract_version")
-        status = payload.get("status")
-        if contract_version != SNAPSHOT_CONTRACT_VERSION:
-            raise SnapshotNotReadyError("Unexpected market snapshot contract version")
-        if status == "stale":
-            raise SnapshotStaleError(str(payload.get("reason") or "market snapshot is stale"))
-        if status != "ready":
-            raise SnapshotNotReadyError(str(payload.get("reason") or "market snapshot is not ready"))
-        snapshot = payload.get("snapshot")
-        candles = payload.get("candles")
-        if not isinstance(snapshot, dict) or not isinstance(candles, list):
+        return _snapshot_from_contract_payload(payload)
+
+    def _get_snapshot_sync(self, snapshot_id: str) -> BotMarketSnapshot:
+        payload = self._read_snapshot_payload(snapshot_id=snapshot_id)
+        return _snapshot_from_contract_payload(payload)
+
+    def _read_snapshot_payload(self, *, snapshot_id: str) -> dict[str, object]:
+        try:
+            with urlopen(f"{self.base_url}/snapshots/{snapshot_id}", timeout=self.timeout_seconds) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        except HTTPError as exc:
+            try:
+                payload = json.loads(exc.read().decode("utf-8"))
+            except Exception as payload_exc:
+                raise SnapshotNotReadyError("Market snapshot payload is unavailable") from payload_exc
+        except Exception as exc:
+            raise SnapshotNotReadyError("Market snapshot endpoint is unavailable") from exc
+        if not isinstance(payload, dict):
             raise SnapshotNotReadyError("Market snapshot payload is invalid")
-        return _snapshot_from_payload(snapshot, candles)
+        return payload
 
     def _read_latest_snapshot_payload(self, *, source: str, canonical_symbol: str, timeframe: str) -> dict[str, object]:
         query = urlencode(
@@ -146,6 +158,22 @@ class MarketDataHttpSnapshotClient:
         if not isinstance(payload, dict):
             raise SnapshotNotReadyError("Market snapshot payload is invalid")
         return payload
+
+
+def _snapshot_from_contract_payload(payload: dict[str, object]) -> BotMarketSnapshot:
+    contract_version = payload.get("contract_version")
+    status = payload.get("status")
+    if contract_version != SNAPSHOT_CONTRACT_VERSION:
+        raise SnapshotNotReadyError("Unexpected market snapshot contract version")
+    if status == "stale":
+        raise SnapshotStaleError(str(payload.get("reason") or "market snapshot is stale"))
+    if status != "ready":
+        raise SnapshotNotReadyError(str(payload.get("reason") or "market snapshot is not ready"))
+    snapshot = payload.get("snapshot")
+    candles = payload.get("candles")
+    if not isinstance(snapshot, dict) or not isinstance(candles, list):
+        raise SnapshotNotReadyError("Market snapshot payload is invalid")
+    return _snapshot_from_payload(snapshot, candles)
 
 
 def _snapshot_from_payload(snapshot: dict[str, object], candles: list[object]) -> BotMarketSnapshot:

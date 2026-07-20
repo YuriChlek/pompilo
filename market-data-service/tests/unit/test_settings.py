@@ -38,6 +38,9 @@ class MarketDataServiceSettingsTests(unittest.TestCase):
         self.assertEqual(settings.bootstrap.bootstrap_lookback_years, 2)
         self.assertEqual(settings.bootstrap.bootstrap_max_chunks_per_tick, 10)
         self.assertEqual(settings.bootstrap.provider_max_concurrency, 8)
+        self.assertEqual(settings.collect.poll_interval_seconds, 30.0)
+        self.assertTrue(settings.collect.on_start)
+        self.assertEqual(settings.collect.max_jobs_per_tick, 100)
         self.assertTrue(settings.scheduler_enabled)
         self.assertTrue(settings.outbox_publisher_enabled)
 
@@ -66,6 +69,9 @@ class MarketDataServiceSettingsTests(unittest.TestCase):
                 "MARKET_DATA_COLLECT_BOOTSTRAP_LOOKBACK_YEARS": "3",
                 "MARKET_DATA_COLLECT_BOOTSTRAP_MAX_CHUNKS_PER_TICK": "15",
                 "MARKET_DATA_PROVIDER_MAX_CONCURRENCY": "12",
+                "MARKET_DATA_COLLECT_POLL_INTERVAL_SECONDS": "5.5",
+                "MARKET_DATA_COLLECT_ON_START": "false",
+                "MARKET_DATA_COLLECT_MAX_JOBS_PER_TICK": "7",
             }
         )
 
@@ -88,6 +94,9 @@ class MarketDataServiceSettingsTests(unittest.TestCase):
         self.assertEqual(settings.bootstrap.bootstrap_lookback_years, 3)
         self.assertEqual(settings.bootstrap.bootstrap_max_chunks_per_tick, 15)
         self.assertEqual(settings.bootstrap.provider_max_concurrency, 12)
+        self.assertEqual(settings.collect.poll_interval_seconds, 5.5)
+        self.assertFalse(settings.collect.on_start)
+        self.assertEqual(settings.collect.max_jobs_per_tick, 7)
         self.assertFalse(settings.scheduler_enabled)
         self.assertFalse(settings.outbox_publisher_enabled)
 

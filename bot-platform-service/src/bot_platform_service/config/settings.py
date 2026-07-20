@@ -49,6 +49,28 @@ class SignalEventSettings:
 
 
 @dataclass(frozen=True, slots=True)
+class MarketDataEventSettings:
+    """Typed Market Data event consumer settings."""
+
+    enabled: bool
+    redis_url: str
+    stream_name: str
+    consumer_group: str
+    consumer_name: str
+    read_count: int
+    block_milliseconds: int
+    retry_backoff_seconds: float
+
+
+@dataclass(frozen=True, slots=True)
+class EventRetentionSettings:
+    """Typed retention settings for service-owned event processing records."""
+
+    idempotency_retention_days: int
+    audit_retention_days: int
+
+
+@dataclass(frozen=True, slots=True)
 class BotPlatformSettings:
     """Validated service settings parsed once at startup."""
 
@@ -57,6 +79,8 @@ class BotPlatformSettings:
     runtime: RuntimeSettings
     market_data: MarketDataSettings
     signal_events: SignalEventSettings
+    market_data_events: MarketDataEventSettings
+    event_retention: EventRetentionSettings
 
     @classmethod
     def from_env(cls) -> "BotPlatformSettings":
@@ -90,6 +114,50 @@ class BotPlatformSettings:
                 max_retries=_parse_non_negative_int(os.getenv("BOT_PLATFORM_SIGNAL_EVENTS_MAX_RETRIES", "3")),
                 retry_backoff_seconds=_parse_non_negative_float(
                     os.getenv("BOT_PLATFORM_SIGNAL_EVENTS_RETRY_BACKOFF_SECONDS", "0.25")
+                ),
+            ),
+            market_data_events=MarketDataEventSettings(
+                enabled=_parse_bool(os.getenv("BOT_PLATFORM_MARKET_DATA_EVENTS_ENABLED", "false")),
+                redis_url=_parse_redis_url(
+                    os.getenv(
+                        "BOT_PLATFORM_MARKET_DATA_EVENTS_REDIS_URL",
+                        os.getenv("REDIS_URL", "redis://redis:6379/0"),
+                    ),
+                    env_name="BOT_PLATFORM_MARKET_DATA_EVENTS_REDIS_URL",
+                ),
+                stream_name=_parse_non_empty(
+                    os.getenv("BOT_PLATFORM_MARKET_DATA_EVENTS_STREAM", "market-data-events"),
+                    env_name="BOT_PLATFORM_MARKET_DATA_EVENTS_STREAM",
+                ),
+                consumer_group=_parse_non_empty(
+                    os.getenv("BOT_PLATFORM_MARKET_DATA_EVENTS_CONSUMER_GROUP", "bot-platform"),
+                    env_name="BOT_PLATFORM_MARKET_DATA_EVENTS_CONSUMER_GROUP",
+                ),
+                consumer_name=_parse_non_empty(
+                    os.getenv("BOT_PLATFORM_MARKET_DATA_EVENTS_CONSUMER_NAME", "bot-platform-runner"),
+                    env_name="BOT_PLATFORM_MARKET_DATA_EVENTS_CONSUMER_NAME",
+                ),
+                read_count=_parse_positive_int(
+                    os.getenv("BOT_PLATFORM_MARKET_DATA_EVENTS_READ_COUNT", "10"),
+                    env_name="BOT_PLATFORM_MARKET_DATA_EVENTS_READ_COUNT",
+                ),
+                block_milliseconds=_parse_non_negative_int(
+                    os.getenv("BOT_PLATFORM_MARKET_DATA_EVENTS_BLOCK_MILLISECONDS", "5000"),
+                    env_name="BOT_PLATFORM_MARKET_DATA_EVENTS_BLOCK_MILLISECONDS",
+                ),
+                retry_backoff_seconds=_parse_non_negative_float(
+                    os.getenv("BOT_PLATFORM_MARKET_DATA_EVENTS_RETRY_BACKOFF_SECONDS", "1"),
+                    env_name="BOT_PLATFORM_MARKET_DATA_EVENTS_RETRY_BACKOFF_SECONDS",
+                ),
+            ),
+            event_retention=EventRetentionSettings(
+                idempotency_retention_days=_parse_positive_int(
+                    os.getenv("BOT_PLATFORM_EVENT_IDEMPOTENCY_RETENTION_DAYS", "5"),
+                    env_name="BOT_PLATFORM_EVENT_IDEMPOTENCY_RETENTION_DAYS",
+                ),
+                audit_retention_days=_parse_positive_int(
+                    os.getenv("BOT_PLATFORM_EVENT_AUDIT_RETENTION_DAYS", "5"),
+                    env_name="BOT_PLATFORM_EVENT_AUDIT_RETENTION_DAYS",
                 ),
             ),
         )
@@ -131,35 +199,49 @@ def _parse_base_url(value: str) -> str:
     return normalized
 
 
-def _parse_redis_url(value: str) -> str:
+def _parse_redis_url(value: str, *, env_name: str = "BOT_PLATFORM_SIGNAL_EVENTS_REDIS_URL") -> str:
     normalized = value.strip()
     if not normalized.startswith(("redis://", "rediss://")):
-        raise ValueError("BOT_PLATFORM_SIGNAL_EVENTS_REDIS_URL must start with redis:// or rediss://")
+        raise ValueError(f"{env_name} must start with redis:// or rediss://")
     return normalized
 
 
-def _parse_non_empty(value: str) -> str:
+def _parse_non_empty(value: str, *, env_name: str = "BOT_PLATFORM_SIGNAL_EVENTS_STREAM") -> str:
     normalized = value.strip()
     if not normalized:
-        raise ValueError("BOT_PLATFORM_SIGNAL_EVENTS_STREAM must not be empty")
+        raise ValueError(f"{env_name} must not be empty")
     return normalized
 
 
-def _parse_non_negative_int(value: str) -> int:
+def _parse_positive_int(value: str, *, env_name: str) -> int:
     try:
         parsed = int(value)
     except ValueError as exc:
-        raise ValueError("BOT_PLATFORM_SIGNAL_EVENTS_MAX_RETRIES must be an integer") from exc
-    if parsed < 0:
-        raise ValueError("BOT_PLATFORM_SIGNAL_EVENTS_MAX_RETRIES must be non-negative")
+        raise ValueError(f"{env_name} must be an integer") from exc
+    if parsed <= 0:
+        raise ValueError(f"{env_name} must be greater than zero")
     return parsed
 
 
-def _parse_non_negative_float(value: str) -> float:
+def _parse_non_negative_int(value: str, *, env_name: str = "BOT_PLATFORM_SIGNAL_EVENTS_MAX_RETRIES") -> int:
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise ValueError(f"{env_name} must be an integer") from exc
+    if parsed < 0:
+        raise ValueError(f"{env_name} must be non-negative")
+    return parsed
+
+
+def _parse_non_negative_float(
+    value: str,
+    *,
+    env_name: str = "BOT_PLATFORM_SIGNAL_EVENTS_RETRY_BACKOFF_SECONDS",
+) -> float:
     try:
         parsed = float(value)
     except ValueError as exc:
-        raise ValueError("BOT_PLATFORM_SIGNAL_EVENTS_RETRY_BACKOFF_SECONDS must be a number") from exc
+        raise ValueError(f"{env_name} must be a number") from exc
     if parsed < 0:
-        raise ValueError("BOT_PLATFORM_SIGNAL_EVENTS_RETRY_BACKOFF_SECONDS must be non-negative")
+        raise ValueError(f"{env_name} must be non-negative")
     return parsed

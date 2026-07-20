@@ -62,6 +62,12 @@ from bot_platform_service.domain.models import (
     build_signal_key,
     canonical_json,
 )
+from bot_platform_service.domain.market_data_events import (
+    MARKET_DATA_CANDLES_COLLECTED_EVENT_TYPE,
+    MARKET_DATA_EVENT_CONTRACT_VERSION,
+    MarketDataCandlesCollectedEvent,
+    parse_market_data_candles_collected_event,
+)
 from bot_platform_service.domain.signal_safety import resolve_bot_mode
 from bot_platform_service.domain.timeframe_aliases import CANONICAL_TIMEFRAMES, normalize_timeframe, normalize_timeframes
 
@@ -105,6 +111,9 @@ __all__ = [
     "Clock",
     "ConfigSchemaValidationError",
     "MarketDataSnapshotProvider",
+    "MarketDataCandlesCollectedEvent",
+    "MARKET_DATA_CANDLES_COLLECTED_EVENT_TYPE",
+    "MARKET_DATA_EVENT_CONTRACT_VERSION",
     "MetricsRecorder",
     "NotificationPublisher",
     "PermissionDeniedError",
@@ -120,6 +129,7 @@ __all__ = [
     "canonical_json",
     "normalize_timeframe",
     "normalize_timeframes",
+    "parse_market_data_candles_collected_event",
     "resolve_bot_mode",
     "validate_config_schema",
 ]

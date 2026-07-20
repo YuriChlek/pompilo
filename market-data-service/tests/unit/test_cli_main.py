@@ -4,7 +4,7 @@ import io
 import json
 import unittest
 from datetime import UTC, datetime, timedelta
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock, AsyncMock
 
 from market_data_service import main as cli_main
 from market_data_service.application.services.candles_get_fetch_service import CandlesGetItemResult, CandlesGetResult
@@ -493,3 +493,15 @@ def _result(
             ),
         ),
     )
+
+
+class CliMainLongRunningCollectTests(unittest.TestCase):
+    def test_collect_long_running_runs_http_server(self) -> None:
+        async def run_server():
+            return None
+
+        with patch("market_data_service.runtime.http_server.run_http_server", side_effect=run_server) as server:
+            exit_code = cli_main.main(["collect"])
+
+        self.assertEqual(exit_code, cli_main.EXIT_SUCCESS)
+        server.assert_called_once_with()

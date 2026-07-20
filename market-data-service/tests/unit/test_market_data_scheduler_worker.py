@@ -1,5 +1,4 @@
-from __future__ import annotations
-
+import asyncio
 import unittest
 
 from market_data_service.application.services.candle_collection_service import CollectionResult
@@ -39,3 +38,27 @@ class MarketDataSchedulerWorkerTests(unittest.IsolatedAsyncioTestCase):
         await worker.run_forever()
 
         self.assertEqual(service.calls, 2)
+
+    async def test_run_forever_snappy_shutdown(self) -> None:
+        import time
+        service = FakeCandleCollectionService()
+        stop_flag = False
+
+        def should_stop() -> bool:
+            return stop_flag
+
+        worker = MarketDataSchedulerWorker(service, poll_interval_seconds=10.0, should_stop=should_stop)
+
+        async def trigger_stop_later():
+            await asyncio.sleep(0.05)
+            nonlocal stop_flag
+            stop_flag = True
+
+        start_time = time.monotonic()
+        stop_task = asyncio.create_task(trigger_stop_later())
+        await worker.run_forever()
+        await stop_task
+        duration = time.monotonic() - start_time
+
+        self.assertLess(duration, 1.0)
+        self.assertEqual(service.calls, 1)

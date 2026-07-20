@@ -24,6 +24,11 @@ MARKET_DATA_OUTBOX_EVENTS_FETCHED_TOTAL = "market_data_outbox_events_fetched_tot
 MARKET_DATA_OUTBOX_EVENTS_PUBLISHED_TOTAL = "market_data_outbox_events_published_total"
 MARKET_DATA_OUTBOX_EVENTS_FAILED_TOTAL = "market_data_outbox_events_failed_total"
 MARKET_DATA_OUTBOX_EVENTS_DELETED_TOTAL = "market_data_outbox_events_deleted_total"
+MARKET_DATA_COLLECTION_TICKS_TOTAL = "market_data_collection_ticks_total"
+MARKET_DATA_COLLECTION_JOBS_SCHEDULED_TOTAL = "market_data_collection_jobs_scheduled_total"
+MARKET_DATA_COLLECTION_JOBS_PROCESSED_TOTAL = "market_data_collection_jobs_processed_total"
+MARKET_DATA_COLLECTION_JOBS_FAILED_TOTAL = "market_data_collection_jobs_failed_total"
+MARKET_DATA_COLLECTION_EVENTS_PUBLISHED_TOTAL = "market_data_collection_events_published_total"
 
 STABLE_METRIC_NAMES = (
     MARKET_DATA_SYNC_DURATION_SECONDS,
@@ -43,6 +48,11 @@ STABLE_METRIC_NAMES = (
     MARKET_DATA_OUTBOX_EVENTS_PUBLISHED_TOTAL,
     MARKET_DATA_OUTBOX_EVENTS_FAILED_TOTAL,
     MARKET_DATA_OUTBOX_EVENTS_DELETED_TOTAL,
+    MARKET_DATA_COLLECTION_TICKS_TOTAL,
+    MARKET_DATA_COLLECTION_JOBS_SCHEDULED_TOTAL,
+    MARKET_DATA_COLLECTION_JOBS_PROCESSED_TOTAL,
+    MARKET_DATA_COLLECTION_JOBS_FAILED_TOTAL,
+    MARKET_DATA_COLLECTION_EVENTS_PUBLISHED_TOTAL,
 )
 
 
@@ -64,6 +74,36 @@ class InMemoryMetricsRecorder:
 
     def record(self, sample: MetricSample) -> None:
         self.samples.append(sample)
+
+
+class PrometheusMetricsRecorder:
+    def __init__(self) -> None:
+        self._samples: dict[tuple[str, tuple[tuple[str, str], ...]], MetricSample] = {}
+
+    def record(self, sample: MetricSample) -> None:
+        key = (sample.name, tuple(sorted(sample.labels.items())))
+        existing = self._samples.get(key)
+        value = sample.value
+        if existing is not None and sample.kind == "counter":
+            value += existing.value
+        self._samples[key] = MetricSample(sample.name, value, dict(sample.labels), sample.kind)
+
+    def render(self) -> str:
+        lines = []
+        for sample in sorted(self._samples.values(), key=lambda item: (item.name, sorted(item.labels.items()))):
+            lines.append(_render_sample(sample))
+        return "\n".join(lines)
+
+
+def _render_sample(sample: MetricSample) -> str:
+    if not sample.labels:
+        return f"{sample.name} {sample.value:g}"
+    labels = ",".join(f'{name}="{_escape_label_value(value)}"' for name, value in sorted(sample.labels.items()))
+    return f"{sample.name}{{{labels}}} {sample.value:g}"
+
+
+def _escape_label_value(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("\n", "\\n").replace('"', '\\"')
 
 
 def record_sync_metrics(
@@ -148,6 +188,25 @@ def record_scheduler_tick(recorder: MetricsRecorder | None, *, status: str) -> N
     if recorder is None:
         return
     recorder.record(MetricSample(MARKET_DATA_SCHEDULER_TICKS_TOTAL, 1.0, {"status": status}, "counter"))
+
+
+def record_collection_tick(
+    recorder: MetricsRecorder | None,
+    *,
+    status: str,
+    scheduled_count: int,
+    processed_count: int,
+    failed_count: int,
+    published_count: int,
+) -> None:
+    if recorder is None:
+        return
+    labels = {"status": status}
+    recorder.record(MetricSample(MARKET_DATA_COLLECTION_TICKS_TOTAL, 1.0, labels, "counter"))
+    recorder.record(MetricSample(MARKET_DATA_COLLECTION_JOBS_SCHEDULED_TOTAL, float(scheduled_count), labels, "counter"))
+    recorder.record(MetricSample(MARKET_DATA_COLLECTION_JOBS_PROCESSED_TOTAL, float(processed_count), labels, "counter"))
+    recorder.record(MetricSample(MARKET_DATA_COLLECTION_JOBS_FAILED_TOTAL, float(failed_count), labels, "counter"))
+    recorder.record(MetricSample(MARKET_DATA_COLLECTION_EVENTS_PUBLISHED_TOTAL, float(published_count), labels, "counter"))
 
 
 def record_outbox_publish_batch(

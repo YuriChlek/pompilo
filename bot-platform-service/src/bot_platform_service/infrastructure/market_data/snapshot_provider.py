@@ -29,6 +29,17 @@ class MarketDataServiceSnapshotProvider:
     def __init__(self, connection: AsyncConnection) -> None:
         self.connection = connection
 
+    async def get_snapshot(self, *, snapshot_id: str) -> BotMarketSnapshot:
+        """Return one complete snapshot by id and exact candle membership."""
+
+        query = select(market_snapshots).where(market_snapshots.c.id == snapshot_id)
+        row = (await self.connection.execute(query)).mappings().one_or_none()
+        if row is None:
+            raise SnapshotNotReadyError(f"Snapshot {snapshot_id} is not available")
+        if str(row["completeness_status"]) != COMPLETE_STATUS:
+            raise SnapshotNotReadyError(f"Snapshot {snapshot_id} is not complete")
+        return await self._snapshot_from_row(row)
+
     async def get_latest_complete_snapshot(
         self,
         *,

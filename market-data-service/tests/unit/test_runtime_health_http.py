@@ -94,6 +94,10 @@ class RuntimeHttpServerTests(unittest.IsolatedAsyncioTestCase):
             method="GET",
             path="/snapshots/latest?symbol=ETHUSDT&timeframe=1h&max_age_seconds=1",
         )
+        by_id_status, _, by_id_body = await ready_server._route(
+            method="GET",
+            path="/snapshots/snapshot-1",
+        )
 
         self.assertEqual(ready_status, 200)
         self.assertEqual(ready_body["contract_version"], "market-snapshot.v1")
@@ -101,6 +105,9 @@ class RuntimeHttpServerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(not_ready_body["status"], "not_ready")
         self.assertEqual(stale_status, 503)
         self.assertEqual(stale_body["status"], "stale")
+        self.assertEqual(by_id_status, 200)
+        self.assertEqual(by_id_body["status"], "ready")
+        self.assertEqual(ready_server.snapshot_read_service.snapshot_ids, ["snapshot-1"])
 
 
 class FakeContainer:
@@ -155,6 +162,11 @@ class FakeSnapshotReadResult:
 class FakeSnapshotReadService:
     def __init__(self, *, status: str) -> None:
         self.status = status
+        self.snapshot_ids: list[str] = []
 
     async def latest_complete_snapshot(self, query):
+        return FakeSnapshotReadResult(status=self.status)
+
+    async def snapshot_by_id(self, snapshot_id: str):
+        self.snapshot_ids.append(snapshot_id)
         return FakeSnapshotReadResult(status=self.status)

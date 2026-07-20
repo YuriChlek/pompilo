@@ -9,6 +9,7 @@ from market_data_service.observability.metrics import (
     MARKET_DATA_GAP_COUNT,
     MARKET_DATA_OUTBOX_EVENTS_DELETED_TOTAL,
     MARKET_DATA_OUTBOX_LAG_SECONDS,
+    MARKET_DATA_COLLECTION_TICKS_TOTAL,
     MARKET_DATA_PROVIDER_ERRORS_TOTAL,
     MARKET_DATA_PROVIDER_RATE_LIMITED_TOTAL,
     MARKET_DATA_QUEUE_LAG_SECONDS,
@@ -16,6 +17,8 @@ from market_data_service.observability.metrics import (
     MARKET_DATA_SYNC_DURATION_SECONDS,
     STABLE_METRIC_NAMES,
     InMemoryMetricsRecorder,
+    PrometheusMetricsRecorder,
+    record_collection_tick,
     record_outbox_cleanup,
     record_outbox_lag,
     record_provider_error,
@@ -35,6 +38,7 @@ class ObservabilityMetricsTests(unittest.TestCase):
         self.assertIn(MARKET_DATA_QUEUE_LAG_SECONDS, STABLE_METRIC_NAMES)
         self.assertIn(MARKET_DATA_OUTBOX_LAG_SECONDS, STABLE_METRIC_NAMES)
         self.assertIn(MARKET_DATA_OUTBOX_EVENTS_DELETED_TOTAL, STABLE_METRIC_NAMES)
+        self.assertIn(MARKET_DATA_COLLECTION_TICKS_TOTAL, STABLE_METRIC_NAMES)
 
     def test_record_sync_metrics_emits_rows_gap_status_and_duration(self) -> None:
         recorder = InMemoryMetricsRecorder()
@@ -104,6 +108,30 @@ class ObservabilityMetricsTests(unittest.TestCase):
         self.assertEqual(recorder.samples[0].name, MARKET_DATA_QUEUE_LAG_SECONDS)
         self.assertEqual(recorder.samples[0].labels["queue_name"], "market-data-events")
         self.assertEqual(recorder.samples[0].value, 15.0)
+
+    def test_collection_tick_metrics_are_rendered_as_prometheus_counters(self) -> None:
+        recorder = PrometheusMetricsRecorder()
+
+        record_collection_tick(
+            recorder,
+            status="success",
+            scheduled_count=2,
+            processed_count=2,
+            failed_count=0,
+            published_count=1,
+        )
+        record_collection_tick(
+            recorder,
+            status="success",
+            scheduled_count=1,
+            processed_count=1,
+            failed_count=0,
+            published_count=1,
+        )
+        payload = recorder.render()
+
+        self.assertIn('market_data_collection_ticks_total{status="success"} 2', payload)
+        self.assertIn('market_data_collection_jobs_scheduled_total{status="success"} 3', payload)
 
 
 def _snapshot() -> MarketSnapshot:

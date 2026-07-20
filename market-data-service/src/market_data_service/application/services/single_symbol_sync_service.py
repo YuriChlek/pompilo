@@ -13,7 +13,7 @@ from market_data_service.application.services.backfill_planning_service import B
 from market_data_service.application.services.symbol_registry_service import assert_sync_mapping_active
 from market_data_service.application.symbol_registry_ports import ProviderSymbolRegistryPort
 from market_data_service.application.sync_models import SyncClosedCandlesCommand, SyncClosedCandlesResult
-from market_data_service.domain.candle_gap_detector import detect_candle_range_status
+from market_data_service.domain.candle_gap_detector import CandleRangeValidationResult, detect_candle_range_status
 from market_data_service.domain.candle_models import CanonicalCandle
 from market_data_service.domain.enums import CandleRangeStatus, MarketDataBatchStatus, ProviderSymbolStatus
 from market_data_service.domain.symbol_registry_models import ProviderSymbol
@@ -92,6 +92,11 @@ class SingleSymbolSyncService:
                 timeframe=timeframe,
                 expected_from=command.from_time,
                 expected_to=command.to_time,
+            )
+            range_validation = _accepted_provider_limited_validation(
+                range_validation,
+                candles=candles,
+                command=command,
             )
             if (
                 range_validation.status == CandleRangeStatus.GAP_DETECTED
@@ -224,6 +229,42 @@ def _batch_status_for_range_status(range_status: CandleRangeStatus) -> MarketDat
     if range_status == CandleRangeStatus.COMPLETE:
         return MarketDataBatchStatus.COMPLETE
     return MarketDataBatchStatus.INCOMPLETE
+
+
+def _accepted_provider_limited_validation(
+    range_validation: CandleRangeValidationResult,
+    *,
+    candles: list[CanonicalCandle],
+    command: SyncClosedCandlesCommand,
+) -> CandleRangeValidationResult:
+    if not command.allow_provider_limited_history:
+        return range_validation
+    if range_validation.status not in {CandleRangeStatus.GAP_DETECTED, CandleRangeStatus.INCOMPLETE}:
+        return range_validation
+    if not _is_provider_limited_prefix(range_validation=range_validation, candles=candles):
+        return range_validation
+    return CandleRangeValidationResult(
+        status=CandleRangeStatus.COMPLETE if candles else CandleRangeStatus.INCOMPLETE,
+        expected_count=range_validation.expected_count,
+        actual_count=range_validation.actual_count,
+        gap_count=0,
+        duplicate_count=range_validation.duplicate_count,
+        wrong_duration_count=range_validation.wrong_duration_count,
+        missing_intervals=(),
+    )
+
+
+def _is_provider_limited_prefix(
+    *,
+    range_validation: CandleRangeValidationResult,
+    candles: list[CanonicalCandle],
+) -> bool:
+    if range_validation.duplicate_count > 0 or range_validation.wrong_duration_count > 0:
+        return False
+    if not candles:
+        return True
+    first_open_time = min(candle.open_time for candle in candles)
+    return all(interval.close_time <= first_open_time for interval in range_validation.missing_intervals)
 
 
 def _candle_range_bounds(candles: list[CanonicalCandle]) -> tuple[datetime | None, datetime | None]:

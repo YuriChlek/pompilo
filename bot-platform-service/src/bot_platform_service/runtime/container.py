@@ -12,6 +12,7 @@ from bot_platform_service.application import (
     AdminBotInstanceService,
     AdminMetadataService,
     BotInstanceLifecycleService,
+    EventDataCleanupService,
     ManualBotRunService,
     RuntimeCapabilities,
 )
@@ -25,6 +26,7 @@ from bot_platform_service.persistence.repositories.bot_instance_repository impor
 from bot_platform_service.persistence.repositories.bot_module_repository import BotModuleRepository
 from bot_platform_service.persistence.repositories.bot_run_repository import BotRunRepository
 from bot_platform_service.persistence.repositories.bot_signal_repository import BotSignalRepository
+from bot_platform_service.persistence.repositories.market_data_event_repository import MarketDataEventRepository
 from bot_platform_service.registry.module_resolver import PersistedBotModuleResolver
 
 
@@ -44,6 +46,7 @@ class BotPlatformRepositories:
     bot_audit_events: BotAuditEventRepository
     bot_runs: BotRunRepository
     bot_signals: BotSignalRepository
+    market_data_events: MarketDataEventRepository | None = None
 
 
 @dataclass(slots=True)
@@ -60,6 +63,7 @@ class BotPlatformRuntimeContainer:
     lifecycle_service: BotInstanceLifecycleService
     manual_run_service: ManualBotRunService
     metrics: InMemoryMetricsRecorder
+    event_data_cleanup_service: EventDataCleanupService | None = None
     runner_started: bool = False
     _closed: bool = False
 
@@ -88,12 +92,14 @@ async def build_runtime_container(
     bot_audit_event_repository = BotAuditEventRepository(connection)
     bot_run_repository = BotRunRepository(connection)
     bot_signal_repository = BotSignalRepository(connection)
+    market_data_event_repository = MarketDataEventRepository(connection)
     repositories = BotPlatformRepositories(
         bot_modules=bot_module_repository,
         bot_instances=bot_instance_repository,
         bot_audit_events=bot_audit_event_repository,
         bot_runs=bot_run_repository,
         bot_signals=bot_signal_repository,
+        market_data_events=market_data_event_repository,
     )
     metrics = InMemoryMetricsRecorder()
     module_resolver = PersistedBotModuleResolver(bot_module_repository)
@@ -141,6 +147,11 @@ async def build_runtime_container(
             market_data_source=resolved_settings.market_data.source,
         ),
         metrics=metrics,
+        event_data_cleanup_service=EventDataCleanupService(
+            repository=market_data_event_repository,
+            idempotency_retention_days=resolved_settings.event_retention.idempotency_retention_days,
+            audit_retention_days=resolved_settings.event_retention.audit_retention_days,
+        ),
     )
 
 

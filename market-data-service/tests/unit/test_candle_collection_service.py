@@ -298,6 +298,30 @@ class CandleCollectionServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.queue.completed_keys, [btc_job.idempotency_key])
         self.assertEqual(self.queue.failed_keys, [sol_job.idempotency_key])
 
+    async def test_respects_max_jobs_per_tick(self) -> None:
+        service = CandleCollectionService(
+            resolver=self.resolver,
+            single_symbol_sync=self.sync_service,
+            sync_job_queue=self.queue,
+            candle_history=self.history,
+            collection_state=self.collection_state,
+            provider_symbols=("BTCUSDT", "SOLUSDT"),
+            timeframes=("1h",),
+            safety_delay_by_timeframe={"1h": timedelta(minutes=0)},
+            jitter_seconds=0,
+            bootstrap_lookback_years=2,
+            bootstrap_max_chunks_per_tick=3,
+            max_jobs_per_tick=1,
+            chunk_limit=100,
+            now_provider=lambda: self.now,
+        )
+
+        result = await service.collect()
+
+        self.assertEqual(result.scheduled_count, 2)
+        self.assertEqual(result.processed_count, 1)
+        self.assertEqual(len(self.sync_service.calls), 1)
+
     async def test_first_run_triggers_paginated_bootstrap(self) -> None:
         # Clean history to trigger bootstrap
         self.history.history.clear()
@@ -329,6 +353,7 @@ class CandleCollectionServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(self.sync_service.calls), 6)
         for call in self.sync_service.calls:
             self.assertFalse(call.create_events)
+            self.assertTrue(call.allow_provider_limited_history)
 
     async def test_resume_bootstrap_progress(self) -> None:
         # Assume BTCUSDT started bootstrap but is still 1 year behind (e.g. latest_time is now - 365 days)
@@ -404,6 +429,7 @@ class CandleCollectionServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(self.sync_service.calls), 3)
         for call in self.sync_service.calls:
             self.assertTrue(call.create_events)
+            self.assertFalse(call.allow_provider_limited_history)
 
     async def test_live_tick_scheduling_for_different_timeframes(self) -> None:
         for timeframe, duration in [("1h", timedelta(hours=1)), ("4h", timedelta(hours=4)), ("1d", timedelta(days=1))]:

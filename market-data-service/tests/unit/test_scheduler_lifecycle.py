@@ -1,67 +1,132 @@
 from __future__ import annotations
 
+import asyncio
 import unittest
 
-from market_data_service.domain.scheduler_models import SchedulerTickResult
+from market_data_service.application.services.candle_collection_service import CollectionResult
+from market_data_service.application.services.outbox_publisher_service import OutboxPublishBatchResult
 from market_data_service.observability.metrics import (
+    MARKET_DATA_COLLECTION_EVENTS_PUBLISHED_TOTAL,
+    MARKET_DATA_COLLECTION_TICKS_TOTAL,
     InMemoryMetricsRecorder,
-    MARKET_DATA_SCHEDULER_TICKS_TOTAL,
 )
-from market_data_service.observability.structured_logging import InMemoryStructuredLogger
 from market_data_service.workers.scheduler_lifecycle import MarketDataSchedulerLifecycle
 
 
 class SchedulerLifecycleTests(unittest.IsolatedAsyncioTestCase):
-    async def test_failed_tick_is_isolated_and_next_tick_can_succeed(self) -> None:
-        worker = FakeSchedulerWorker([RuntimeError("db temporarily unavailable"), SchedulerTickResult(1, 2)])
+    async def test_collection_tick_commits_before_publishing_outbox(self) -> None:
+        events: list[str] = []
         metrics = InMemoryMetricsRecorder()
-        logs = InMemoryStructuredLogger()
-        lifecycle = MarketDataSchedulerLifecycle(worker, metrics_recorder=metrics, structured_logger=logs)
+        lifecycle = MarketDataSchedulerLifecycle(
+            FakeCollectionWorker(events),
+            connection=FakeConnection(events),
+            outbox_publisher=FakeOutboxPublisher(events),
+            metrics_recorder=metrics,
+        )
 
         await lifecycle._run_tick_safely()
+
+        self.assertEqual(events, ["collect", "commit", "publish", "commit"])
+        self.assertTrue(lifecycle.health().last_tick_ok)
+        self.assertIn(MARKET_DATA_COLLECTION_TICKS_TOTAL, {sample.name for sample in metrics.samples})
+        published = [sample for sample in metrics.samples if sample.name == MARKET_DATA_COLLECTION_EVENTS_PUBLISHED_TOTAL]
+        self.assertEqual(published[0].value, 1.0)
+
+    async def test_failed_collection_rolls_back_and_records_failed_tick(self) -> None:
+        events: list[str] = []
+        metrics = InMemoryMetricsRecorder()
+        lifecycle = MarketDataSchedulerLifecycle(
+            FailingCollectionWorker(events),
+            connection=FakeConnection(events),
+            metrics_recorder=metrics,
+        )
+
         await lifecycle._run_tick_safely()
 
-        health = lifecycle.health()
-        self.assertFalse(health.running)
-        self.assertEqual(health.failed_ticks, 1)
-        self.assertEqual(health.successful_ticks, 1)
-        self.assertTrue(health.last_tick_ok)
-        self.assertIsNone(health.last_error)
-        self.assertEqual([sample.name for sample in metrics.samples], [MARKET_DATA_SCHEDULER_TICKS_TOTAL] * 2)
-        self.assertEqual([sample.labels["status"] for sample in metrics.samples], ["failed", "success"])
-        self.assertEqual([event.fields["status"] for event in logs.events], ["FAILED", "COMPLETE"])
+        self.assertEqual(events, ["collect", "rollback"])
+        self.assertFalse(lifecycle.health().last_tick_ok)
+        self.assertEqual(metrics.samples[1].labels["status"], "failed")
 
-    async def test_stop_prevents_additional_scheduler_ticks(self) -> None:
-        worker = FakeSchedulerWorker([SchedulerTickResult(1, 0), SchedulerTickResult(1, 0)])
-        worker.poll_interval_seconds = 10
-        lifecycle = MarketDataSchedulerLifecycle(worker)
+    async def test_stop_waits_for_active_collection_tick(self) -> None:
+        events: list[str] = []
+        worker = SlowCollectionWorker(events)
+        lifecycle = MarketDataSchedulerLifecycle(worker, connection=FakeConnection(events))
 
         lifecycle.start()
-        while worker.call_count == 0:
-            await worker.wait_for_call()
-        await lifecycle.stop()
+        await worker.wait_for_call()
+        stop_task = asyncio.create_task(lifecycle.stop())
+        self.assertFalse(stop_task.done())
+        worker.release()
+        await stop_task
 
-        self.assertEqual(worker.call_count, 1)
+        self.assertEqual(events, ["collect:start", "collect:done", "commit"])
         self.assertFalse(lifecycle.health().running)
 
 
-class FakeSchedulerWorker:
-    def __init__(self, results) -> None:
-        self.results = list(results)
-        self.poll_interval_seconds = 0.01
-        self.call_count = 0
-        self._called = False
+class FakeConnection:
+    def __init__(self, events: list[str]) -> None:
+        self.events = events
+        self.open_transaction = True
 
-    async def run_once(self):
-        self.call_count += 1
-        self._called = True
-        result = self.results.pop(0)
-        if isinstance(result, Exception):
-            raise result
-        return result
+    def in_transaction(self) -> bool:
+        return self.open_transaction
+
+    async def commit(self) -> None:
+        self.events.append("commit")
+        self.open_transaction = True
+
+    async def rollback(self) -> None:
+        self.events.append("rollback")
+        self.open_transaction = False
+
+
+class FakeCollectionWorker:
+    poll_interval_seconds = 0.01
+
+    def __init__(self, events: list[str]) -> None:
+        self.events = events
+
+    async def run_once(self) -> CollectionResult:
+        self.events.append("collect")
+        return CollectionResult(scheduled_count=1, processed_count=1, failed_count=0, published_count=0)
+
+
+class FailingCollectionWorker(FakeCollectionWorker):
+    async def run_once(self) -> CollectionResult:
+        self.events.append("collect")
+        raise RuntimeError("collection failed")
+
+
+class SlowCollectionWorker(FakeCollectionWorker):
+    def __init__(self, events: list[str]) -> None:
+        super().__init__(events)
+        self._called = asyncio.Event()
+        self._release = asyncio.Event()
+
+    async def run_once(self) -> CollectionResult:
+        self.events.append("collect:start")
+        self._called.set()
+        await self._release.wait()
+        self.events.append("collect:done")
+        return CollectionResult(scheduled_count=1, processed_count=1, failed_count=0, published_count=0)
 
     async def wait_for_call(self) -> None:
-        while not self._called:
-            import asyncio
+        await self._called.wait()
 
-            await asyncio.sleep(0)
+    def release(self) -> None:
+        self._release.set()
+
+
+class FakeOutboxPublisher:
+    def __init__(self, events: list[str]) -> None:
+        self.events = events
+
+    async def run_once(self) -> OutboxPublishBatchResult:
+        self.events.append("publish")
+        return OutboxPublishBatchResult(
+            fetched_count=1,
+            published_count=1,
+            retry_count=0,
+            failed_count=0,
+            publisher_lag_seconds=0.0,
+        )

@@ -50,6 +50,7 @@ from market_data_service.persistence.repositories.symbol_registry_repository imp
 from market_data_service.persistence.repositories.sync_completion_repository import SyncCompletionRepository
 from market_data_service.persistence.repositories.sync_job_repository import SyncJobRepository
 from market_data_service.domain.availability_rules import AvailabilityCachePolicy
+from market_data_service.observability.metrics import PrometheusMetricsRecorder
 from market_data_service.workers.market_data_scheduler_worker import MarketDataSchedulerWorker
 from market_data_service.workers.outbox_publisher_lifecycle import OutboxPublisherLifecycle
 from market_data_service.workers.outbox_publisher_worker import OutboxPublisherWorker
@@ -108,6 +109,7 @@ class MarketDataRuntimeContainer:
     provider_adapter: CandleProviderPort
     adapters: Mapping[MarketDataSource, CandleProviderPort]
     event_broker: RedisStreamEventBroker
+    metrics_recorder: PrometheusMetricsRecorder
     repositories: RuntimeRepositories
     services: RuntimeServices
     workers: RuntimeWorkers
@@ -141,7 +143,8 @@ async def build_runtime_container(
         stream_name=runtime_settings.redis.stream_name,
         maxlen=runtime_settings.redis.maxlen,
     )
-    adapters = _build_adapters(runtime_settings)
+    metrics_recorder = PrometheusMetricsRecorder()
+    adapters = _build_adapters(runtime_settings, metrics_recorder=metrics_recorder)
     provider_adapter = adapters[MarketDataSource.BINANCE_SPOT]
     services = _build_services(
         settings=runtime_settings,
@@ -149,10 +152,20 @@ async def build_runtime_container(
         event_broker=event_broker,
         provider_adapter=provider_adapter,
         adapters=adapters,
+        metrics_recorder=metrics_recorder,
     )
     workers = _build_workers(settings=runtime_settings, services=services)
-    scheduler_lifecycle = MarketDataSchedulerLifecycle(workers.market_data_scheduler)
-    outbox_publisher_lifecycle = OutboxPublisherLifecycle(workers.outbox_publisher)
+    scheduler_lifecycle = MarketDataSchedulerLifecycle(
+        workers.market_data_scheduler,
+        connection=connection,
+        outbox_publisher=workers.outbox_publisher if runtime_settings.outbox_publisher_enabled else None,
+        collect_on_start=runtime_settings.collect.on_start,
+        metrics_recorder=metrics_recorder,
+    )
+    outbox_publisher_lifecycle = OutboxPublisherLifecycle(
+        workers.outbox_publisher,
+        metrics_recorder=metrics_recorder,
+    )
 
     return MarketDataRuntimeContainer(
         settings=runtime_settings,
@@ -162,6 +175,7 @@ async def build_runtime_container(
         provider_adapter=provider_adapter,
         adapters=adapters,
         event_broker=event_broker,
+        metrics_recorder=metrics_recorder,
         repositories=repositories,
         services=services,
         workers=workers,
@@ -188,7 +202,11 @@ def _build_repositories(connection: AsyncConnection) -> RuntimeRepositories:
     )
 
 
-def _build_adapters(settings: MarketDataServiceSettings) -> Mapping[MarketDataSource, CandleProviderPort]:
+def _build_adapters(
+    settings: MarketDataServiceSettings,
+    *,
+    metrics_recorder: PrometheusMetricsRecorder,
+) -> Mapping[MarketDataSource, CandleProviderPort]:
     if settings.provider_mode == "fixture":
         fixture = FixtureCandleProvider()
         return {
@@ -198,6 +216,7 @@ def _build_adapters(settings: MarketDataServiceSettings) -> Mapping[MarketDataSo
     binance = BinanceSpotAdapter(
         settings.provider,
         concurrency_limiter=AsyncConcurrencyLimiter(settings.provider.max_concurrent_requests),
+        metrics_recorder=metrics_recorder,
         circuit_breaker=CircuitBreaker(
             CircuitBreakerConfig(
                 failure_threshold=settings.provider.circuit_breaker_failure_threshold,
@@ -208,6 +227,7 @@ def _build_adapters(settings: MarketDataServiceSettings) -> Mapping[MarketDataSo
     bybit = BybitSpotAdapter(
         settings.bybit_provider,
         concurrency_limiter=AsyncConcurrencyLimiter(settings.bybit_provider.max_concurrent_requests),
+        metrics_recorder=metrics_recorder,
         circuit_breaker=CircuitBreaker(
             CircuitBreakerConfig(
                 failure_threshold=settings.bybit_provider.circuit_breaker_failure_threshold,
@@ -228,6 +248,7 @@ def _build_services(
     event_broker: RedisStreamEventBroker,
     provider_adapter: CandleProviderPort,
     adapters: Mapping[MarketDataSource, CandleProviderPort],
+    metrics_recorder: PrometheusMetricsRecorder,
 ) -> RuntimeServices:
     backfill_planning = BackfillPlanningService(repositories.backfill_request)
     backfill_command = BackfillCommandService(
@@ -252,6 +273,7 @@ def _build_services(
     outbox_publisher = OutboxPublisherService(
         outbox_store=repositories.outbox,
         broker=event_broker,
+        metrics_recorder=metrics_recorder,
     )
     outbox_replay = OutboxReplayService(
         outbox_store=repositories.outbox,
@@ -273,6 +295,7 @@ def _build_services(
         batch_tracker=repositories.batch,
         sync_completion=repositories.sync_completion,
         backfill_planning=backfill_planning,
+        metrics_recorder=metrics_recorder,
     )
     symbol_registry_sync = SymbolRegistrySyncService(repositories.symbol_registry)
 
@@ -295,6 +318,7 @@ def _build_services(
     outbox_cleanup = OutboxCleanupService(
         outbox_repository=repositories.outbox,
         retention_days=settings.retention.outbox_retention_days,
+        metrics_recorder=metrics_recorder,
     )
     collection_concurrency_limiter = AsyncConcurrencyLimiter(settings.bootstrap.provider_max_concurrency)
     candle_collection = CandleCollectionService(
@@ -309,6 +333,7 @@ def _build_services(
         jitter_seconds=settings.scheduler.jitter_seconds,
         bootstrap_lookback_years=settings.bootstrap.bootstrap_lookback_years,
         bootstrap_max_chunks_per_tick=settings.bootstrap.bootstrap_max_chunks_per_tick,
+        max_jobs_per_tick=settings.collect.max_jobs_per_tick,
         concurrency_limiter=collection_concurrency_limiter,
     )
 
@@ -333,7 +358,7 @@ def _build_workers(*, settings: MarketDataServiceSettings, services: RuntimeServ
     return RuntimeWorkers(
         market_data_scheduler=MarketDataSchedulerWorker(
             services.candle_collection,
-            poll_interval_seconds=settings.scheduler.poll_interval_seconds,
+            poll_interval_seconds=settings.collect.poll_interval_seconds,
         ),
         outbox_publisher=OutboxPublisherWorker(services.outbox_publisher),
     )
