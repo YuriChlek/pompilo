@@ -13,17 +13,27 @@ class PersistentBackendStage1CliSkeletonSmokeTests(unittest.TestCase):
 
         for command in (
             "serve",
-            "scheduler",
-            "outbox-publisher",
-            "backfill",
+            "collect",
+            "candles:get",
             "healthcheck",
             "db:check",
+            "outbox:cleanup",
+        ):
+            self.assertIn(command, entrypoint)
+
+        for removed_command in (
+            "scheduler",
+            "outbox-publisher",
             "db:revision",
+            "scheduler:run-once",
+            "sync:run-next",
+            "outbox:publish-once",
             "symbols:sync",
+            "backfill",
             "gaps:scan",
             "outbox:replay",
         ):
-            self.assertIn(command, entrypoint)
+            self.assertNotIn(f'"{removed_command}"', entrypoint)
 
         self.assertIn("make_url", entrypoint)
         self.assertIn("Database configuration is valid", entrypoint)

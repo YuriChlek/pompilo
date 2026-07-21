@@ -109,6 +109,19 @@ class MarketDataEventConsumerService:
     ) -> MarketDataEventConsumerResult:
         """Handle one Redis Stream message and ACK only terminal outcomes."""
 
+        event_type = payload.get("event_type")
+        if event_type == "CandleBatchReady":
+            self.logger.info(
+                "bot_platform.market_data_event.ignored",
+                message_id=message_id,
+                event_type=event_type,
+            )
+            return MarketDataEventConsumerResult(
+                ack=True,
+                recognized=False,
+                terminal=True,
+            )
+
         try:
             event = parse_market_data_candles_collected_event(payload)
         except ValueError as exc:

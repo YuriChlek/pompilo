@@ -22,6 +22,7 @@ from bot_platform_service.domain import (
     MarketDataSnapshotProvider,
     build_payload_hash,
 )
+from bot_platform_service.domain.symbol_normalization import normalize_symbol
 
 
 class BotRunOrchestrationInstanceRepository(Protocol):
@@ -489,4 +490,4 @@ def _permissions_for_mode(mode: BotMode) -> frozenset[BotPermission]:
 def is_instance_eligible_for_snapshot(config: BotInstanceConfig, *, canonical_symbol: str, timeframe: str) -> bool:
     """Return whether one enabled config should run for a snapshot."""
 
-    return canonical_symbol.upper() in {symbol.upper() for symbol in config.symbols} and timeframe in set(config.timeframes)
+    return normalize_symbol(canonical_symbol) in {normalize_symbol(symbol) for symbol in config.symbols} and timeframe in set(config.timeframes)

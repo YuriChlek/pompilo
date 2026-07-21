@@ -13,9 +13,9 @@ class PersistentBackendStage9RuntimeSmokeTests(unittest.TestCase):
 
         for required_text in (
             "market_data_migrate",
-            "market_data_symbols_sync",
+            "collect --once",
             "compose up --build -d market_data",
-            "/health/ready",
+            "python -m market_data_service.main healthcheck",
             "/metrics",
             "_market_data.sync_jobs",
             "_market_data.market_data_batches",
@@ -23,8 +23,6 @@ class PersistentBackendStage9RuntimeSmokeTests(unittest.TestCase):
             "_market_data.market_snapshots",
             "_market_data.outbox_events",
             "MARKET_DATA_PROVIDER_MODE",
-            "sync:run-next",
-            "outbox:publish-once",
             "redis-cli",
             "XLEN",
             "Smoke failed:",

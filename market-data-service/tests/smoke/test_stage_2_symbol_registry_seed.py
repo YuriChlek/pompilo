@@ -26,8 +26,7 @@ class Stage2SymbolRegistrySeedTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
 
         for provider_symbol in ("BTCUSDT", "ETHUSDT", "LTCUSDT", "SOLUSDT", "SUIUSDT", "TAOUSDT", "XRPUSDT"):
-            canonical_symbol = provider_symbol.replace("USDT", "/USDT")
-            self.assertIn(canonical_symbol, migration)
+            self.assertIn(provider_symbol, migration)
 
     def test_metadata_matches_seeded_registry_contract(self) -> None:
         market_symbols_module = (

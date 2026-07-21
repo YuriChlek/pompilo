@@ -2,11 +2,11 @@
 
 `market-data-service` - Python 3.12 сервіс централізованого збору, нормалізації, збереження та публікації market data для Pampilo trading platform.
 
-Сервіс відповідає за symbol registry, candle ingestion, batch tracking, snapshots, gap detection, transactional outbox і scheduler contracts. Trading bots мають споживати market snapshots, а не читати legacy candle tables напряму.
+Сервіс відповідає за symbol registry, candle ingestion, batch tracking, snapshots, gap detection, transactional outbox і collection contracts. Trading bots мають споживати market snapshots, а не читати legacy candle tables напряму.
 
 ## Поточний статус
 
-Сервіс має production CLI entrypoint, runtime composition root, HTTP health/readiness/metrics API, scheduler lifecycle, outbox publisher lifecycle, one-shot maintenance jobs, Binance Spot provider, fixture provider для deterministic smoke, Redis Stream broker, SQLAlchemy Core persistence, Alembic migrations і тестове покриття.
+Сервіс має production CLI entrypoint, runtime composition root, HTTP health/readiness/metrics API, collection lifecycle, outbox publisher lifecycle, Binance Spot provider, fixture provider для deterministic smoke, Redis Stream broker, SQLAlchemy Core persistence, Alembic migrations і тестове покриття.
 
 Основний production режим - long-running process:
 
@@ -261,69 +261,29 @@ python -m market_data_service.main db:check
 python -m market_data_service.main collect
 ```
 
-Синхронізувати registry symbols:
+Запустити один collection tick для smoke/CI:
 
 ```bash
-python -m market_data_service.main symbols:sync
+python -m market_data_service.main collect --once
 ```
 
-Запустити один collection tick:
+Отримати provider candles за період без запису в production workflow:
 
 ```bash
-python -m market_data_service.main scheduler:run-once
+python -m market_data_service.main candles:get --period 1d --symbols ETHUSDT --timeframes 1h --provider auto
 ```
 
-Обробити наступний pending sync job, записати candles/batch/snapshot/outbox records:
+Очистити службові outbox event records як ops-команду:
 
 ```bash
-python -m market_data_service.main sync:run-next
+python -m market_data_service.main outbox:cleanup
 ```
 
-Опублікувати одну пачку pending outbox events у Redis Stream:
+Retention policy:
 
-```bash
-python -m market_data_service.main outbox:publish-once
-```
-
-Створити backfill requests:
-
-```bash
-python -m market_data_service.main backfill \
-  --symbol ETHUSDT \
-  --timeframe 1h \
-  --from 2026-07-16T00:00:00Z \
-  --to 2026-07-16T06:00:00Z
-```
-
-Просканувати gaps без запуску backfill:
-
-```bash
-python -m market_data_service.main gaps:scan \
-  --symbol ETHUSDT \
-  --timeframe 1h \
-  --from 2026-07-16T00:00:00Z \
-  --to 2026-07-16T06:00:00Z
-```
-
-Просканувати gaps і створити backfill requests:
-
-```bash
-python -m market_data_service.main gaps:scan \
-  --symbol ETHUSDT \
-  --timeframe 1h \
-  --from 2026-07-16T00:00:00Z \
-  --to 2026-07-16T06:00:00Z \
-  --create-backfill
-```
-
-Replay outbox events:
-
-```bash
-python -m market_data_service.main outbox:replay --dry-run
-python -m market_data_service.main outbox:replay --from-id 1 --to-id 100
-```
-
-Команди `scheduler`, `outbox-publisher` і `db:revision` зарезервовані для майбутнього окремого deployment mode і зараз повертають явний unsupported exit code.
+- Redis Stream events зберігаються за замовчуванням 2 дні через `MARKET_DATA_REDIS_EVENT_RETENTION_DAYS`.
+- Службові DB event records видаляються за замовчуванням після 5 днів через `MARKET_DATA_OUTBOX_RETENTION_DAYS`.
+- Candles не видаляються цим cleanup-ом.
 
 ## Локальний deterministic smoke без Docker runtime
 
@@ -337,7 +297,6 @@ export MARKET_DATA_SCHEDULER_JITTER_SECONDS=0
 export MARKET_DATA_1H_SAFETY_DELAY_SECONDS=0
 
 alembic upgrade head
-python -m market_data_service.main symbols:sync
 python -m market_data_service.main collect --once
 python -m market_data_service.main collect
 ```
@@ -414,7 +373,7 @@ docker compose -p pampilo-platform \
   up --build market_data
 ```
 
-Запустити one-shot jobs:
+Запустити один collection tick для smoke/CI:
 
 ```bash
 docker compose -p pampilo-platform \
@@ -423,37 +382,7 @@ docker compose -p pampilo-platform \
   -f infra/compose/docker-compose.dev.yaml \
   --profile infra \
   --profile platform \
-  run --rm market_data_symbols_sync
-```
-
-```bash
-docker compose -p pampilo-platform \
-  --env-file control-panel/.env \
-  -f infra/compose/docker-compose.yaml \
-  -f infra/compose/docker-compose.dev.yaml \
-  --profile infra \
-  --profile platform \
-  run --rm market_data python -m market_data_service.main scheduler:run-once
-```
-
-```bash
-docker compose -p pampilo-platform \
-  --env-file control-panel/.env \
-  -f infra/compose/docker-compose.yaml \
-  -f infra/compose/docker-compose.dev.yaml \
-  --profile infra \
-  --profile platform \
-  run --rm market_data python -m market_data_service.main sync:run-next
-```
-
-```bash
-docker compose -p pampilo-platform \
-  --env-file control-panel/.env \
-  -f infra/compose/docker-compose.yaml \
-  -f infra/compose/docker-compose.dev.yaml \
-  --profile infra \
-  --profile platform \
-  run --rm market_data python -m market_data_service.main outbox:publish-once
+  run --rm market_data python -m market_data_service.main collect --once
 ```
 
 Запустити platform profile повністю:

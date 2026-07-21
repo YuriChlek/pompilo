@@ -24,7 +24,7 @@ class SymbolRegistrySyncServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(repository.provider_symbols_by_source_and_canonical_symbol), 7)
         self.assertEqual(
             set(repository.market_symbols_by_canonical_symbol),
-            {"BTC/USDT", "ETH/USDT", "LTC/USDT", "SOL/USDT", "SUI/USDT", "TAO/USDT", "XRP/USDT"},
+            {"BTCUSDT", "ETHUSDT", "LTCUSDT", "SOLUSDT", "SUIUSDT", "TAOUSDT", "XRPUSDT"},
         )
         self.assertEqual(
             {

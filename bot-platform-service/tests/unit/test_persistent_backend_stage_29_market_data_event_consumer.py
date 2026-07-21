@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 
 from bot_platform_service.application import MarketDataEventConsumerService
 from bot_platform_service.config.settings import BotPlatformSettings
 from bot_platform_service.domain import parse_market_data_candles_collected_event
-from bot_platform_service.infrastructure.market_data import RedisStreamMessage
+from bot_platform_service.infrastructure.market_data import RedisStreamMarketDataEventConsumer, RedisStreamMessage
 from bot_platform_service.workers import MarketDataEventConsumerWorker
 
 
@@ -39,6 +40,20 @@ class _StreamConsumer:
 
     async def ack(self, message_id: str) -> None:
         self.acked.append(message_id)
+
+
+class _RedisClient:
+    def __init__(self, response) -> None:
+        self.response = response
+
+    async def xgroup_create(self, *args, **kwargs) -> None:
+        return None
+
+    async def xreadgroup(self, *args, **kwargs):
+        return self.response
+
+    async def xack(self, *args, **kwargs) -> None:
+        return None
 
 
 def test_stage_29_settings_and_compose_expose_market_data_event_consumer(monkeypatch) -> None:
@@ -92,6 +107,71 @@ def test_stage_29_consumer_logs_recognized_event_without_adapter_execution() -> 
                 },
             )
         ]
+
+    asyncio.run(run())
+
+
+def test_stage_29_consumer_ignores_candle_batch_ready_events() -> None:
+    async def run() -> None:
+        logger = _Logger()
+        service = MarketDataEventConsumerService(logger=logger)
+
+        result = await service.handle_message(
+            message_id="1-0",
+            payload={
+                "event_type": "CandleBatchReady",
+                "snapshot_id": "snapshot-1",
+                "source": "BINANCE_SPOT",
+            },
+        )
+
+        assert result.ack is True
+        assert result.recognized is False
+        assert result.terminal is True
+        assert logger.info_records == [
+            (
+                "bot_platform.market_data_event.ignored",
+                {
+                    "message_id": "1-0",
+                    "event_type": "CandleBatchReady",
+                },
+            )
+        ]
+        assert logger.warning_records == []
+
+    asyncio.run(run())
+
+
+def test_stage_29_redis_consumer_decodes_outbox_payload_json() -> None:
+    async def run() -> None:
+        redis = _RedisClient(
+            [
+                (
+                    "market-data-events",
+                    [
+                        (
+                            "1-0",
+                            {
+                                "event_type": "market_data.candles_collected",
+                                "payload_json": json.dumps(_valid_event_payload()),
+                            },
+                        )
+                    ],
+                )
+            ]
+        )
+        consumer = RedisStreamMarketDataEventConsumer(
+            redis_client=redis,
+            stream_name="market-data-events",
+            consumer_group="bot-platform",
+            consumer_name="test",
+        )
+
+        messages = await consumer.read_batch()
+
+        assert len(messages) == 1
+        assert messages[0].fields["contract_version"] == "market-data-event.v1"
+        assert messages[0].fields["snapshot_id"] == "snapshot-1"
 
     asyncio.run(run())
 

@@ -54,11 +54,8 @@ class RuntimeContainerTests(unittest.IsolatedAsyncioTestCase):
             container.services.market_data_scheduler.config.provider_symbols,
             ("ETHUSDT", "BTCUSDT"),
         )
-        self.assertIs(container.services.backfill_command.backfill_requester, container.repositories.backfill_request)
-        self.assertIs(container.services.gap_scan.candle_reader, container.repositories.gap_scan)
-        self.assertIs(container.services.outbox_replay.outbox_store, container.repositories.outbox)
+        self.assertIs(container.services.backfill_planning.backfill_requester, container.repositories.backfill_request)
         self.assertIs(container.services.snapshot_read.snapshot_reader, container.repositories.snapshot)
-        self.assertIs(container.services.symbol_registry_sync.repository, container.repositories.symbol_registry)
         self.assertIsNotNone(container.services.symbol_resolver)
         self.assertIsNotNone(container.services.candles_get_fetch)
         self.assertIsNotNone(container.services.outbox_cleanup)

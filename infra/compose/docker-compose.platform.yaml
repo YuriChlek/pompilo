@@ -42,6 +42,10 @@ services:
       DB_NAME: ${DB_NAME:-pampilo_db}
       DATABASE: ${DB_NAME:-pampilo_db}
       MARKET_DATA_REDIS_URL: redis://redis:6379/0
+      MARKET_DATA_OUTBOX_STREAM: ${MARKET_DATA_OUTBOX_STREAM:-market-data-events}
+      MARKET_DATA_OUTBOX_STREAM_MAXLEN: ${MARKET_DATA_OUTBOX_STREAM_MAXLEN:-100000}
+      MARKET_DATA_REDIS_EVENT_RETENTION_DAYS: ${MARKET_DATA_REDIS_EVENT_RETENTION_DAYS:-2}
+      MARKET_DATA_OUTBOX_RETENTION_DAYS: ${MARKET_DATA_OUTBOX_RETENTION_DAYS:-5}
       MARKET_DATA_PROVIDER_MODE: ${MARKET_DATA_PROVIDER_MODE:-binance}
       MARKET_DATA_PROVIDER_SYMBOLS: ${MARKET_DATA_PROVIDER_SYMBOLS:-ETHUSDT}
       MARKET_DATA_TIMEFRAMES: ${MARKET_DATA_TIMEFRAMES:-1h,4h,1d}
@@ -63,76 +67,6 @@ services:
       timeout: 5s
       retries: 12
       start_period: 20s
-    networks:
-      - platform
-
-  market_data_symbols_sync:
-    profiles: ["platform"]
-    build:
-      context: ../../market-data-service
-      dockerfile: Dockerfile
-    image: platform_market_data_service
-    restart: "no"
-    depends_on:
-      market_data_migrate:
-        condition: service_completed_successfully
-      postgres:
-        condition: service_healthy
-    environment:
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: ${DB_USER:-admin}
-      DB_PASSWORD: ${DB_PASSWORD:-admin_pass}
-      DB_NAME: ${DB_NAME:-pampilo_db}
-      DATABASE: ${DB_NAME:-pampilo_db}
-      MARKET_DATA_REDIS_URL: redis://redis:6379/0
-      MARKET_DATA_PROVIDER_MODE: ${MARKET_DATA_PROVIDER_MODE:-binance}
-      MARKET_DATA_PROVIDER_SYMBOLS: ${MARKET_DATA_PROVIDER_SYMBOLS:-ETHUSDT}
-      MARKET_DATA_TIMEFRAMES: ${MARKET_DATA_TIMEFRAMES:-1h,4h,1d}
-    command: ["python", "-m", "market_data_service.main", "symbols:sync"]
-    networks:
-      - platform
-
-  market_data_backfill:
-    profiles: ["platform"]
-    build:
-      context: ../../market-data-service
-      dockerfile: Dockerfile
-    image: platform_market_data_service
-    restart: "no"
-    depends_on:
-      market_data_migrate:
-        condition: service_completed_successfully
-      postgres:
-        condition: service_healthy
-    environment:
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: ${DB_USER:-admin}
-      DB_PASSWORD: ${DB_PASSWORD:-admin_pass}
-      DB_NAME: ${DB_NAME:-pampilo_db}
-      DATABASE: ${DB_NAME:-pampilo_db}
-      MARKET_DATA_REDIS_URL: redis://redis:6379/0
-      MARKET_DATA_PROVIDER_MODE: ${MARKET_DATA_PROVIDER_MODE:-binance}
-      MARKET_DATA_PROVIDER_SYMBOLS: ${MARKET_DATA_PROVIDER_SYMBOLS:-ETHUSDT}
-      MARKET_DATA_TIMEFRAMES: ${MARKET_DATA_TIMEFRAMES:-1h,4h,1d}
-      MARKET_DATA_BACKFILL_BATCH_CANDLES: ${MARKET_DATA_BACKFILL_BATCH_CANDLES:-500}
-      MARKET_DATA_BACKFILL_MAX_CONCURRENCY: ${MARKET_DATA_BACKFILL_MAX_CONCURRENCY:-1}
-    command:
-      [
-        "python",
-        "-m",
-        "market_data_service.main",
-        "backfill",
-        "--symbol",
-        "${MARKET_DATA_BACKFILL_SYMBOL:-}",
-        "--timeframe",
-        "${MARKET_DATA_BACKFILL_TIMEFRAME:-}",
-        "--from",
-        "${MARKET_DATA_BACKFILL_FROM:-}",
-        "--to",
-        "${MARKET_DATA_BACKFILL_TO:-}",
-      ]
     networks:
       - platform
 
@@ -221,10 +155,14 @@ services:
       BOT_PLATFORM_MARKET_DATA_BASE_URL: ${BOT_PLATFORM_MARKET_DATA_BASE_URL:-http://market_data:8010}
       BOT_PLATFORM_MARKET_DATA_SOURCE: ${BOT_PLATFORM_MARKET_DATA_SOURCE:-BINANCE_SPOT}
       BOT_PLATFORM_RUNNER_POLL_INTERVAL_SECONDS: ${BOT_PLATFORM_RUNNER_POLL_INTERVAL_SECONDS:-15}
-      BOT_PLATFORM_MARKET_DATA_EVENTS_ENABLED: ${BOT_PLATFORM_MARKET_DATA_EVENTS_ENABLED:-false}
+      BOT_PLATFORM_MARKET_DATA_EVENTS_ENABLED: ${BOT_PLATFORM_MARKET_DATA_EVENTS_ENABLED:-true}
       BOT_PLATFORM_MARKET_DATA_EVENTS_REDIS_URL: ${BOT_PLATFORM_MARKET_DATA_EVENTS_REDIS_URL:-redis://redis:6379/0}
       BOT_PLATFORM_MARKET_DATA_EVENTS_STREAM: ${BOT_PLATFORM_MARKET_DATA_EVENTS_STREAM:-market-data-events}
       BOT_PLATFORM_MARKET_DATA_EVENTS_CONSUMER_GROUP: ${BOT_PLATFORM_MARKET_DATA_EVENTS_CONSUMER_GROUP:-bot-platform}
+      BOT_PLATFORM_MARKET_DATA_EVENTS_CONSUMER_NAME: ${BOT_PLATFORM_MARKET_DATA_EVENTS_CONSUMER_NAME:-bot-platform-runner}
+      BOT_PLATFORM_MARKET_DATA_EVENTS_READ_COUNT: ${BOT_PLATFORM_MARKET_DATA_EVENTS_READ_COUNT:-10}
+      BOT_PLATFORM_MARKET_DATA_EVENTS_BLOCK_MILLISECONDS: ${BOT_PLATFORM_MARKET_DATA_EVENTS_BLOCK_MILLISECONDS:-5000}
+      BOT_PLATFORM_MARKET_DATA_EVENTS_RETRY_BACKOFF_SECONDS: ${BOT_PLATFORM_MARKET_DATA_EVENTS_RETRY_BACKOFF_SECONDS:-1}
       BOT_PLATFORM_EVENT_IDEMPOTENCY_RETENTION_DAYS: ${BOT_PLATFORM_EVENT_IDEMPOTENCY_RETENTION_DAYS:-5}
       BOT_PLATFORM_EVENT_AUDIT_RETENTION_DAYS: ${BOT_PLATFORM_EVENT_AUDIT_RETENTION_DAYS:-5}
       BOT_PLATFORM_SIGNAL_EVENTS_ENABLED: ${BOT_PLATFORM_SIGNAL_EVENTS_ENABLED:-false}

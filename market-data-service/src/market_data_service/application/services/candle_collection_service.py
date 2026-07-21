@@ -7,6 +7,7 @@ from typing import Mapping, Protocol
 
 from market_data_service.domain.collection_models import CandleCollectionState
 from market_data_service.application.services.multi_provider_symbol_resolver import MultiProviderSymbolResolver
+from market_data_service.application.services.symbol_operations_service import SymbolOperationsService
 from market_data_service.application.services.single_symbol_sync_service import SingleSymbolSyncService
 from market_data_service.application.sync_models import SyncClosedCandlesCommand, SyncClosedCandlesResult
 from market_data_service.domain.enums import MarketDataBatchStatus, MarketDataSource, SyncJobKind
@@ -101,6 +102,7 @@ class CandleCollectionService:
         self,
         *,
         resolver: MultiProviderSymbolResolver,
+        symbol_operations: SymbolOperationsService | None = None,
         single_symbol_sync: SingleSymbolSyncService,
         sync_job_queue: SyncJobQueuePort,
         candle_history: CandleHistoryPort,
@@ -117,6 +119,7 @@ class CandleCollectionService:
         now_provider=None,
     ) -> None:
         self.resolver = resolver
+        self.symbol_operations = symbol_operations
         self.single_symbol_sync = single_symbol_sync
         self.sync_job_queue = sync_job_queue
         self.candle_history = candle_history
@@ -135,6 +138,8 @@ class CandleCollectionService:
 
     async def collect(self) -> CollectionResult:
         now = _ensure_utc(self.now_provider())
+        if self.symbol_operations is not None:
+            await self.symbol_operations.sync_symbols(symbols=self.provider_symbols, timeframes=self.timeframes)
 
         scheduled_count = 0
 

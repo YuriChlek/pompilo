@@ -22,6 +22,11 @@ class SymbolRegistryRepository:
         market_symbols: tuple[MarketSymbolSeed, ...],
         provider_symbols: tuple[ProviderSymbolSeed, ...],
     ) -> SymbolRegistrySyncResult:
+        if self.connection.in_transaction():
+            market_count = await self._upsert_market_symbols(market_symbols)
+            provider_count = await self._upsert_provider_symbols(provider_symbols)
+            return SymbolRegistrySyncResult(market_symbols=market_count, provider_symbols=provider_count)
+
         async with self.connection.begin():
             market_count = await self._upsert_market_symbols(market_symbols)
             provider_count = await self._upsert_provider_symbols(provider_symbols)

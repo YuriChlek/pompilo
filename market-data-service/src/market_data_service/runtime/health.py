@@ -8,7 +8,7 @@ from sqlalchemy import text
 from market_data_service.runtime.container import MarketDataRuntimeContainer
 from market_data_service.runtime.lifecycle import RuntimeLifecycle
 
-EXPECTED_ALEMBIC_REVISION = "0008_extend_sync_backfill"
+EXPECTED_ALEMBIC_REVISION = "0010_normalize_symbol_format"
 
 
 @dataclass(frozen=True, slots=True)

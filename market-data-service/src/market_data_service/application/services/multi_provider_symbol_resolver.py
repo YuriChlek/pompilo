@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Mapping
 
 from market_data_service.domain.enums import MarketDataSource, ProviderSymbolAvailabilityStatus, ProviderSymbolStatus
+from market_data_service.domain.symbol_normalization import normalize_symbol
 from market_data_service.domain.symbol_registry_models import ProviderSymbol
 from market_data_service.domain.availability_rules import AvailabilityCachePolicy
 from market_data_service.persistence.repositories.provider_symbol_availability_repository import (
@@ -41,6 +42,7 @@ class MultiProviderSymbolResolver:
         self.now_provider = now_provider or (lambda: datetime.now(UTC))
 
     async def resolve(self, requested_symbol: str) -> ResolvedProvider | None:
+        requested_symbol = normalize_symbol(requested_symbol)
         now = self.now_provider()
         if now.tzinfo is None:
             now = now.replace(tzinfo=UTC)
@@ -64,7 +66,7 @@ class MultiProviderSymbolResolver:
                 continue
 
             # 2. Cache is missing or expired -> Query provider
-            provider_symbol_str = requested_symbol.replace("/", "").upper()
+            provider_symbol_str = requested_symbol
             provider_symbol_obj = ProviderSymbol(
                 source=source,
                 canonical_symbol=requested_symbol,

@@ -6,6 +6,7 @@ import os
 
 from market_data_service.domain.enums import MarketDataSource
 from market_data_service.domain.scheduler import SUPPORTED_SCHEDULE_TIMEFRAMES
+from market_data_service.domain.symbol_normalization import normalize_symbol
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,7 +30,10 @@ def get_scheduler_config() -> SchedulerConfig:
 
     return SchedulerConfig(
         source=MarketDataSource(os.getenv("MARKET_DATA_SOURCE", MarketDataSource.BINANCE_SPOT.value)),
-        provider_symbols=_parse_csv(os.getenv("MARKET_DATA_PROVIDER_SYMBOLS", "ETHUSDT")),
+        provider_symbols=tuple(
+            normalize_symbol(symbol)
+            for symbol in _parse_csv(os.getenv("MARKET_DATA_PROVIDER_SYMBOLS", "ETHUSDT"))
+        ),
         timeframes=timeframes,
         safety_delay_by_timeframe={
             "1h": timedelta(seconds=_parse_non_negative_int("MARKET_DATA_1H_SAFETY_DELAY_SECONDS", default="30")),

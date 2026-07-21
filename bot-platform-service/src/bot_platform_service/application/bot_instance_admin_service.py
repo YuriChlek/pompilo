@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from bot_platform_service.domain import BotInstanceConfig, BotInstanceStatus, BotMode
+from bot_platform_service.domain.symbol_normalization import normalize_symbol
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,7 +50,7 @@ def config_from_payload(payload: Mapping[str, object], *, instance_id: str) -> B
         instance_id=instance_id,
         module_id=str(payload["module_id"]),
         mode=BotMode(str(payload["mode"])),
-        symbols=tuple(str(symbol).upper() for symbol in _string_list(payload["symbols"])),
+        symbols=tuple(normalize_symbol(symbol) for symbol in _string_list(payload["symbols"])),
         timeframes=tuple(str(timeframe) for timeframe in _string_list(payload["timeframes"])),
         config_schema_version=int(payload["config_schema_version"]),
         config=dict(payload["config"]) if isinstance(payload["config"], Mapping) else {},

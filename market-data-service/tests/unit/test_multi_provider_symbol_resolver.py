@@ -62,12 +62,12 @@ class MultiProviderSymbolResolverTests(unittest.IsolatedAsyncioTestCase):
         # Pre-populate cache with SUPPORTED
         availability = ProviderSymbolAvailability(
             source=MarketDataSource.BINANCE_SPOT,
-            requested_symbol="BTC/USDT",
+            requested_symbol="BTCUSDT",
             provider_symbol="BTCUSDT",
             status=ProviderSymbolAvailabilityStatus.SUPPORTED,
             next_check_at=self.now + timedelta(hours=1),
         )
-        self.repository.records[(MarketDataSource.BINANCE_SPOT, "BTC/USDT")] = availability
+        self.repository.records[(MarketDataSource.BINANCE_SPOT, "BTCUSDT")] = availability
 
         binance_adapter = MockCandleProvider({})
         resolver = MultiProviderSymbolResolver(
@@ -86,9 +86,9 @@ class MultiProviderSymbolResolverTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_resolve_cache_hit_unsupported_skips_provider(self) -> None:
         # Pre-populate Binance cache with UNSUPPORTED
-        self.repository.records[(MarketDataSource.BINANCE_SPOT, "HYPE/USDT")] = ProviderSymbolAvailability(
+        self.repository.records[(MarketDataSource.BINANCE_SPOT, "HYPEUSDT")] = ProviderSymbolAvailability(
             source=MarketDataSource.BINANCE_SPOT,
-            requested_symbol="HYPE/USDT",
+            requested_symbol="HYPEUSDT",
             status=ProviderSymbolAvailabilityStatus.UNSUPPORTED,
             next_check_at=self.now + timedelta(hours=1),
         )

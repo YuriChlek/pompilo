@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import suppress
+from collections.abc import Awaitable, Callable
 from typing import Protocol
 
 from bot_platform_service.application.market_data_event_consumer_service import MarketDataEventConsumerService
@@ -29,10 +30,14 @@ class MarketDataEventConsumerWorker:
         stream_consumer: MarketDataEventStreamConsumer,
         service: MarketDataEventConsumerService,
         retry_backoff_seconds: float,
+        commit: Callable[[], Awaitable[None]] | None = None,
+        rollback: Callable[[], Awaitable[None]] | None = None,
     ) -> None:
         self.stream_consumer = stream_consumer
         self.service = service
         self.retry_backoff_seconds = retry_backoff_seconds
+        self.commit = commit
+        self.rollback = rollback
         self._stop_event = asyncio.Event()
 
     async def run_forever(self) -> None:
@@ -52,13 +57,22 @@ class MarketDataEventConsumerWorker:
         messages = await self.stream_consumer.read_batch()
         ack_count = 0
         for message in messages:
-            result = await self.service.handle_message(
-                message_id=message.message_id,
-                payload=message.fields,
-            )
+            try:
+                result = await self.service.handle_message(
+                    message_id=message.message_id,
+                    payload=message.fields,
+                )
+            except Exception:
+                if self.rollback is not None:
+                    await self.rollback()
+                raise
             if result.ack:
+                if self.commit is not None:
+                    await self.commit()
                 await self.stream_consumer.ack(message.message_id)
                 ack_count += 1
+            elif self.rollback is not None:
+                await self.rollback()
         return ack_count
 
     def stop(self) -> None:

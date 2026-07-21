@@ -122,6 +122,38 @@ def test_stage_30_worker_does_not_ack_when_idempotency_store_fails() -> None:
     asyncio.run(run())
 
 
+def test_stage_30_worker_commits_before_acknowledging_processed_event() -> None:
+    async def run() -> None:
+        events: list[str] = []
+        stream = _StreamConsumer((RedisStreamMessage(message_id="1-0", fields=_valid_event_payload()),))
+        original_ack = stream.ack
+
+        async def ack(message_id: str) -> None:
+            events.append(f"ack:{message_id}")
+            await original_ack(message_id)
+
+        async def commit() -> None:
+            events.append("commit")
+
+        stream.ack = ack
+        worker = MarketDataEventConsumerWorker(
+            stream_consumer=stream,
+            service=MarketDataEventConsumerService(
+                logger=_Logger(),
+                idempotency_store=_IdempotencyStore(),
+            ),
+            retry_backoff_seconds=0,
+            commit=commit,
+        )
+
+        ack_count = await worker.run_once()
+
+        assert ack_count == 1
+        assert events == ["commit", "ack:1-0"]
+
+    asyncio.run(run())
+
+
 def _valid_event_payload() -> dict[str, object]:
     return {
         "event_type": "market_data.candles_collected",

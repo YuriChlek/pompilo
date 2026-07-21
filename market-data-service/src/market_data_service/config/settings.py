@@ -12,6 +12,7 @@ from market_data_service.config.provider_config import BinanceSpotProviderConfig
 from market_data_service.config.queue_config import RedisStreamBrokerConfig, calculate_redis_stream_maxlen
 from market_data_service.config.scheduler_config import SchedulerConfig
 from market_data_service.domain.enums import MarketDataSource
+from market_data_service.domain.symbol_normalization import normalize_symbol
 from market_data_service.domain.scheduler import SUPPORTED_SCHEDULE_TIMEFRAMES
 
 
@@ -243,7 +244,10 @@ def load_scheduler_settings(env: Mapping[str, str] | None = None) -> SchedulerCo
 
     return SchedulerConfig(
         source=MarketDataSource(_optional(source, "MARKET_DATA_SOURCE") or MarketDataSource.BINANCE_SPOT.value),
-        provider_symbols=_parse_csv(_optional(source, "MARKET_DATA_PROVIDER_SYMBOLS") or "ETHUSDT"),
+        provider_symbols=tuple(
+            normalize_symbol(symbol)
+            for symbol in _parse_csv(_optional(source, "MARKET_DATA_PROVIDER_SYMBOLS") or "ETHUSDT")
+        ),
         timeframes=timeframes,
         safety_delay_by_timeframe=_load_safety_delays(source),
         jitter_seconds=_parse_non_negative_int(source, "MARKET_DATA_SCHEDULER_JITTER_SECONDS", default="30"),

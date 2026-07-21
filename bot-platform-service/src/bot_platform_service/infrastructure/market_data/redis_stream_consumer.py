@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from collections.abc import Mapping
 from typing import Any
@@ -51,7 +52,7 @@ class RedisStreamMarketDataEventConsumer:
         messages: list[RedisStreamMessage] = []
         for _stream_name, stream_messages in response:
             for message_id, fields in stream_messages:
-                messages.append(RedisStreamMessage(message_id=str(message_id), fields=dict(fields)))
+                messages.append(RedisStreamMessage(message_id=str(message_id), fields=_decode_fields(fields)))
         return tuple(messages)
 
     async def ack(self, message_id: str) -> None:
@@ -81,3 +82,15 @@ def build_redis_market_data_event_consumer(
         read_count=read_count,
         block_milliseconds=block_milliseconds,
     )
+
+
+def _decode_fields(fields: Mapping[str, object]) -> Mapping[str, object]:
+    payload_json = fields.get("payload_json")
+    if isinstance(payload_json, str) and payload_json.strip():
+        try:
+            payload = json.loads(payload_json)
+        except json.JSONDecodeError:
+            return dict(fields)
+        if isinstance(payload, dict):
+            return payload
+    return dict(fields)

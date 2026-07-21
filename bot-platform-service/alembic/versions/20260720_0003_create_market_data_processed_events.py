@@ -5,7 +5,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 
-revision = "0003_create_market_data_processed_events"
+revision = "0003_md_processed_events"
 down_revision = "0002_extend_bot_module_metadata"
 branch_labels = None
 depends_on = None

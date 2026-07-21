@@ -41,6 +41,25 @@ async def sync_bot_modules_from_database_url(database_url: str) -> tuple[str, ..
         await engine.dispose()
 
 
+async def cleanup_event_data() -> tuple[int, int]:
+    """Run one cleanup batch for processed market-data event records."""
+
+    container = await build_runtime_container()
+    try:
+        if container.event_data_cleanup_service is None:
+            return (0, 0)
+        result = await container.event_data_cleanup_service.run_once()
+        if container.connection.in_transaction():
+            await container.connection.commit()
+        return (result.processed_event_deleted_count, result.event_audit_deleted_count)
+    except Exception:
+        if container.connection.in_transaction():
+            await container.connection.rollback()
+        raise
+    finally:
+        await container.close()
+
+
 async def serve_http(settings: BotPlatformSettings | None = None) -> None:
     """Start the Bot Platform HTTP API until the process receives a stop signal."""
     container = await build_runtime_container(settings)
@@ -79,6 +98,8 @@ async def run_runner(settings: BotPlatformSettings | None = None) -> None:
         idempotency_store=container.repositories.market_data_events,
         instance_repository=container.repositories.bot_instances,
         event_run_service=container.manual_run_service,
+        commit=container.connection.commit,
+        rollback=container.connection.rollback,
     )
     stop_event = asyncio.Event()
     loop = asyncio.get_running_loop()
@@ -108,6 +129,8 @@ def _build_market_data_event_consumer_worker(
     idempotency_store,
     instance_repository,
     event_run_service,
+    commit=None,
+    rollback=None,
 ) -> MarketDataEventConsumerWorker | None:
     if not settings.market_data_events.enabled:
         return None
@@ -128,6 +151,8 @@ def _build_market_data_event_consumer_worker(
             run_dispatcher=MarketDataEventRunDispatcherService(event_run_service=event_run_service),
         ),
         retry_backoff_seconds=settings.market_data_events.retry_backoff_seconds,
+        commit=commit,
+        rollback=rollback,
     )
 
 
@@ -147,6 +172,7 @@ def run_cli(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="bot-platform")
     subparsers = parser.add_subparsers(dest="command")
     subparsers.add_parser("bot:modules:sync", help="Discover and persist platform-native bot modules")
+    subparsers.add_parser("events:cleanup", help="Clean up old processed market-data event records")
     subparsers.add_parser("serve", help="Start the Bot Platform HTTP API")
     subparsers.add_parser("runner", help="Start the Bot Platform runner skeleton")
     healthcheck_parser = subparsers.add_parser("healthcheck", help="Check HTTP readiness")
@@ -160,6 +186,14 @@ def run_cli(argv: Sequence[str] | None = None) -> int:
     if args.command == "bot:modules:sync":
         module_ids = asyncio.run(sync_bot_modules_from_database_url(get_database_url()))
         print(f"Synced bot modules: {', '.join(module_ids) if module_ids else '(none)'}")
+        return 0
+
+    if args.command == "events:cleanup":
+        processed_count, audit_count = asyncio.run(cleanup_event_data())
+        print(
+            "Event data cleanup completed: "
+            f"processed_events_deleted={processed_count} event_audit_deleted={audit_count}"
+        )
         return 0
 
     if args.command == "serve":

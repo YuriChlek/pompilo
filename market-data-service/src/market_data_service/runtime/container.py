@@ -9,21 +9,19 @@ from typing import Any, Callable
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, create_async_engine
 
 from market_data_service.application.services.backfill_planning_service import BackfillPlanningService
-from market_data_service.application.services.backfill_command_service import BackfillCommandService
-from market_data_service.application.services.gap_scan_service import GapScanService
 from market_data_service.application.services.market_data_scheduler_service import (
     MarketDataSchedulerConfig,
     MarketDataSchedulerService,
 )
 from market_data_service.application.services.outbox_publisher_service import OutboxPublisherService
-from market_data_service.application.services.outbox_replay_service import OutboxReplayService
 from market_data_service.application.services.snapshot_read_service import SnapshotReadService
 from market_data_service.application.services.single_symbol_sync_service import SingleSymbolSyncService
-from market_data_service.application.services.symbol_registry_sync_service import SymbolRegistrySyncService
 from market_data_service.application.services.multi_provider_symbol_resolver import MultiProviderSymbolResolver
 from market_data_service.application.services.candles_get_fetch_service import CandlesGetFetchService
 from market_data_service.application.services.outbox_cleanup_service import OutboxCleanupService
 from market_data_service.application.services.candle_collection_service import CandleCollectionService
+from market_data_service.application.services.symbol_operations_service import SymbolOperationsService
+from market_data_service.application.services.symbol_registry_sync_service import SymbolRegistrySyncService
 from market_data_service.infrastructure.providers.routing_candle_provider import RoutingCandleProvider
 from market_data_service.application.market_data_ports import CandleProviderPort
 from market_data_service.domain.enums import MarketDataSource
@@ -39,13 +37,13 @@ from market_data_service.persistence.repositories.backfill_request_repository im
 from market_data_service.persistence.repositories.batch_repository import BatchRepository
 from market_data_service.persistence.repositories.candle_repository import CandleRepository
 from market_data_service.persistence.repositories.collection_state_repository import CollectionStateRepository
-from market_data_service.persistence.repositories.gap_scan_repository import GapScanRepository
 from market_data_service.persistence.repositories.outbox_repository import OutboxRepository
 from market_data_service.persistence.repositories.provider_symbol_repository import ProviderSymbolRepository
 from market_data_service.persistence.repositories.provider_symbol_availability_repository import (
     ProviderSymbolAvailabilityRepository,
 )
 from market_data_service.persistence.repositories.snapshot_repository import SnapshotRepository
+from market_data_service.persistence.repositories.symbol_operations_repository import SymbolOperationsRepository
 from market_data_service.persistence.repositories.symbol_registry_repository import SymbolRegistryRepository
 from market_data_service.persistence.repositories.sync_completion_repository import SyncCompletionRepository
 from market_data_service.persistence.repositories.sync_job_repository import SyncJobRepository
@@ -67,11 +65,11 @@ class RuntimeRepositories:
     batch: BatchRepository
     candle: CandleRepository
     collection_state: CollectionStateRepository
-    gap_scan: GapScanRepository
     outbox: OutboxRepository
     provider_symbol: ProviderSymbolRepository
     provider_symbol_availability: ProviderSymbolAvailabilityRepository
     snapshot: SnapshotRepository
+    symbol_operations: SymbolOperationsRepository
     symbol_registry: SymbolRegistryRepository
     sync_completion: SyncCompletionRepository
     sync_job: SyncJobRepository
@@ -79,16 +77,14 @@ class RuntimeRepositories:
 
 @dataclass(frozen=True, slots=True)
 class RuntimeServices:
-    backfill_command: BackfillCommandService
     backfill_planning: BackfillPlanningService
-    gap_scan: GapScanService
     market_data_scheduler: MarketDataSchedulerService
     outbox_publisher: OutboxPublisherService
-    outbox_replay: OutboxReplayService
     single_symbol_sync: SingleSymbolSyncService
     snapshot_read: SnapshotReadService
-    symbol_registry_sync: SymbolRegistrySyncService
     symbol_resolver: MultiProviderSymbolResolver
+    symbol_operations: SymbolOperationsService
+    symbol_registry_sync: SymbolRegistrySyncService
     candles_get_fetch: CandlesGetFetchService
     outbox_cleanup: OutboxCleanupService
     candle_collection: CandleCollectionService
@@ -191,11 +187,11 @@ def _build_repositories(connection: AsyncConnection) -> RuntimeRepositories:
         batch=BatchRepository(connection),
         candle=CandleRepository(connection),
         collection_state=CollectionStateRepository(connection),
-        gap_scan=GapScanRepository(connection),
         outbox=OutboxRepository(connection),
         provider_symbol=ProviderSymbolRepository(connection),
         provider_symbol_availability=ProviderSymbolAvailabilityRepository(connection),
         snapshot=SnapshotRepository(connection),
+        symbol_operations=SymbolOperationsRepository(connection),
         symbol_registry=SymbolRegistryRepository(connection),
         sync_completion=SyncCompletionRepository(connection),
         sync_job=SyncJobRepository(connection),
@@ -251,15 +247,6 @@ def _build_services(
     metrics_recorder: PrometheusMetricsRecorder,
 ) -> RuntimeServices:
     backfill_planning = BackfillPlanningService(repositories.backfill_request)
-    backfill_command = BackfillCommandService(
-        symbol_registry=repositories.provider_symbol,
-        backfill_requester=repositories.backfill_request,
-    )
-    gap_scan = GapScanService(
-        symbol_registry=repositories.provider_symbol,
-        candle_reader=repositories.gap_scan,
-        backfill_requester=repositories.backfill_request,
-    )
     market_data_scheduler = MarketDataSchedulerService(
         sync_job_queue=repositories.sync_job,
         config=MarketDataSchedulerConfig(
@@ -274,11 +261,6 @@ def _build_services(
         outbox_store=repositories.outbox,
         broker=event_broker,
         metrics_recorder=metrics_recorder,
-    )
-    outbox_replay = OutboxReplayService(
-        outbox_store=repositories.outbox,
-        broker=event_broker,
-        now_provider=_utc_now,
     )
     snapshot_read = SnapshotReadService(
         symbol_registry=repositories.provider_symbol,
@@ -297,7 +279,6 @@ def _build_services(
         backfill_planning=backfill_planning,
         metrics_recorder=metrics_recorder,
     )
-    symbol_registry_sync = SymbolRegistrySyncService(repositories.symbol_registry)
 
     cache_policy = AvailabilityCachePolicy(
         availability_ttl_hours=settings.availability.availability_ttl_hours,
@@ -310,10 +291,17 @@ def _build_services(
         priority=settings.provider_priority,
         cache_policy=cache_policy,
     )
+    symbol_registry_sync = SymbolRegistrySyncService(repositories.symbol_registry)
     candles_get_fetch = CandlesGetFetchService(
         resolver=symbol_resolver,
+        registry_sync=symbol_registry_sync,
         candle_provider=routing_provider,
         candle_writer=repositories.candle,
+    )
+    symbol_operations = SymbolOperationsService(
+        resolver=symbol_resolver,
+        registry_sync=symbol_registry_sync,
+        operations_repository=repositories.symbol_operations,
     )
     outbox_cleanup = OutboxCleanupService(
         outbox_repository=repositories.outbox,
@@ -323,6 +311,7 @@ def _build_services(
     collection_concurrency_limiter = AsyncConcurrencyLimiter(settings.bootstrap.provider_max_concurrency)
     candle_collection = CandleCollectionService(
         resolver=symbol_resolver,
+        symbol_operations=symbol_operations,
         single_symbol_sync=single_symbol_sync,
         sync_job_queue=repositories.sync_job,
         candle_history=repositories.candle,
@@ -338,16 +327,14 @@ def _build_services(
     )
 
     return RuntimeServices(
-        backfill_command=backfill_command,
         backfill_planning=backfill_planning,
-        gap_scan=gap_scan,
         market_data_scheduler=market_data_scheduler,
         outbox_publisher=outbox_publisher,
-        outbox_replay=outbox_replay,
         single_symbol_sync=single_symbol_sync,
         snapshot_read=snapshot_read,
-        symbol_registry_sync=symbol_registry_sync,
         symbol_resolver=symbol_resolver,
+        symbol_operations=symbol_operations,
+        symbol_registry_sync=symbol_registry_sync,
         candles_get_fetch=candles_get_fetch,
         outbox_cleanup=outbox_cleanup,
         candle_collection=candle_collection,

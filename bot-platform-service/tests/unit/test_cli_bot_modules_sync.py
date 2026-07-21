@@ -25,3 +25,19 @@ def test_bot_modules_sync_command_runs_discovery(monkeypatch: pytest.MonkeyPatch
     assert exit_code == 0
     assert calls == ["postgresql+asyncpg://example"]
     assert "Synced bot modules: spot_greenwich, spot_grid" in capsys.readouterr().out
+
+
+def test_events_cleanup_command_runs_cleanup(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    calls: list[str] = []
+
+    async def fake_cleanup() -> tuple[int, int]:
+        calls.append("cleanup")
+        return (2, 1)
+
+    monkeypatch.setattr(cli, "cleanup_event_data", fake_cleanup)
+
+    exit_code = main(["events:cleanup"])
+
+    assert exit_code == 0
+    assert calls == ["cleanup"]
+    assert "processed_events_deleted=2 event_audit_deleted=1" in capsys.readouterr().out

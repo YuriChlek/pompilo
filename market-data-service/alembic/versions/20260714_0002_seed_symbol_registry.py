@@ -15,20 +15,20 @@ SUPPORTED_TIMEFRAMES = ["1h", "4h", "1d"]
 MAX_BACKFILL_DAYS = 1095
 
 MARKET_SYMBOL_ROWS = [
-    {"canonical_symbol": "BTC/USDT", "base_asset": "BTC", "quote_asset": "USDT", "status": "ACTIVE"},
-    {"canonical_symbol": "ETH/USDT", "base_asset": "ETH", "quote_asset": "USDT", "status": "ACTIVE"},
-    {"canonical_symbol": "LTC/USDT", "base_asset": "LTC", "quote_asset": "USDT", "status": "ACTIVE"},
-    {"canonical_symbol": "SOL/USDT", "base_asset": "SOL", "quote_asset": "USDT", "status": "ACTIVE"},
-    {"canonical_symbol": "SUI/USDT", "base_asset": "SUI", "quote_asset": "USDT", "status": "ACTIVE"},
-    {"canonical_symbol": "TAO/USDT", "base_asset": "TAO", "quote_asset": "USDT", "status": "ACTIVE"},
-    {"canonical_symbol": "XRP/USDT", "base_asset": "XRP", "quote_asset": "USDT", "status": "ACTIVE"},
+    {"canonical_symbol": "BTCUSDT", "base_asset": "BTC", "quote_asset": "USDT", "status": "ACTIVE"},
+    {"canonical_symbol": "ETHUSDT", "base_asset": "ETH", "quote_asset": "USDT", "status": "ACTIVE"},
+    {"canonical_symbol": "LTCUSDT", "base_asset": "LTC", "quote_asset": "USDT", "status": "ACTIVE"},
+    {"canonical_symbol": "SOLUSDT", "base_asset": "SOL", "quote_asset": "USDT", "status": "ACTIVE"},
+    {"canonical_symbol": "SUIUSDT", "base_asset": "SUI", "quote_asset": "USDT", "status": "ACTIVE"},
+    {"canonical_symbol": "TAOUSDT", "base_asset": "TAO", "quote_asset": "USDT", "status": "ACTIVE"},
+    {"canonical_symbol": "XRPUSDT", "base_asset": "XRP", "quote_asset": "USDT", "status": "ACTIVE"},
 ]
 
 PROVIDER_SYMBOL_ROWS = [
     {
         "source": BINANCE_SPOT,
         "canonical_symbol": row["canonical_symbol"],
-        "provider_symbol": row["canonical_symbol"].replace("/", ""),
+        "provider_symbol": row["canonical_symbol"],
         "status": "TRADING",
         "supported_timeframes": SUPPORTED_TIMEFRAMES,
         "min_available_time": None,

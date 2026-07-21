@@ -5,6 +5,7 @@ from pathlib import Path
 
 from bot_platform_service.application import MarketDataEventConsumerService
 from bot_platform_service.domain import BotInstanceConfig, BotMode
+from bot_platform_service.domain.symbol_normalization import normalize_symbol
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -44,7 +45,7 @@ class _InstanceRepository:
             instance
             for instance in self.instances
             if instance.mode is BotMode.SIGNAL_ONLY
-            and canonical_symbol.upper() in {symbol.upper() for symbol in instance.symbols}
+            and normalize_symbol(canonical_symbol) in {normalize_symbol(symbol) for symbol in instance.symbols}
             and timeframe in instance.timeframes
         )
 
@@ -69,6 +70,24 @@ def test_stage_33_event_finds_matching_enabled_signal_only_instances() -> None:
         assert repository.calls == [("BINANCE_SPOT", "BTCUSDT", "1h")]
         assert logger.info_records[-1][0] == "bot_platform.market_data_event.recognized"
         assert logger.info_records[-1][1]["matched_instance_count"] == 1
+
+    asyncio.run(run())
+
+
+def test_stage_33_event_matches_legacy_slash_symbol_configuration() -> None:
+    async def run() -> None:
+        instance = _instance("instance-1", mode=BotMode.SIGNAL_ONLY, symbols=("BTC/USDT",), timeframes=("1h",))
+        service = MarketDataEventConsumerService(
+            logger=_Logger(),
+            idempotency_store=_IdempotencyStore(),
+            instance_repository=_InstanceRepository((instance,)),
+        )
+
+        result = await service.handle_message(message_id="1-0", payload=_event_payload(symbol="BTCUSDT", timeframe="1h"))
+
+        assert result.ack is True
+        assert result.matched_instance_count == 1
+        assert result.matching_instances == (instance,)
 
     asyncio.run(run())
 
@@ -129,6 +148,7 @@ def test_stage_33_repository_query_filters_enabled_signal_only_instances() -> No
     assert "list_enabled_instances_for_snapshot" in repository_source
     assert "BotInstanceStatus.ENABLED.value" in repository_source
     assert "BotMode.SIGNAL_ONLY.value" in repository_source
+    assert "normalize_symbol(canonical_symbol)" in repository_source
 
 
 def _instance(

@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 
 from bot_platform_service.domain.enums import BotInstanceStatus, BotMode, BotPermission
 from bot_platform_service.domain.models import BotInstanceConfig
+from bot_platform_service.domain.symbol_normalization import normalize_symbol
 from bot_platform_service.application.bot_instance_admin_service import AdminBotInstanceSummary
 from bot_platform_service.persistence.tables import (
     bot_instance_configs,
@@ -346,7 +347,7 @@ class BotInstanceRepository:
         for row in rows:
             symbols = tuple(str(symbol) for symbol in row.symbols)
             timeframes = tuple(str(candidate) for candidate in row.timeframes)
-            if canonical_symbol.upper() not in {symbol.upper() for symbol in symbols}:
+            if normalize_symbol(canonical_symbol) not in {normalize_symbol(symbol) for symbol in symbols}:
                 continue
             if timeframe not in set(timeframes):
                 continue

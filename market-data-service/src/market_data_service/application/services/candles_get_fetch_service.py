@@ -6,7 +6,9 @@ from typing import Mapping
 
 from market_data_service.application.market_data_ports import CandleProviderPort, CandleWriterPort
 from market_data_service.application.services.multi_provider_symbol_resolver import MultiProviderSymbolResolver, ResolvedProvider
+from market_data_service.application.services.symbol_registry_sync_service import SymbolRegistrySyncService, build_provider_symbol_seed
 from market_data_service.domain.enums import MarketDataSource, ProviderSymbolStatus
+from market_data_service.domain.symbol_normalization import normalize_symbol
 from market_data_service.domain.symbol_registry_models import ProviderSymbol
 
 
@@ -49,10 +51,12 @@ class CandlesGetFetchService:
         self,
         *,
         resolver: MultiProviderSymbolResolver,
+        registry_sync: SymbolRegistrySyncService | None = None,
         candle_provider: CandleProviderPort,
         candle_writer: CandleWriterPort,
     ) -> None:
         self.resolver = resolver
+        self.registry_sync = registry_sync
         self.candle_provider = candle_provider
         self.candle_writer = candle_writer
 
@@ -68,16 +72,18 @@ class CandlesGetFetchService:
         items: list[CandlesGetItemResult] = []
         unresolved_symbols: list[str] = []
 
-        for requested_symbol in symbols:
+        normalized_symbols = tuple(normalize_symbol(symbol) for symbol in symbols)
+
+        for requested_symbol in normalized_symbols:
             if provider == "binance":
                 resolved = ResolvedProvider(
                     source=MarketDataSource.BINANCE_SPOT,
-                    provider_symbol=requested_symbol.replace("/", "").upper(),
+                    provider_symbol=requested_symbol,
                 )
             elif provider == "bybit":
                 resolved = ResolvedProvider(
                     source=MarketDataSource.BYBIT_SPOT,
-                    provider_symbol=requested_symbol.replace("/", "").upper(),
+                    provider_symbol=requested_symbol,
                 )
             else:
                 resolved = await self.resolver.resolve(requested_symbol)
@@ -85,6 +91,18 @@ class CandlesGetFetchService:
             if resolved is None:
                 unresolved_symbols.append(requested_symbol)
                 continue
+
+            if self.registry_sync is not None:
+                await self.registry_sync.sync_resolved_symbols(
+                    resolved_symbols=(
+                        build_provider_symbol_seed(
+                            source=resolved.source,
+                            canonical_symbol=requested_symbol,
+                            provider_symbol=resolved.provider_symbol,
+                            supported_timeframes=timeframes,
+                        ),
+                    )
+                )
 
             provider_symbol_obj = ProviderSymbol(
                 source=resolved.source,
@@ -117,7 +135,7 @@ class CandlesGetFetchService:
         return CandlesGetResult(
             from_time=from_time,
             to_time=to_time,
-            symbols=symbols,
+            symbols=normalized_symbols,
             timeframes=timeframes,
             provider=provider,
             total_fetched_count=sum(item.fetched_count for item in items),
