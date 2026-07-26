@@ -7,6 +7,11 @@ from .env import load_project_env
 
 load_project_env()
 
+
+def _get_bool_env(name: str, default: str = "false") -> bool:
+    return os.getenv(name, default).strip().lower() in {"1", "true", "yes", "on"}
+
+
 DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = os.getenv("DB_PORT", "5432")
 DB_NAME = os.getenv("DATABASE", "pompilo_db")
@@ -24,6 +29,7 @@ BYBIT_RECV_WINDOW = int(os.getenv("BYBIT_RECV_WINDOW", "10000"))
 APP_TIMEZONE = os.getenv("APP_TIMEZONE", "Europe/Kyiv")
 APP_ENV = os.getenv("APP_ENV", "dev")
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+MARKET_DATA_SERVICE_ENABLED = _get_bool_env("MARKET_DATA_SERVICE_ENABLED", "false")
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", os.getenv("TOKEN", ""))
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", os.getenv("CHAT_ID", ""))

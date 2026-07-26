@@ -1,0 +1,50 @@
+.modalRoot {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-index-modal);
+}
+
+.backdrop {
+    position: absolute;
+    inset: 0;
+    background: var(--color-backdrop);
+    z-index: var(--z-index-modal-backdrop);
+}
+
+.modal {
+    position: relative;
+    max-width: 520px;
+    margin: 10vh auto;
+    background: var(--color-surface);
+    border-radius: var(--border-radius-xl);
+    padding: var(--modal-padding);
+    z-index: var(--z-index-modal);
+    box-shadow: var(--shadow-2xl);
+}
+
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--spacing-4);
+}
+
+.body {
+    margin-top: var(--spacing-6);
+}
+
+.close {
+    background: none;
+    border: none;
+    font-size: var(--font-size-xl);
+    color: var(--color-text-tertiary);
+    cursor: pointer;
+    line-height: var(--line-height-none);
+    padding: var(--spacing-1);
+    border-radius: var(--border-radius-sm);
+    transition: background-color 0.2s ease;
+}
+
+.close:hover {
+    background-color: var(--color-surface-secondary);
+}

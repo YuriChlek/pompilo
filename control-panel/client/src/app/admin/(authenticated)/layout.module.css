@@ -1,0 +1,17 @@
+.container {
+    display: flex;
+    min-height: 100vh;
+}
+
+.mainContent {
+    flex: 1;
+    min-width: 0;
+    background-color: #f9fafb;
+    margin-left: 90px;
+    max-width: none;
+}
+
+.mainContent :global(.MuiContainer-root) {
+    width: 100%;
+    max-width: none;
+}

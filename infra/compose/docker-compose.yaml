@@ -1,0 +1,6 @@
+include:
+  - path: ./docker-compose.infra.yaml
+  - path: ./docker-compose.apps.yaml
+  - path: ./docker-compose.platform.yaml
+  - path: ./docker-compose.observability.yaml
+  - path: ./docker-compose.mailpit.yaml

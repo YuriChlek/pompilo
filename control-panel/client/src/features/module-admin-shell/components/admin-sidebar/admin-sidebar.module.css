@@ -1,0 +1,248 @@
+.sidebar {
+    background-color: #303030;
+    border-right: 1px solid #413c3a;
+    color: #cccccc;
+    width: 90px;
+    height: 100vh;
+    position: fixed;
+    top: 0;
+    left: 0;
+    display: flex;
+    flex-direction: row;
+    transition:
+        background-color 0.25s ease,
+        border-color 0.25s ease;
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.05);
+    z-index: 100;
+    overflow: visible;
+}
+
+.mainColumn {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.header {
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-bottom: 1px solid #413c3a;
+}
+
+.logoBadge {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background-color: var(--color-app-accent);
+    color: var(--color-white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 1.5rem;
+    font-style: italic;
+    text-decoration: none;
+    box-shadow:
+        0 4px 6px -1px rgba(79, 70, 229, 0.2),
+        0 2px 4px -2px rgba(79, 70, 229, 0.2);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.logoBadge:hover {
+    transform: translateY(-1px);
+    box-shadow:
+        0 6px 10px -2px rgba(79, 70, 229, 0.28),
+        0 3px 6px -3px rgba(79, 70, 229, 0.25);
+}
+
+.nav {
+    flex: 1;
+    padding: 16px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.navItem {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 8px;
+    color: #cccccc;
+    background: none;
+    border: none;
+    border-left: 3px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    gap: 8px;
+    text-align: center;
+    width: 100%;
+}
+
+.navItem:hover {
+    color: #ffffff;
+    background-color: #2d2d2d;
+}
+
+.navItemActive {
+    color: #ffffff;
+    background-color: #1e1e1e;
+    border-left-color: var(--color-app-accent);
+}
+
+.navItemOpen {
+    background-color: #2d2d2d;
+    color: #ffffff;
+}
+
+.navItemOpen .icon {
+    color: #ffffff;
+}
+
+.iconWrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.icon {
+    font-size: 1.5rem;
+    color: #cccccc;
+    transition:
+        color 0.2s ease,
+        stroke 0.2s ease;
+    stroke: #303030;
+    stroke-width: 1px;
+}
+
+.navItem:hover .icon,
+.navItemOpen .icon,
+.navItemActive .icon {
+    color: #ffffff;
+}
+
+.navItem:hover .icon {
+    stroke: #2d2d2d;
+}
+
+.navItemOpen .icon {
+    stroke: #2d2d2d;
+}
+
+.navItemActive .icon {
+    stroke: #1e1e1e;
+}
+
+.label {
+    display: none;
+}
+
+.submenuColumn {
+    position: absolute;
+    left: 90px;
+    top: 0;
+    width: 200px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background-color: #3c3c3c;
+    border-right: 1px solid #4d4d4d;
+    box-shadow: 4px 0 10px rgba(0, 0, 0, 0.2);
+    z-index: 101;
+    animation: slideIn 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.submenuHeader {
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    border-bottom: 1px solid #4d4d4d;
+}
+
+.closeButton {
+    background: none;
+    border: none;
+    color: #cbd5e1;
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s ease;
+    font-size: 1.1rem;
+}
+
+.closeButton:hover {
+    color: #ffffff;
+}
+
+.submenuTitle {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #ffffff;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.submenuList {
+    list-style: none;
+    padding: 12px 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.submenuLink {
+    display: block;
+    padding: 10px 20px;
+    color: #cbd5e1;
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    border-left: 3px solid transparent;
+}
+
+.submenuLink:hover {
+    color: #ffffff;
+    background-color: #4a4a4a;
+}
+
+.submenuLinkActive {
+    color: #ffffff;
+    background-color: #2b2b2b;
+    font-weight: 600;
+    border-left-color: var(--color-app-accent);
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateX(-10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@media (min-width: 768px) {
+    .label {
+        display: block;
+        font-size: 0.5rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 100%;
+    }
+}

@@ -1,0 +1,202 @@
+.wrapper {
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem 1rem;
+}
+
+.header {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.title {
+    color: var(--color-app-text);
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+.description {
+    color: var(--color-app-text-muted);
+    font-size: 1rem;
+    margin-top: 0.5rem;
+}
+
+.content {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.panel {
+    background-color: var(--color-app-surface);
+    border: 1px solid var(--color-app-border);
+    border-radius: 1rem;
+    padding: 1.25rem;
+}
+
+.panelHeader {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.panelTitleGroup {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+}
+
+.panelIcon {
+    width: 1.25rem;
+    color: var(--color-app-accent);
+    margin-top: 0.2rem;
+}
+
+.panelTitle {
+    color: var(--color-app-text);
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.panelDescription {
+    color: var(--color-app-text-muted);
+    font-size: 0.875rem;
+    margin-top: 0.25rem;
+}
+
+.primaryButton {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    width: 100%;
+    min-height: 2.75rem;
+    border: none;
+    border-radius: 0.5rem;
+    background-color: var(--color-app-accent);
+    color: var(--color-white);
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 700;
+    padding: 0.65rem 1rem;
+}
+
+.primaryButton:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
+.emptyState {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 1.25rem;
+    border: 1px dashed var(--color-app-border);
+    border-radius: 0.75rem;
+    padding: 1rem;
+}
+
+.emptyIcon {
+    width: 1.5rem;
+    color: var(--color-app-text-muted);
+}
+
+.emptyTitle {
+    color: var(--color-app-text);
+    font-size: 0.95rem;
+    font-weight: 700;
+}
+
+.emptyText {
+    color: var(--color-app-text-muted);
+    font-size: 0.875rem;
+    margin-top: 0.25rem;
+}
+
+.policyGrid {
+    display: grid;
+    gap: 1rem;
+    margin-top: 1.25rem;
+}
+
+.policyBlock {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.policyLabel {
+    color: var(--color-app-text-muted);
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.scopeList {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.scopePill {
+    border: 1px solid var(--color-app-border);
+    border-radius: 999px;
+    color: var(--color-app-text);
+    font-family: var(--font-family-mono);
+    font-size: 0.75rem;
+    padding: 0.35rem 0.6rem;
+}
+
+.actionPreview {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.iconButton,
+.iconButtonDanger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border: 1px solid var(--color-app-border);
+    border-radius: 0.5rem;
+    background-color: transparent;
+    color: var(--color-app-text-muted);
+}
+
+.iconButtonDanger {
+    color: var(--color-app-danger);
+}
+
+.iconButton:disabled,
+.iconButtonDanger:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
+@media (min-width: 768px) {
+    .header {
+        align-items: flex-start;
+        flex-direction: row;
+        justify-content: space-between;
+    }
+
+    .primaryButton {
+        width: auto;
+        min-width: 9rem;
+    }
+
+    .panel {
+        padding: 1.5rem;
+    }
+
+    .policyGrid {
+        align-items: end;
+        grid-template-columns: minmax(0, 1fr) auto;
+    }
+}

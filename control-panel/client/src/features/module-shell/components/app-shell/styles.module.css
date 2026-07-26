@@ -1,0 +1,42 @@
+.shell {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    width: 100vw;
+    overflow-x: hidden;
+    overflow-y: auto;
+    background-color: var(--color-app-bg);
+}
+
+@media (min-width: 768px) {
+    .shell {
+        flex-direction: row;
+    }
+}
+
+.main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: visible;
+    min-height: 100%;
+}
+
+.content {
+    flex: 1;
+    width: 100%;
+    margin: 0 auto;
+    padding-bottom: calc(64px + var(--spacing-6)); /* Mobile nav space */
+}
+
+@media (min-width: 768px) {
+    .content {
+        padding-bottom: 0;
+    }
+}
+
+.contentFull {
+    max-width: none;
+    padding: 0;
+}

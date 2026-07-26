@@ -1,0 +1,8 @@
+/* Import all token files */
+@import './colors.css';
+@import './spacing.css';
+@import './typography.css';
+@import './borders.css';
+@import './shadow.css';
+@import './breakpoints.css';
+@import './z-index.css';

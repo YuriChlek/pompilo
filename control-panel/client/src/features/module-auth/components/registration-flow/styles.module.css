@@ -1,0 +1,400 @@
+.formWrapper {
+    width: 100%;
+    max-width: 28rem;
+    margin: auto;
+    padding: 2rem 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: calc(100vh - 4rem);
+}
+
+/* progressIndicator */
+.progressIndicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+}
+
+.progressDot {
+    width: 0.625rem; /* 10px */
+    height: 0.625rem; /* 10px */
+    border-radius: 9999px;
+    background-color: var(--color-app-border);
+    transition: background-color 0.3s;
+}
+
+.progressDot.active {
+    background-color: var(--color-app-accent);
+}
+
+.progressLine {
+    width: 2rem; /* 32px */
+    height: 0.25rem; /* 4px */
+    border-radius: 9999px;
+    background-color: var(--color-app-border);
+    transition: background-color 0.3s;
+}
+
+.progressLine.active {
+    background-color: var(--color-app-accent);
+}
+
+/* stepContent */
+.stepContent {
+    animation: slideUp 0.4s ease-out;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.errorMessage {
+    background-color: #fee2e2; /* Red 100 */
+    color: var(--color-app-danger);
+    padding: 0.75rem;
+    border-radius: 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    margin-bottom: 1.5rem;
+    border: 1px solid #fecaca; /* Red 200 */
+    box-shadow: var(--shadow-sm);
+}
+
+.stepTitle {
+    font-size: 1.875rem; /* text-3xl */
+    font-weight: 700;
+    color: var(--color-app-text);
+    letter-spacing: -0.025em;
+    margin-bottom: 0.5rem;
+}
+
+.stepDescription {
+    font-size: 0.875rem;
+    color: var(--color-app-text-muted);
+    font-weight: 500;
+    margin-bottom: 1.5rem;
+}
+
+.stepForm {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem; /* space-y-5 */
+}
+
+/* roleSelection */
+.roleSelection {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    padding-bottom: 0.5rem;
+}
+
+.roleCard {
+    cursor: pointer;
+    position: relative;
+}
+
+.hiddenRadio {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+}
+
+.roleCardContent {
+    padding: 1rem;
+    border-radius: 0.75rem; /* rounded-xl */
+    border: 2px solid var(--color-app-border);
+    background-color: var(--color-app-bg);
+    transition: all 0.2s;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.375rem;
+}
+
+@media (min-width: 1024px) {
+    .roleCardContent {
+        background-color: var(--color-app-surface);
+    }
+}
+
+@media (min-width: 768px) {
+    .roleCardContent {
+        padding: 1rem 1rem;
+    }
+}
+
+.roleCard:hover .roleCardContent {
+    border-color: var(--color-app-border-dark);
+}
+
+.hiddenRadio:checked + .roleCardContent {
+    border-color: var(--color-app-accent);
+    background-color: #eef2ff; /* peer-checked:bg-indigo-50 */
+}
+
+.roleIcon {
+    font-size: 1.5rem;
+    margin-bottom: 0.375rem;
+    color: var(--color-app-text-muted);
+    transition: color 0.2s;
+}
+
+.hiddenRadio:checked + .roleCardContent .roleIcon {
+    color: var(--color-app-accent);
+}
+
+.roleLabel {
+    font-weight: 700;
+    color: var(--color-app-text);
+    font-size: 0.875rem;
+}
+
+/* fields */
+.fieldGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+}
+
+.label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--color-app-text);
+}
+
+.input {
+    width: 100%;
+    padding: 0.75rem;
+    border-radius: 0.75rem; /* rounded-xl */
+    border: 1px solid var(--color-app-border);
+    background-color: var(--color-app-bg);
+    color: var(--color-app-text);
+    font-weight: 500;
+    outline: none;
+    transition: all 0.2s;
+    box-shadow: var(--shadow-sm);
+}
+
+@media (min-width: 1024px) {
+    .input {
+        background-color: var(--color-app-surface);
+    }
+}
+
+.input:focus {
+    border-color: var(--color-app-accent);
+    box-shadow: 0 0 0 1px var(--color-app-accent), var(--shadow-sm);
+}
+
+.inputCentered {
+    composes: input;
+    text-align: center;
+}
+
+/* buttons */
+.nextButton {
+    padding: 0.875rem;
+    background-color: var(--color-app-accent);
+    color: white;
+    border-radius: 0.75rem; /* rounded-xl */
+    font-weight: 700;
+    margin-top: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2), 0 2px 4px -2px rgba(79, 70, 229, 0.2); /* shadow-md shadow-indigo-500/20 */
+    transition: background-color 0.2s;
+}
+
+.nextButton:hover {
+    background-color: var(--color-app-accent-dark);
+}
+
+.nextButton:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+/* switchAuth */
+.switchAuth {
+    text-align: center;
+    font-size: 0.875rem;
+    color: var(--color-app-text-muted);
+    font-weight: 500;
+    margin-top: 1.5rem;
+}
+
+.link {
+    color: var(--color-app-accent);
+    font-weight: 700;
+}
+
+.link:hover {
+    color: var(--color-app-accent-dark);
+    text-decoration: underline;
+}
+
+/* personalization step specifics */
+.genderSelection {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+}
+
+.genderOption {
+    cursor: pointer;
+    position: relative;
+}
+
+.genderLabel {
+    padding: 0.625rem;
+    text-align: center;
+    border-radius: 0.75rem; /* rounded-xl */
+    border: 1px solid var(--color-app-border);
+    background-color: var(--color-app-bg);
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--color-app-text);
+    transition: all 0.2s;
+    box-shadow: var(--shadow-sm);
+}
+
+@media (min-width: 1024px) {
+    .genderLabel {
+        background-color: var(--color-app-surface);
+    }
+}
+
+.hiddenRadio:checked + .genderLabel {
+    border-color: var(--color-app-accent);
+    background-color: #eef2ff; /* indigo-50 */
+    color: var(--color-app-accent);
+}
+
+.metricsGrid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+}
+
+.goalsList {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.goalChip {
+    cursor: pointer;
+}
+
+.hiddenCheckbox {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+}
+
+.chipContent {
+    padding: 0.5rem 1rem;
+    border-radius: 9999px;
+    border: 1px solid var(--color-app-border);
+    background-color: var(--color-app-bg);
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--color-app-text-muted);
+    transition: all 0.2s;
+    box-shadow: var(--shadow-sm);
+}
+
+@media (min-width: 1024px) {
+    .chipContent {
+        background-color: var(--color-app-surface);
+    }
+}
+
+.hiddenCheckbox:checked + .chipContent {
+    background-color: var(--color-app-accent);
+    color: white;
+    border-color: var(--color-app-accent);
+}
+
+.buttonGroup {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.backButton {
+    width: 33.333333%;
+    background-color: var(--color-gray-100);
+    border: 1px solid var(--color-app-border);
+    color: var(--color-app-text);
+    border-radius: 0.75rem;
+    font-weight: 700;
+    transition: all 0.2s;
+}
+
+.backButton:hover {
+    background-color: var(--color-app-border-dark);
+}
+
+.submitButton {
+    width: 66.666667%;
+    composes: nextButton;
+    margin-top: 0;
+}
+
+/* success step specifics */
+.centered {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 2.5rem 0;
+}
+
+.successIconWrapper {
+    width: 6rem; /* 96px */
+    height: 6rem; /* 96px */
+    border-radius: 50%;
+    background-color: #dcfce7; /* Green 100 */
+    color: var(--color-app-success);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.25rem;
+    margin-bottom: 1.5rem;
+    border: 1px solid #bbf7d0; /* Green 200 */
+    box-shadow: var(--shadow-sm);
+}
+
+.datePickerGrid {
+    display: grid;
+    grid-template-columns: 2fr 3fr 2fr;
+    gap: 0.5rem;
+}
+

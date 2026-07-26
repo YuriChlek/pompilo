@@ -1,0 +1,99 @@
+@import './tokens/index.css';
+
+/* ===== Base styles ===== */
+html,
+body {
+    width: 100%;
+    min-height: 100%;
+    max-width: 100vw;
+    overflow-x: hidden;
+}
+
+body {
+    min-height: 100vh;
+    padding: 0;
+    font-family: var(--font-family-base), sans-serif;
+    line-height: var(--line-height-normal);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background: var(--color-background);
+    background-attachment: fixed;
+    color: var(--color-text-primary);
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+    padding: 0;
+    margin: 0;
+}
+
+a {
+    color: inherit;
+    text-decoration: none;
+}
+
+/* ===== Layout utilities ===== */
+.app-shell {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden;
+}
+
+@media (min-width: 768px) {
+    .app-shell {
+        flex-direction: row;
+    }
+}
+
+.app-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow-y: auto;
+    background: var(--color-background);
+    padding-bottom: 64px; /* Space for mobile nav */
+}
+
+@media (min-width: 768px) {
+    .app-main {
+        padding-bottom: 0;
+    }
+}
+
+.app-content {
+    flex: 1;
+    width: 100%;
+    max-width: var(--container-max-width);
+    margin: 0 auto;
+    padding: var(--container-padding-inline);
+    padding-top: var(--section-spacing);
+    padding-bottom: var(--section-spacing);
+}
+
+.app-content--full {
+    max-width: none;
+    padding: 0;
+}
+
+/* Legacy support - to be phased out or adapted per-page */
+main {
+    padding-inline: var(--container-padding-inline);
+    padding-block: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--layout-gutter);
+    max-width: var(--container-max-width);
+    margin: 0 auto;
+}
+
+.page {
+    display: flex;
+    box-sizing: border-box;
+    align-items: stretch;
+    width: 100%;
+}

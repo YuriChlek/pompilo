@@ -1,0 +1,6 @@
+.idea
+.codex
+.env
+.env.production
+logs/
+api/logs/

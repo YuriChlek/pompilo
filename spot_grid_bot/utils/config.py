@@ -45,6 +45,11 @@ def _get_int_env(name: str, default: str) -> int:
     except (TypeError, ValueError) as exc:
         raise ValueError(f"Invalid int value for {name}: {raw_value!r}") from exc
 
+
+def _get_bool_env(name: str, default: str = "false") -> bool:
+    return os.getenv(name, default).strip().lower() in {"1", "true", "yes", "on"}
+
+
 DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = _get_int_env("DB_PORT", "5432")
 DB_NAME = os.getenv("DATABASE", "pompilo_db")
@@ -65,6 +70,7 @@ LIVE_PRICE_DEVIATION_ATR_MULTIPLIER = _get_float_env("LIVE_PRICE_DEVIATION_ATR_M
 LIVE_PRICE_MONITOR_COOLDOWN_SECONDS = _get_float_env("LIVE_PRICE_MONITOR_COOLDOWN_SECONDS", "60")
 LIVE_PRICE_MONITOR_OPEN_TIMEOUT_SECONDS = _get_float_env("LIVE_PRICE_MONITOR_OPEN_TIMEOUT_SECONDS", "45")
 LIVE_PRICE_MONITOR_RECONNECT_DELAY_SECONDS = _get_float_env("LIVE_PRICE_MONITOR_RECONNECT_DELAY_SECONDS", "5")
+MARKET_DATA_SERVICE_ENABLED = _get_bool_env("MARKET_DATA_SERVICE_ENABLED", "false")
 
 DEFAULT_BASE_ASSET = os.getenv("BASE_ASSET", "BTC")
 DEFAULT_QUOTE_ASSET = os.getenv("QUOTE_ASSET", "USDT")

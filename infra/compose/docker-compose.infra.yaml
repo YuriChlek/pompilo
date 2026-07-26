@@ -1,0 +1,49 @@
+services:
+  postgres:
+    profiles: ["infra"]
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - platform_postgres_data:/var/lib/postgresql/data/
+    networks:
+      - platform
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    profiles: ["infra"]
+    image: redis:7-alpine
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 2gb
+      --maxmemory-policy noeviction
+    volumes:
+      - platform_redis_data:/data
+    restart: always
+    networks:
+      - platform
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  platform_postgres_data:
+    name: platform_postgres_data
+  platform_redis_data:
+    name: platform_redis_data
+
+networks:
+  platform:
+    name: platform_network
+    driver: bridge

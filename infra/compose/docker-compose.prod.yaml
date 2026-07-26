@@ -1,0 +1,7 @@
+services:
+  api:
+    env_file:
+      - ../../control-panel/.env.production
+  client:
+    env_file:
+      - ../../control-panel/.env.production

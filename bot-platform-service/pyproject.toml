@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bot-platform-service"
+version = "0.1.0"
+description = "Signal-only runtime platform for Python bot modules."
+requires-python = ">=3.12"
+dependencies = [
+    "alembic>=1.13",
+    "asyncpg>=0.29",
+    "redis>=5.0",
+    "SQLAlchemy>=2.0",
+    "stock-indicators>=1.3",
+]
+
+[project.optional-dependencies]
+test = [
+    "pybit>=5.7",
+    "pytest>=8.0",
+    "requests>=2.31",
+    "websockets>=12.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "."]

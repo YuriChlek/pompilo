@@ -1,0 +1,34 @@
+services:
+  postgres:
+    ports:
+      - "${DB_PORT:-5432}:5432"
+  redis:
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+  market_data:
+    ports:
+      - "${MARKET_DATA_HTTP_HOST_PORT:-8010}:8010"
+  bot_platform:
+    ports:
+      - "${BOT_PLATFORM_HTTP_HOST_PORT:-8092}:8092"
+  api:
+    env_file:
+      - ../../control-panel/.env
+    ports:
+      - "${API_HOST_PORT:-3000}:3000"
+  client:
+    env_file:
+      - ../../control-panel/.env
+  loki:
+    ports:
+      - "${LOKI_HOST_PORT:-3100}:3100"
+  alloy:
+    ports:
+      - "${ALLOY_HOST_PORT:-12345}:12345"
+  grafana:
+    ports:
+      - "${GRAFANA_HOST_PORT:-3002}:3000"
+  mailpit:
+    ports:
+      - "${MAILPIT_SMTP_HOST_PORT:-1025}:1025"
+      - "${MAILPIT_UI_HOST_PORT:-8025}:8025"
