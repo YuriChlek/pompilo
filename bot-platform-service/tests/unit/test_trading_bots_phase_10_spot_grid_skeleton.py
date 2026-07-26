@@ -25,8 +25,13 @@ from bot_platform_service.registry import (
     parse_manifest,
     resolve_module_from_metadata,
 )
+from tests.fixtures.spot_grid_indicator_runtime import FakeStockIndicatorsRuntime
+from bot_platform_service.trading_bots.spot_grid.application import SpotGridTradingCycleService
 from bot_platform_service.trading_bots.spot_grid.config_schema import CONFIG_SCHEMA
 from bot_platform_service.trading_bots.spot_grid.manifest import ADAPTER_CLASS, ADAPTER_PATH, RAW_MANIFEST
+
+
+INDICATOR_RUNTIME = FakeStockIndicatorsRuntime()
 
 
 class _MetadataRepository:
@@ -83,6 +88,7 @@ def test_phase_10_admin_metadata_can_show_spot_grid_from_persisted_metadata() ->
 
 def test_phase_10_runtime_adapter_is_loadable_and_runs_from_platform_snapshot() -> None:
     adapter = resolve_module_from_metadata(_spot_grid_metadata())
+    adapter._cycle_service = SpotGridTradingCycleService(indicator_runtime=INDICATOR_RUNTIME)
     config = BotInstanceConfig(
         instance_id="instance-1",
         module_id="spot_grid",
@@ -108,7 +114,8 @@ def test_phase_10_runtime_adapter_is_loadable_and_runs_from_platform_snapshot() 
     assert validation.valid is True
     assert result.status is BotRunStatus.COMPLETE
     assert result.error_code is None
-    assert result.signals
+    assert result.signals == ()
+    assert result.diagnostics["no_loss"]["block_reason"] == "position_context_missing"
     assert start.accepted is False
     assert start.error_code == "START_NOT_SUPPORTED"
 

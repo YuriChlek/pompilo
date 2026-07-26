@@ -116,7 +116,7 @@ class SpotGreenwichAdapter:
             return _failed_result(request, "MARKET_DATA_REQUIRED", "primary market snapshot is required")
 
         try:
-            config = _config_from_market_data(request.market_data)
+            config = _config_from_request(request)
             cycle = self._cycle_service.run_once(market_data=request.market_data, config=config)
             plan = cycle.plan
             signal = _signal_from_plan(request, plan)
@@ -169,12 +169,15 @@ def _validate_module_config(
     return errors
 
 
-def _config_from_market_data(market_data: BotMarketDataContext):
+def _config_from_request(request: BotRunRequest):
+    market_data = request.market_data
+    if market_data is None:
+        raise ValueError("market_data is required")
     primary = market_data.primary_snapshot
     supporting_timeframes = tuple(snapshot.timeframe for snapshot in market_data.supporting_snapshots)
     fallback_timeframes = (primary.timeframe, *supporting_timeframes)
     return parse_greenwich_config(
-        {},
+        request.config,
         fallback_symbols=(primary.canonical_symbol,),
         fallback_timeframes=fallback_timeframes,
     )

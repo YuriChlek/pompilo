@@ -16,6 +16,8 @@ def test_migration_rollout_doc_covers_required_rollout_gates() -> None:
     required = (
         "spot_grid",
         "dry_run",
+        "Zero-Persistence Preview",
+        "Platform `dry_run` is not this preview path",
         "spot_greenwich",
         "notification_only",
         "Standalone Comparison",
@@ -36,3 +38,12 @@ def test_migration_rollout_doc_names_test_commands() -> None:
 
     assert "test_stage_17_migration_rollout.py" in text
     assert "bot-platform-service/tests" in text
+
+
+def test_migration_rollout_doc_does_not_claim_dry_run_is_always_zero_persistence() -> None:
+    text = DOC_PATH.read_text(encoding="utf-8")
+
+    assert "dry_run always" not in text
+    assert "dry_run` always" not in text
+    assert "Platform `dry_run` is not this preview path" in text
+    assert "may have persistence side effects" in text

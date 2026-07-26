@@ -40,6 +40,18 @@ def _normalize_for_json(value: object) -> object:
     raise TypeError(f"Unsupported payload value type: {type(value).__name__}")
 
 
+def _freeze_json_value(value: object) -> object:
+    if isinstance(value, Mapping):
+        return MappingProxyType({str(key): _freeze_json_value(item) for key, item in value.items()})
+    if isinstance(value, tuple | list):
+        return tuple(_freeze_json_value(item) for item in value)
+    return value
+
+
+def _freeze_json_mapping(value: Mapping[str, object]) -> JsonMapping:
+    return MappingProxyType({str(key): _freeze_json_value(item) for key, item in value.items()})
+
+
 def canonical_json(value: Mapping[str, object]) -> str:
     """Return stable JSON used for payload hashes and signal keys."""
     normalized = _normalize_for_json(value)
@@ -282,8 +294,12 @@ class BotRunRequest:
     module_id: str
     mode: BotMode
     trigger_type: BotTriggerType
+    config: JsonMapping = field(default_factory=dict)
     market_data: BotMarketDataContext | None = None
     correlation_id: str | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "config", _freeze_json_mapping(self.config))
 
 
 @dataclass(frozen=True, slots=True)

@@ -46,7 +46,7 @@ class _InstanceRepository:
             symbols=("ETHUSDT",),
             timeframes=("1h",),
             config_schema_version=1,
-            config={},
+            config={"max_grid_levels": 2, "runtime": {"emit_diagnostics": True}},
         )
 
     async def get_instance_config(self, instance_id: str) -> BotInstanceConfig | None:
@@ -228,6 +228,10 @@ def test_stage_22_manual_run_creates_bot_run_and_calls_adapter_without_signal_fa
         assert run_repository.completed_runs[0]["status"] is BotRunStatus.COMPLETE
         assert module.initialized == 1
         assert module.requests[0].market_data is not None
+        assert module.requests[0].config["max_grid_levels"] == 2
+        assert module.requests[0].config["runtime"] == {"emit_diagnostics": True}
+        with pytest.raises(TypeError):
+            module.requests[0].config["max_grid_levels"] = 4  # type: ignore[index]
 
     asyncio.run(run())
 

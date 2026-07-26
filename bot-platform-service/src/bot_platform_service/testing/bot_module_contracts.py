@@ -111,6 +111,7 @@ class BotModuleContractHarness:
             module_id=case.config.module_id,
             mode=BotMode.DRY_RUN,
             trigger_type=BotTriggerType.MANUAL,
+            config=case.config.config,
             market_data=BotMarketDataContext(primary_snapshot=_snapshot(case.config.symbols[0], case.config.timeframes[0])),
         )
         result = asyncio.run(case.module.dry_run(request))

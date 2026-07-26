@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Mapping, Protocol
 
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, create_async_engine
 
@@ -18,6 +19,7 @@ from bot_platform_service.application import (
 )
 from bot_platform_service.application.config_validation_service import BotConfigValidationService
 from bot_platform_service.config.settings import BotPlatformSettings
+from bot_platform_service.domain import build_payload_hash, canonical_json
 from bot_platform_service.infrastructure.market_data.http_snapshot_client import MarketDataHttpSnapshotClient
 from bot_platform_service.infrastructure.signals import DisabledSignalEventPublisher, build_redis_signal_event_publisher
 from bot_platform_service.observability.metrics import InMemoryMetricsRecorder
@@ -106,7 +108,7 @@ async def build_runtime_container(
     runtime_capabilities = RuntimeCapabilities(
         market_data=MarketDataHttpSnapshotClient(base_url=resolved_settings.market_data.base_url),
         signal_publisher=_NoopSignalPublisher(),
-        state_store=_NoopStateStore(),
+        state_store=PersistentRuntimeStateStore(bot_instance_repository),
         notification_publisher=_NoopNotificationPublisher(),
         secret_provider=_NoopSecretProvider(),
         logger=_NoopStructuredLogger(),
@@ -160,12 +162,39 @@ class _NoopSignalPublisher:
         raise RuntimeError("Run-scoped signal persistence is configured outside runtime context fanout")
 
 
-class _NoopStateStore:
+class PersistentRuntimeStateStore:
+    """StateStore backed by `_bot_platform.bot_runtime_state`."""
+
+    def __init__(self, repository: BotInstanceRepository) -> None:
+        self.repository = repository
+
     async def load(self, *, instance_id: str, namespace: str, state_key: str) -> object | None:
-        return None
+        state = await self.repository.get_runtime_state(
+            instance_id=instance_id,
+            namespace=namespace,
+            state_key=state_key,
+        )
+        return None if state is None else state.state_json
 
     async def save(self, *, instance_id: str, namespace: str, state_key: str, value: object) -> None:
-        return None
+        if not isinstance(value, Mapping):
+            raise TypeError("runtime state value must be a JSON mapping")
+        state_json = json.loads(canonical_json(value))
+        state_hash = build_payload_hash(state_json)
+        state_identity = {
+            "instance_id": instance_id,
+            "namespace": namespace,
+            "state_key": state_key,
+        }
+        state_id = f"state_{build_payload_hash(state_identity)[:32]}"
+        await self.repository.upsert_runtime_state(
+            state_id=state_id,
+            instance_id=instance_id,
+            namespace=namespace,
+            state_key=state_key,
+            state_json=state_json,
+            state_hash=state_hash,
+        )
 
 
 class _NoopNotificationPublisher:

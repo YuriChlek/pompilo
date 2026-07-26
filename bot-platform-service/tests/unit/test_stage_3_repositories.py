@@ -241,6 +241,39 @@ def test_instance_repository_upserts_state_permission_and_secret_ref() -> None:
     assert len(connection.statements) == 3
 
 
+def test_instance_repository_loads_runtime_state_by_key() -> None:
+    connection = _FakeConnection(
+        mapping_row={
+            "instance_id": "instance-1",
+            "namespace": "spot_grid",
+            "state_key": "ETHUSDT:1h:cooldown_state",
+            "state_json": {"remaining_runs": 2},
+            "state_hash": "state-hash",
+            "version": 3,
+            "correlation_id": "corr-1",
+        }
+    )
+    repository = BotInstanceRepository(connection)
+
+    state = asyncio.run(
+        repository.get_runtime_state(
+            instance_id="instance-1",
+            namespace="spot_grid",
+            state_key="ETHUSDT:1h:cooldown_state",
+        )
+    )
+
+    assert state is not None
+    assert state.instance_id == "instance-1"
+    assert state.namespace == "spot_grid"
+    assert state.state_key == "ETHUSDT:1h:cooldown_state"
+    assert state.state_json == {"remaining_runs": 2}
+    assert state.state_hash == "state-hash"
+    assert state.version == 3
+    assert state.correlation_id == "corr-1"
+    assert len(connection.statements) == 1
+
+
 def test_run_repository_records_run_event_and_health() -> None:
     connection = _FakeConnection([1, 1, 1])
     repository = BotRunRepository(connection)

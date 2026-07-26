@@ -55,6 +55,32 @@ class BotSignalRepository:
         existing = (await self.connection.execute(query)).scalar_one()
         return str(existing)
 
+    async def get_signal_by_id(self, signal_id: str) -> dict[str, object] | None:
+        """Return one persisted signal row by id for execution-side payload lookup."""
+
+        query = select(
+            bot_signals.c.signal_id,
+            bot_signals.c.signal_key,
+            bot_signals.c.run_id,
+            bot_signals.c.instance_id,
+            bot_signals.c.module_id,
+            bot_signals.c.symbol,
+            bot_signals.c.timeframe,
+            bot_signals.c.snapshot_id,
+            bot_signals.c.signal_type,
+            bot_signals.c.side,
+            bot_signals.c.confidence,
+            bot_signals.c.reason,
+            bot_signals.c.payload_schema,
+            bot_signals.c.payload_schema_version,
+            bot_signals.c.payload_hash,
+            bot_signals.c.payload_json,
+            bot_signals.c.status,
+            bot_signals.c.correlation_id,
+        ).where(bot_signals.c.signal_id == signal_id)
+        row = (await self.connection.execute(query)).mappings().first()
+        return dict(row) if row is not None else None
+
 
 def _decimal_or_none(value: Decimal | None) -> Decimal | None:
     return value if value is not None else None

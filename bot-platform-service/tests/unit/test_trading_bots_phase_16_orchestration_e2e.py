@@ -24,6 +24,11 @@ from bot_platform_service.domain import (
     BotTriggerType,
 )
 from bot_platform_service.registry import PersistedBotModuleResolver, discover_trading_bot_registrations
+from tests.fixtures.spot_grid_indicator_runtime import FakeStockIndicatorsRuntime
+from bot_platform_service.trading_bots.spot_grid.application import SpotGridTradingCycleService
+
+
+INDICATOR_RUNTIME = FakeStockIndicatorsRuntime()
 
 
 class _InstanceRepository:
@@ -110,7 +115,10 @@ class _Resolver:
     async def resolve(self, module_id: str):
         if module_id == "fixture_bot":
             return _FixtureBotModule()
-        return await self.persisted.resolve(module_id)
+        module = await self.persisted.resolve(module_id)
+        if getattr(module, "module_id", None) == "spot_grid":
+            module._cycle_service = SpotGridTradingCycleService(indicator_runtime=INDICATOR_RUNTIME)
+        return module
 
 
 class _FixtureBotModule:
@@ -227,15 +235,14 @@ def test_phase_16_orchestration_runs_fixture_spot_grid_and_spot_greenwich_from_m
         ("1h", ("4h",)),
         ("4h", ("1d",)),
     ]
-    assert len(signal_publisher.signals) == 12
-    assert {signal.module_id for signal in signal_publisher.signals} == {"spot_grid"}
+    assert signal_publisher.signals == []
     assert len(notification_publisher.notifications) == 1
     assert notification_publisher.notifications[0][1] == "spot_greenwich_signal"
     assert notification_publisher.notifications[0][2]["status"] == BotNotificationStatus.SKIPPED.value
     assert {saved[1] for saved in state_store.saved} == {"spot_grid", "spot_greenwich"}
     completed_payloads = [payload for _, event_type, payload in run_repository.events if event_type == "COMPLETED"]
     assert len(completed_payloads) == 3
-    assert any(payload["signal_publish_count"] == 12 for payload in completed_payloads)
+    assert any(payload["signal_publish_count"] == 0 for payload in completed_payloads)
     assert any(payload["notification_publish_count"] == 1 for payload in completed_payloads)
     assert all("diagnostics" in payload for payload in completed_payloads)
 

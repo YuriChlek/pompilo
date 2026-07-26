@@ -14,6 +14,7 @@ from bot_platform_service.domain import (
     BotMarketDataContext,
     BotMarketSnapshot,
     BotMode,
+    BotModule,
     BotModuleStatus,
     BotRunRequest,
     BotRunResult,
@@ -135,6 +136,7 @@ def test_market_context_and_run_result_are_structured() -> None:
         module_id="spot_grid_bot",
         mode=BotMode.DRY_RUN,
         trigger_type=BotTriggerType.MANUAL,
+        config={"max_grid_levels": 2, "nested": {"symbols": ["ETHUSDT"]}},
         market_data=market_context,
     )
     result = BotRunResult(
@@ -146,10 +148,24 @@ def test_market_context_and_run_result_are_structured() -> None:
     )
 
     assert request.market_data is market_context
+    assert request.config["max_grid_levels"] == 2
+    assert request.config["nested"] == {"symbols": ("ETHUSDT",)}
+    with pytest.raises(TypeError):
+        request.config["max_grid_levels"] = 3  # type: ignore[index]
+    with pytest.raises(TypeError):
+        request.config["nested"]["symbols"] = ("BTCUSDT",)  # type: ignore[index,union-attr]
     assert result.signals == ()
     assert result.notifications == ()
     assert result.state_changes == ()
     assert result.error_code is None
+
+
+def test_bot_module_dry_run_contract_does_not_promise_zero_persistence() -> None:
+    doc = BotModule.dry_run.__doc__ or ""
+
+    assert "non-persisting" not in doc
+    assert "Persistence is controlled by the platform orchestration entrypoint" in doc
+    assert "without module-owned execution side effects" in doc
 
 
 def test_health_status_enum_values_are_stable() -> None:

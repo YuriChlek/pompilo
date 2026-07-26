@@ -7,7 +7,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from bot_platform_service.domain.enums import BotInstanceStatus, BotMode, BotPermission
-from bot_platform_service.domain.models import BotInstanceConfig
+from bot_platform_service.domain.models import BotInstanceConfig, BotRuntimeStateRecord
 from bot_platform_service.domain.symbol_normalization import normalize_symbol
 from bot_platform_service.application.bot_instance_admin_service import AdminBotInstanceSummary
 from bot_platform_service.persistence.tables import (
@@ -137,6 +137,42 @@ class BotInstanceRepository:
         )
         result = await self.connection.execute(statement)
         return bool(result.rowcount)
+
+    async def get_runtime_state(
+        self,
+        *,
+        instance_id: str,
+        namespace: str,
+        state_key: str,
+    ) -> BotRuntimeStateRecord | None:
+        """Return one persisted runtime state value by deterministic state key."""
+
+        statement = (
+            select(
+                bot_runtime_state.c.instance_id,
+                bot_runtime_state.c.namespace,
+                bot_runtime_state.c.state_key,
+                bot_runtime_state.c.state_json,
+                bot_runtime_state.c.state_hash,
+                bot_runtime_state.c.version,
+                bot_runtime_state.c.correlation_id,
+            )
+            .where(bot_runtime_state.c.instance_id == instance_id)
+            .where(bot_runtime_state.c.namespace == namespace)
+            .where(bot_runtime_state.c.state_key == state_key)
+        )
+        row = (await self.connection.execute(statement)).mappings().first()
+        if row is None:
+            return None
+        return BotRuntimeStateRecord(
+            instance_id=str(row["instance_id"]),
+            namespace=str(row["namespace"]),
+            state_key=str(row["state_key"]),
+            state_json=dict(row["state_json"]),
+            state_hash=str(row["state_hash"]),
+            version=int(row["version"]),
+            correlation_id=str(row["correlation_id"]) if row["correlation_id"] is not None else None,
+        )
 
     async def upsert_permission(self, *, permission_id: str, instance_id: str, permission: BotPermission, enabled: bool) -> bool:
         statement = insert(bot_permissions).values(

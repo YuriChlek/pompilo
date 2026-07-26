@@ -35,3 +35,10 @@ def test_phase_1_standards_retire_legacy_adapter_path() -> None:
     assert "bot_platform_service.infrastructure.bot_modules.*" not in standards
     assert "temporary compatibility" not in standards
     assert "service-level\n  infrastructure packages" in standards
+
+
+def test_phase_1_migration_plan_does_not_claim_dry_run_is_zero_persistence() -> None:
+    migration_plan = MIGRATION_PLAN_PATH.read_text(encoding="utf-8")
+
+    assert "dry_run(request)` calculates signals without side effects" not in migration_plan
+    assert "Platform persistence is controlled by the orchestration entrypoint" in migration_plan

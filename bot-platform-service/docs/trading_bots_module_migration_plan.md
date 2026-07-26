@@ -218,7 +218,8 @@ Required behavior:
 
 - `validate_config(config)` validates only platform config and module config schema.
 - `initialize(context)` stores platform capabilities.
-- `dry_run(request)` calculates signals without side effects.
+- `dry_run(request)` calculates signals without exchange execution or module-owned
+  side effects. Platform persistence is controlled by the orchestration entrypoint.
 - `run_once(request)` supports `notification_only` and `signal_only`.
 - `start(request)` should return `START_NOT_SUPPORTED` unless a platform worker explicitly owns long-running execution.
 - `stop(instance_id)` should be idempotent.

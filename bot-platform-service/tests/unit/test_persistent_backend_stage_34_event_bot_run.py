@@ -299,7 +299,15 @@ def test_stage_34_event_consumer_dispatches_run_for_each_matching_instance() -> 
 
 def test_stage_34_event_run_uses_event_snapshot_id_and_persists_signal_audit() -> None:
     async def run() -> None:
-        instance_repository = _InstanceRepository((_instance("instance-1", timeframes=("1h", "4h")),))
+        instance_repository = _InstanceRepository(
+            (
+                _instance(
+                    "instance-1",
+                    timeframes=("1h", "4h"),
+                    config={"max_grid_levels": 3, "runtime": {"emit_diagnostics": True}},
+                ),
+            )
+        )
         run_repository = _RunRepository()
         signal_repository = _SignalRepository()
         audit_repository = _AuditRepository()
@@ -342,6 +350,8 @@ def test_stage_34_event_run_uses_event_snapshot_id_and_persists_signal_audit() -
         assert signal_repository.signals[0]["signal"].snapshot_id == "event-snapshot-1"
         assert audit_repository.events[0]["actor_id"] == "event_run"
         assert module.requests[0].market_data.primary_snapshot.snapshot_id == "event-snapshot-1"
+        assert module.requests[0].config["max_grid_levels"] == 3
+        assert module.requests[0].config["runtime"] == {"emit_diagnostics": True}
 
     asyncio.run(run())
 
@@ -476,7 +486,12 @@ def _manual_service(
     )
 
 
-def _instance(instance_id: str, *, timeframes: tuple[str, ...]) -> BotInstanceConfig:
+def _instance(
+    instance_id: str,
+    *,
+    timeframes: tuple[str, ...],
+    config: dict[str, object] | None = None,
+) -> BotInstanceConfig:
     return BotInstanceConfig(
         instance_id=instance_id,
         module_id="spot_grid",
@@ -484,7 +499,7 @@ def _instance(instance_id: str, *, timeframes: tuple[str, ...]) -> BotInstanceCo
         symbols=("BTCUSDT",),
         timeframes=timeframes,
         config_schema_version=1,
-        config={},
+        config=config or {},
     )
 
 

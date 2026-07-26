@@ -272,6 +272,7 @@ class ManualBotRunService:
                     module_id=config.module_id,
                     mode=config.mode,
                     trigger_type=BotTriggerType.MANUAL,
+                    config=config.config,
                     market_data=market_data,
                     correlation_id=command.correlation_id,
                 )
@@ -434,6 +435,7 @@ class ManualBotRunService:
                     module_id=config.module_id,
                     mode=config.mode,
                     trigger_type=BotTriggerType.EVENT,
+                    config=config.config,
                     market_data=market_data,
                     correlation_id=command.correlation_id,
                 )

@@ -1,2 +1,1 @@
-"""Platform-native Spot Grid bot package skeleton."""
-
+"""Platform-native Spot Grid bot module."""

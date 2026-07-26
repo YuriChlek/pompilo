@@ -133,7 +133,11 @@ class BotModule(Protocol):
         """Initialize the bot module with platform-provided capabilities."""
 
     async def dry_run(self, request: BotRunRequest) -> BotRunResult:
-        """Run one non-persisting planning pass."""
+        """Run one planning pass without module-owned execution side effects.
+
+        Persistence is controlled by the platform orchestration entrypoint, not by
+        the bot module contract.
+        """
 
     async def run_once(self, request: BotRunRequest) -> BotRunResult:
         """Run one platform-controlled signal generation pass."""

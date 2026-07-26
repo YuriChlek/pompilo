@@ -37,12 +37,58 @@ Gate:
 
 - platform run returns structured `BotRunResult`;
 - generated signals match expected strategy decisions;
-- no persisted signals are required;
+- `BotRunOrchestrationService` platform `dry_run` creates run records and run events,
+  captures diagnostics, and applies returned state changes;
+- `BotRunOrchestrationService` platform `dry_run` does not publish persisted signals;
 - no private exchange client is created;
 - no candle sync is started;
 - at least 3 stable comparable runs pass.
 
-## Step 2. Spot Greenwich Notification Only
+## Zero-Persistence Preview
+
+Use zero-persistence preview before platform `dry_run` when operators need to inspect
+planning output without creating run records, state changes, or persisted signals.
+
+The zero-persistence path is a direct adapter/contract-harness invocation with in-memory
+fixtures or read-only snapshot inputs. It must not call `BotRunOrchestrationService`,
+`ManualBotRunService`, `SignalPublisher`, or `StateStore`.
+
+Platform `dry_run` is not this preview path. It is an orchestration-controlled mode and
+may have persistence side effects.
+
+## Step 2. Spot Grid Notification Only
+
+Target module:
+
+```text
+spot_grid
+```
+
+Target platform mode:
+
+```text
+notification_only
+```
+
+Rollback:
+
+```text
+disable the platform instance
+```
+
+Gate:
+
+- platform run returns structured `BotRunResult`;
+- generated signals and diagnostics are visible for subscribed symbols;
+- notifications are routed through platform `NotificationPublisher`;
+- notification payloads contain notification metadata only, not secrets, private
+  execution data, or full signal payloads;
+- persisted signals are not published in this mode;
+- no private exchange client is created;
+- no candle sync is started;
+- at least 3 stable comparable runs pass.
+
+## Step 3. Spot Greenwich Notification Only
 
 Target module:
 
@@ -72,7 +118,7 @@ Gate:
 - no candle sync is started;
 - at least 3 stable comparable runs pass.
 
-## Step 3. Standalone Comparison
+## Step 4. Standalone Comparison
 
 For each candidate run, compare:
 
@@ -94,7 +140,7 @@ spot_grid_bot -> spot_grid
 spot_greenwich_bot -> spot_greenwich
 ```
 
-## Step 4. Signal Only
+## Step 5. Signal Only
 
 `signal_only` can be enabled only after:
 
@@ -105,6 +151,8 @@ spot_greenwich_bot -> spot_greenwich
 - operators confirm health and alerts are quiet.
 
 `signal_only` persists standardized `BotSignal` records. It still does not open positions.
+Persisted signal events use `bot_signal.persisted.v1` metadata only; the downstream
+execution service remains disconnected until the dedicated execution-service rollout.
 
 ## Rollback
 

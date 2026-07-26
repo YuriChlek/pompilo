@@ -33,6 +33,11 @@ Rules:
 - All monetary, price, quantity, confidence, and volume values use `Decimal` in Python and `NUMERIC` in PostgreSQL.
 - Never convert trading, price, quantity, or signal confidence values to `float` in persistence or domain logic.
 - Bot Platform is signal-only. It must not open positions, create exchange orders, manage fills, or call private exchange execution APIs.
+- Bot modules may use well-maintained third-party analytical libraries such as
+  `pandas`, `pandas-ta`, `ta`, or similar packages for indicators and time-series
+  calculations when that is more reliable than reimplementing the algorithm. Add such
+  dependencies explicitly to project dependency metadata, keep them out of
+  lightweight-import files, and normalize their outputs back into platform domain models.
 
 ## Naming Rules
 
@@ -103,6 +108,7 @@ bot-platform-service/
 │       │   │   ├── __init__.py
 │       │   │   ├── manifest.py
 │       │   │   ├── adapter.py
+│       │   │   ├── bot_config.py
 │       │   │   ├── config_schema.py
 │       │   │   ├── domain/
 │       │   │   ├── application/
@@ -111,6 +117,7 @@ bot-platform-service/
 │       │       ├── __init__.py
 │       │       ├── manifest.py
 │       │       ├── adapter.py
+│       │       ├── bot_config.py
 │       │       ├── config_schema.py
 │       │       ├── domain/
 │       │       ├── application/
@@ -142,6 +149,7 @@ trading_bots/<module_id>/
 ├── __init__.py
 ├── manifest.py
 ├── adapter.py
+├── bot_config.py
 ├── config_schema.py
 ├── domain/
 ├── application/
@@ -151,6 +159,9 @@ trading_bots/<module_id>/
 Rules:
 
 - `manifest.py` owns module metadata and must be lightweight-import safe.
+- `bot_config.py` owns module-local default strategy configuration as Python
+  constants, dataclasses, parsers, and validators. Every bot with strategy
+  parameters must have this file.
 - `config_schema.py` owns machine-readable configuration schema metadata and must be
   lightweight-import safe.
 - `config_schema.py` must expose JSON-safe metadata with a positive `schema_version`,
@@ -160,6 +171,8 @@ Rules:
   `array`.
 - Decimal field bounds and defaults should use strings in schema metadata, not Python
   floats.
+- `config_schema.py` must mirror the defaults and bounds from `bot_config.py`; it may
+  import `bot_config.py` only when that module remains lightweight and side-effect-free.
 - `adapter.py` is the package-level Bot Platform entrypoint and implements the
   `BotModule` contract.
 - `adapter.py` is an intentional exception to the broader `*_adapter.py` naming
@@ -173,6 +186,48 @@ Rules:
   execution.
 - Module `infrastructure/` code adapts platform capabilities to module-local ports and
   must remain signal-only.
+
+### Bot-owned configuration
+
+Bot-owned strategy configuration belongs in `trading_bots/<module_id>/bot_config.py`.
+
+Rules:
+
+- `bot_config.py` must be a pure Python module with no environment reads, file reads,
+  database access, network access, exchange clients, Redis clients, or legacy root
+  package imports.
+- Do not use `os.getenv`, `.env` files, process environment variables, or Docker env
+  variables for bot strategy defaults or thresholds.
+- Use typed dataclasses and `Decimal` defaults for strategy prices, quantities,
+  notionals, percentages, confidence values, and volumes.
+- Persisted per-instance overrides come from `BotInstanceConfig.config` and are
+  validated against `config_schema.py`; the adapter or application layer merges those
+  overrides with `bot_config.py` defaults before invoking domain planning.
+- Secrets must never be defaulted in `bot_config.py`. Use `secret_ref` fields in
+  `config_schema.py` and resolve them through `SecretProvider` only outside domain code.
+- Domain code receives a resolved config object explicitly. Domain code must not import
+  platform persistence or read runtime configuration by itself.
+
+### Strategy libraries
+
+Do not hand-roll indicators, volatility metrics, or time-series transforms when a
+well-maintained library can provide the same calculation with clearer behavior and tests.
+
+Rules:
+
+- Allowed examples include `pandas`, `pandas-ta`, `ta`, `stock-indicators`,
+  NumPy-based helpers, or other focused analytical packages approved for the service
+  dependency set.
+- Add every new library to `pyproject.toml` or the relevant lock/dependency metadata; do
+  not rely on undeclared transitive dependencies.
+- Do not import heavy analytical libraries from `manifest.py` or `config_schema.py`.
+  Those files must stay lightweight-import safe.
+- Keep provider, database, Redis, network, and exchange SDK dependencies out of pure
+  strategy code.
+- Convert library outputs at the boundary. Domain-facing models must still use `Decimal`
+  for prices, quantities, notionals, percentages, confidence values, and volumes.
+- Add fixture tests for indicator values so future library upgrades cannot silently
+  change strategy behavior.
 
 ## Layer Responsibilities
 

@@ -19,6 +19,7 @@ bot_platform_service/trading_bots/example/
 ├── __init__.py
 ├── manifest.py
 ├── adapter.py
+├── bot_config.py
 ├── config_schema.py
 ├── domain/
 ├── application/
@@ -29,6 +30,13 @@ The package-level `adapter.py` is the Bot Platform entrypoint. This is the only 
 file exempt from the broader `*_adapter.py` naming convention because the package name
 already scopes it. Internal adapters under `trading_bots/<module_id>/infrastructure/`
 must still use descriptive `*_adapter.py` file names.
+
+The package-level `bot_config.py` owns bot-local strategy defaults and config parsing.
+Use this file for typed Python defaults, bounds, and merge helpers. Do not read
+`os.getenv`, `.env`, Docker env variables, files, databases, Redis, or exchange APIs from
+bot config code. Persisted per-instance settings come from `BotInstanceConfig.config` and
+are merged with `bot_config.py` defaults by the adapter or application layer before domain
+planning.
 
 If the bot has its own standalone package, keep standalone CLI/runtime code outside Bot
 Platform. Add package-local application services only when dependency injection is needed.
@@ -79,11 +87,38 @@ The registry validates manifest shape, supported modes, timeframe aliases, marke
 requirements, adapter path, and module ID naming before registration. Discovery must not
 import `adapter.py` while validating metadata.
 
-## Config Schema
+## Bot Config And Config Schema
 
 Each platform-native module must expose a lightweight `config_schema.py` with a JSON-safe
 schema object. It must not import strategy runtime, SQLAlchemy, exchange clients, DB
 clients, network SDKs, or root-level legacy bot packages.
+
+Each module with strategy parameters must also expose `bot_config.py`. Keep this module
+pure and side-effect-free:
+
+```python
+from dataclasses import dataclass
+from decimal import Decimal
+
+
+@dataclass(frozen=True, slots=True)
+class ExampleConfig:
+    max_position_fraction: Decimal = Decimal("0.10")
+    rsi_buy_threshold: Decimal = Decimal("35")
+
+
+DEFAULT_CONFIG = ExampleConfig()
+```
+
+Rules:
+
+- Use `Decimal` for trading, price, quantity, notional, percentage, confidence, and volume
+  values.
+- Do not read environment variables for bot strategy config.
+- Do not store secrets in defaults. Represent secret references in `config_schema.py` as
+  `secret_ref` fields and resolve them through `SecretProvider`.
+- Keep `config_schema.py` defaults and bounds aligned with `bot_config.py`.
+- Runtime code must pass a resolved config object into domain logic explicitly.
 
 Example:
 
@@ -111,6 +146,23 @@ CONFIG_SCHEMA = {
 Schema content must be JSON-safe and must not contain raw secrets. Secret values must be
 represented as references such as `secret_ref`.
 
+## Strategy Libraries
+
+Prefer proven analytical libraries over custom indicator implementations when they fit
+the bot's needs. For example, a bot may use `pandas`, `pandas-ta`, `ta`, NumPy-based
+helpers, or another focused package for indicators and time-series calculations.
+
+Rules:
+
+- Declare every new library in project dependency metadata.
+- Do not import heavy analytical libraries from `manifest.py` or `config_schema.py`.
+- Keep provider, database, Redis, network, and exchange SDK dependencies out of pure
+  strategy code.
+- Convert library outputs into platform/domain models at the boundary, preserving
+  `Decimal` for trading values.
+- Add fixture tests for indicator outputs so dependency upgrades do not silently alter
+  strategy behavior.
+
 ## BotModule Adapter
 
 The adapter must implement `BotModule`:
@@ -128,7 +180,11 @@ class ExampleBotAdapter:
     async def health(self, instance_id): ...
 ```
 
-Use `dry_run` for non-persisting planning. Use `run_once` for `notification_only` and `signal_only`. Long-running scheduling should stay in platform workers unless the module explicitly supports `start` and `stop`.
+Use `dry_run` for planning that should not call exchange execution or module-local side
+effects. Whether dry-run signals are persisted is a platform orchestration decision; if an
+operator needs a preview with no persistence, expose or use a dedicated preview path.
+Use `run_once` for `notification_only` and `signal_only`. Long-running scheduling should
+stay in platform workers unless the module explicitly supports `start` and `stop`.
 
 ## Runtime Context
 
@@ -173,7 +229,10 @@ Required signal rules:
 - `payload_schema_version` must be positive.
 - `payload_hash` must match canonical JSON payload content.
 - Signal payloads must contain only JSON-safe values supported by platform canonicalization.
-- Signals are trading signals, not order intents.
+- Signals are trading decisions, not exchange orders. Payloads may include
+  execution-neutral position intent and risk hints, but must not include venue order IDs,
+  private execution details, fill state, or instructions that require the bot module to
+  place/cancel orders itself.
 
 Use signal types:
 
@@ -216,7 +275,8 @@ Default to `dry_run` when mode is missing.
 
 Mode behavior:
 
-- `dry_run`: calculate signals, no signal persistence side effects.
+- `dry_run`: calculate signals without exchange execution or module-local side effects;
+  persistence depends on the platform entrypoint.
 - `notification_only`: calculate signals and route notifications through `NotificationPublisher`.
 - `signal_only`: publish normalized signals through `SignalPublisher`.
 

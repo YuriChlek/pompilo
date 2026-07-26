@@ -366,6 +366,7 @@ async def _run_module(
         module_id=config.module_id,
         mode=config.mode,
         trigger_type=trigger_type,
+        config=config.config,
         market_data=market_data,
         correlation_id=correlation_id,
     )

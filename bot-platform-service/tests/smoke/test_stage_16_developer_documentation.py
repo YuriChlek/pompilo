@@ -39,6 +39,8 @@ def test_how_to_add_new_bot_module_doc_covers_required_topics() -> None:
         "config_schema.py",
         "module_id` values must not end with `_bot",
         "SQLAlchemy Core table definitions and repositories",
+        "Whether dry-run signals are persisted is a platform orchestration decision",
+        "persistence depends on the platform entrypoint",
     )
 
     missing = [phrase for phrase in required_phrases if phrase not in text]
@@ -50,3 +52,11 @@ def test_how_to_add_new_bot_module_doc_names_test_commands() -> None:
 
     assert "spot_grid_bot/.venv/bin/python -m pytest" in text
     assert "bot-platform-service/tests" in text
+
+
+def test_how_to_add_new_bot_module_doc_does_not_claim_dry_run_is_zero_persistence() -> None:
+    text = DOC_PATH.read_text(encoding="utf-8")
+
+    assert "dry_run always" not in text
+    assert "dry_run` always" not in text
+    assert "non-persisting planning pass" not in text
